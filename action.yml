@@ -1,0 +1,43 @@
+name: 'AI Agent Code Auditor'
+description: '基于 Semgrep 和 RAG 多智能体的增量代码审计工具'
+author: 'Your Name'
+
+# 定义输入参数，用户在自己的 yml 中通过 with 传递
+inputs:
+  github_token:
+    description: '用于发表 PR 评论的 GITHUB_TOKEN'
+    required: true
+  python_version:
+    description: 'Python 版本'
+    required: false
+    default: '3.10'
+
+runs:
+  using: 'composite' # 复合模式，允许组合多个步骤
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ inputs.python_version }}
+
+    - name: Install Semgrep & Dependencies
+      shell: bash
+      run: |
+        pip install semgrep requests
+        # 如果你的 Agent 还有其他依赖，也可以在这里装
+        if [ -f "${{ github.action_path }}/requirements.txt" ]; then
+          pip install -r ${{ github.action_path }}/requirements.txt
+        fi
+
+    - name: Run Semgrep Scan
+      shell: bash
+      run: |
+        semgrep scan --config auto --diff --json --output report.json || true
+
+    - name: Run AI Agent
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+      run: |
+        # 使用 ${{ github.action_path }} 确保能找到你仓库里的 main.py
+        python ${{ github.action_path }}/main.py --pr_number ${{ github.event.number }} --report_file report.json

@@ -1,0 +1,25 @@
+name: Security Audit
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  audit_job:
+    runs-on: ubuntu-latest
+    # 必须明确授予评论权限
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 必须拉取完整历史以便 Semgrep 比对 diff
+
+      - name: Run AI Auditor Action
+        # 指向你的 Agent 仓库名和分支
+        uses: lnjoy0/agentic-code-sec-review@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
