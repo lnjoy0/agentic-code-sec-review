@@ -40,7 +40,7 @@ runs:
       shell: bash
       run: |
         if [ -n "$CHANGED_FILES" ]; then
-          semgrep scan --oss --json --output=report.json --include $CHANGED_FILES
+          semgrep --config "p/security-audit" --json --output=report.json --include $CHANGED_FILES
         fi
 
     - name: Run AI Agent
