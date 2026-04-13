@@ -29,10 +29,19 @@ runs:
           pip install -r ${{ github.action_path }}/requirements.txt
         fi
 
-    - name: Run Semgrep Scan
+    - name: Get Changed Files
+      shell: bash
+      id: files
+      run: |
+        # 提取变更文件并存入环境变量
+        echo "CHANGED_FILES=$(git diff --name-only --diff-filter=ACMRT origin/main...HEAD | xargs)" >> $GITHUB_ENV
+
+    - name: Run Semgrep
       shell: bash
       run: |
-        semgrep scan --config auto --diff --json --output report.json || true
+        if [ -n "$CHANGED_FILES" ]; then
+          semgrep scan --oss --sarif --json --output=report.json --include $CHANGED_FILES
+        fi
 
     - name: Run AI Agent
       shell: bash
