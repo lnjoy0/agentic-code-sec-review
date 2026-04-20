@@ -1,52 +1,93 @@
-name: 'AI Agent Code Auditor'
-description: '基于 Semgrep 和 RAG 多智能体的增量代码审计工具'
-author: 'Your Name'
+name: 'Agentic Code Sec Reviewer'
+description: '该Agent首先使用codeql等工具对PR中的代码进行安全扫描，然后使用基于RAG的多智能体系统对扫描结果进行研判，并将真正的安全问题以评论的形式反馈到PR中。'
+author: 'lnjoy'
 
-# 定义输入参数，用户在自己的 yml 中通过 with 传递
 inputs:
   github_token:
     description: '用于发表 PR 评论的 GITHUB_TOKEN'
     required: true
-  python_version:
-    description: 'Python 版本'
-    required: false
-    default: '3.10'
 
 runs:
-  using: 'composite' # 复合模式，允许组合多个步骤
+  using: 'composite'
   steps:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: ${{ inputs.python_version }}
+        python-version: '3.10'
 
-    - name: Install Semgrep & Dependencies
+    - name: Detect Primary Language
       shell: bash
       run: |
-        pip install semgrep requests
-        # 如果你的 Agent 还有其他依赖，也可以在这里装
-        if [ -f "${{ github.action_path }}/requirements.txt" ]; then
-          pip install -r ${{ github.action_path }}/requirements.txt
+        echo "Starting language detection..."
+        DETECTED_LANGUAGE=""
+        BUILD_MODE="none" # 为提高速度，对java等编译型语言不进行编译分析
+
+        if [ -f "pom.xml" ] || [ -f "build.gradle" ] || [ -f "build.gradle.kts" ]; then
+            DETECTED_LANGUAGE="java"
+            echo "Detected Java build file."
+        elif [ -f "go.mod" ]; then
+            DETECTED_LANGUAGE="go"
+            BUILD_MODE="autobuild" # Go 目前还不支持build-mode: none，必须使用 autobuild
+            echo "Detected Go module file."
+        elif [ -f "requirements.txt" ] || [ -f "pyproject.toml" ] || [ -f "setup.py" ] || [ -f "Pipfile" ]; then
+            DETECTED_LANGUAGE="python"
+            echo "Detected Python configuration file."
+        else
+            echo "Error: Currently supported languages only include Python, Java, and Go."
+            exit 1
         fi
 
-    - name: Get Changed Files
-      shell: bash
-      id: files
-      run: |
-        # 提取变更文件并存入环境变量
-        echo "CHANGED_FILES=$(git diff --name-only --diff-filter=ACMRT origin/main...HEAD | xargs)" >> $GITHUB_ENV
+        echo "LANGUAGE=$DETECTED_LANGUAGE" >> $GITHUB_ENV
+        echo "BUILD_MODE=$BUILD_MODE" >> $GITHUB_ENV
 
-    - name: Run Semgrep
+    - name: Install Trivy
       shell: bash
       run: |
-        if [ -n "$CHANGED_FILES" ]; then
-          semgrep --config "p/security-audit" --json --output=report.json --include $CHANGED_FILES
-        fi
+        echo "Installing Trivy..."
+        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
 
-    - name: Run AI Agent
+    - name: Install Gitleaks
+      shell: bash
+      run: |
+        echo "Installing Gitleaks..."
+        VERSION=$(curl -s https://api.github.com/repos/gitleaks/gitleaks/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
+        wget https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz
+        tar -zxvf gitleaks_${VERSION}_linux_x64.tar.gz
+        sudo mv gitleaks /usr/local/bin/
+
+    - name: Install Semgrep
+      shell: bash
+      run: |
+        echo "Installing Semgrep..."
+        python3 -m pip install semgrep
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: ${{ env.LANGUAGE }}
+        queries: security-extended
+        build-mode: ${{ env.BUILD_MODE }}
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+      with:
+        upload: false
+        output: ${{ github.workspace }}/sarif-results # 将sarif结果保存到这个文件夹
+
+    - name: Cache Trivy DB
+      uses: actions/cache@v3
+      with:
+        path: /tmp/trivy_cache
+        key: ${{ runner.os }}-trivy-db-${{ steps.get-date.outputs.date }}
+        restore-keys: |
+          ${{ runner.os }}-trivy-db-
+
+    - name: Run code review
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        CODEQL_RESULTS_DIR: ${{ github.workspace }}/sarif-results
       run: |
-        # 使用 ${{ github.action_path }} 确保能找到你仓库里的 main.py
-        python ${{ github.action_path }}/main.py --pr_number ${{ github.event.number }} --report_file report.json
+        python ${{ github.action_path }}/main.py
