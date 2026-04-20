@@ -15,11 +15,8 @@ class GitHubConfig:
             raise ValueError("GitHub token is required")
         if not isinstance(self.token, str):
             raise TypeError("GitHub token must be a string")
-        
-        # GitHub tokens are typically 40 characters (classic) or start with specific prefixes
-        if len(self.token) >= 4 and (
-            len(self.token) == 40 or 
-            self.token.startswith(('ghp_', 'ghs_', 'gho_', 'ghu_'))): 
+                
+        if not (len(self.token) == 40 or self.token.startswith(('ghp_', 'ghs_', 'gho_', 'ghu_'))): 
             raise ValueError("Invalid GitHub token format")
 
 @dataclass
