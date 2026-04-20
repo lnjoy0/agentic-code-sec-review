@@ -14,6 +14,11 @@ runs:
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
+      
+    - name: Install python dependencies
+      shell: bash
+      run: |
+        pip install -r requirements.txt
 
     - name: Detect Primary Language
       shell: bash
