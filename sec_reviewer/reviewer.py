@@ -50,20 +50,24 @@ class CodeSecReviewer:
             # 提取被修改的文件路径
             changed_files = [f.file_info.path for f in diff_files]
 
-            # 在 GitHub Action 中，要扫描的代码通常已经被 actions/checkout 提取到了当前工作目录
+            # 要扫描的代码已经被 actions/checkout 提取到了当前工作目录
             workspace_dir = "." 
 
             # 调用 Semgrep 扫描
             semgrep_results = await self._run_semgrep_sync(changed_files, language)
+            logger.info(f"Semgrep scanned for {len(semgrep_results)} results")
 
             # 调用 gitleaks 扫描
             gitleaks_results = self._run_gitleaks(workspace_dir, base_sha, head_sha)
+            logger.info(f"Gitleaks scanned for {len(gitleaks_results)} results")
 
             # 调用 trivy 扫描
             trivy_results = self._run_trivy(workspace_dir)
+            logger.info(f"Trivy scanned for {len(trivy_results)} results")
 
             # 读取 CodeQL 的结果
             codeql_results = self._read_codeql_results(codeql_results_dir, language)
+            logger.info(f"CodeQL scanned for {len(codeql_results)} results")
 
             # 整合扫描结果
             all_results = {
@@ -74,7 +78,7 @@ class CodeSecReviewer:
             }
             all_comments = self._convert_results_to_comments(all_results, diff_files)
 
-            # 5. 将评论提交到 GitHub
+            # 将评论提交到 GitHub
             if all_comments:
                 success = await self._create_github_review(pr_details, all_comments)
                 if not success:
@@ -90,7 +94,7 @@ class CodeSecReviewer:
             logger.error(f"Error during PR review: {e}")
             raise ReviewerError(f"Review process failed: {e}")
 
-    def _convert_results_to_comments(self, results: Dict[str, Any], diff_files: List[DiffFile]) -> List[ReviewComment]:
+    def _convert_results_to_comments(self, results: Dict[str, Any]) -> List[ReviewComment]:
         """Convert raw scanner results to GitHub review comments."""
         comments = []
         for tool, tool_results in results.items():                        
@@ -109,6 +113,7 @@ class CodeSecReviewer:
         semgrep免费版（不登陆）是对单个文件的AST做模式匹配，不会进行跨文件分析，因此这里只传入变更文件，做增量扫描
         --severity=ERROR 只报告 ERROR 级别的漏洞
         """
+        logger.info("Semgrep running...")
         # 将文件列表切片，防止一次性传入过多文件导致命令行参数过长的问题
         chunks = [changed_files[i:i + batch_size] for i in range(0, len(changed_files), batch_size)]
         # 控制并发数量
@@ -141,7 +146,7 @@ class CodeSecReviewer:
                     stdout, stderr = await process.communicate()
 
                     if process.returncode != 0 and stderr:
-                        print(f"Semgrep Error: {stderr.decode()}")
+                        logger.warning(f"Semgrep Error: {stderr.decode()}")
                     
                     try:
                         data = json.loads(stdout.decode('utf-8'))
@@ -149,14 +154,15 @@ class CodeSecReviewer:
                         if runs and len(runs) > 0:
                             return runs[0].get("results", [])
                         return []
-                    except json.JSONDecodeError:
+                    except json.JSONDecodeError as e:
+                        logger.error(f"json decoding failed: {str(e)}")
                         return []
 
         # 并行执行所有批次
         tasks = [process_chunk(chunk) for chunk in chunks]
         results = await asyncio.gather(*tasks)
         
-        all_results = [item for sublist in results for item in sublist.get("results", [])]
+        all_results = [item for sublist in results for item in sublist]
         return all_results
 
     def _run_gitleaks(self, target_dir: str, base_sha: str, head_sha: str) -> List[Dict[str, Any]]:
@@ -165,6 +171,7 @@ class CodeSecReviewer:
         其使用正则匹配与香农熵分析等技术，对字符串做检测
         这里只做增量扫描，因此只传入 diff 内容
         """
+        logger.info("Gitleaks running...")
         cmd = [
             "gitleaks", "detect", target_dir,
             f"--log-opts={base_sha}...{head_sha}", # 只扫描从 base 到 head 之间新增的 commits
@@ -177,7 +184,7 @@ class CodeSecReviewer:
         result = subprocess.run(cmd, capture_output=True, text=True)
 
         if result.stderr.strip():
-            print(f"Gitleaks Log/Error: {result.stderr.strip()}")
+            logger.warning(f"Gitleaks Log/Error: {result.stderr.strip()}")
 
         try:
             data = json.loads(result.stdout)
@@ -185,7 +192,8 @@ class CodeSecReviewer:
             if runs and len(runs) > 0:
                 return runs[0].get("results", [])
             return []
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            logger.error(f"json decoding failed: {str(e)}")
             return []
 
     def _run_trivy(self, target_dir: str) -> List[Dict[str, Any]]:
@@ -193,6 +201,7 @@ class CodeSecReviewer:
         Trivy用于进行第三方依赖扫描(SCA)，可以检查requirements.txt等依赖文件，其使用的漏洞库整合了包括GitHub Advisory、OSV等多种数据源
         此外，其会使用内置的规则集检查配置文件的安全性(IaC 扫描)，关注Dockerfile等文件
         """
+        logger.info("Trivy running...")
         cmd = [
             "trivy", "fs", target_dir,
             "-f", "sarif", "-q",
@@ -203,7 +212,7 @@ class CodeSecReviewer:
         result = subprocess.run(cmd, capture_output=True, text=True)
 
         if result.stderr.strip():
-            print(f"Trivy Scanner Log/Error: {result.stderr.strip()}")
+            logger.warning(f"Trivy Scanner Log/Error: {result.stderr.strip()}")
 
         try:
             data = json.loads(result.stdout)
@@ -211,7 +220,8 @@ class CodeSecReviewer:
             if runs and len(runs) > 0:
                 return runs[0].get("results", [])
             return []
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            logger.error(f"json decoding failed: {str(e)}")
             return []
         
     def _read_codeql_results(self, results_dir: str, lang: str) -> List[Dict[str, Any]]:
@@ -224,6 +234,7 @@ class CodeSecReviewer:
         3.Taint Tracking: 自动分析不可信的数据是否能在不经过滤的情况下，从 Source 流向 Sink
         由于官方 action 提供更强的增量分析能力，因此选择调用官方 action ，这里直接读取其生成的結果
         """
+        logger.info("Reading CodeQL results...")
         try:
             with open(f"{results_dir}/{lang}.sarif", "r") as f:
                 data = json.load(f)
