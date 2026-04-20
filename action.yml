@@ -18,7 +18,7 @@ runs:
     - name: Install python dependencies
       shell: bash
       run: |
-        pip install -r requirements.txt
+        pip install -r ${{ github.action_path }}/requirements.txt
 
     - name: Detect Primary Language
       shell: bash
