@@ -79,6 +79,11 @@ runs:
         upload: false
         output: ${{ github.workspace }}/sarif-results # 将sarif结果保存到这个文件夹
 
+    - name: Get Date
+      shell: bash
+      id: get-date
+      run: echo "date=$(date -u +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
     - name: Cache Trivy DB
       uses: actions/cache@v3
       with:
