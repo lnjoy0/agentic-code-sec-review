@@ -234,14 +234,14 @@ class CodeSecReviewer:
     def _run_codeql(self, target_dir: str, results_dir: str, lang: str):
         # 创建数据库
         cmd_create_db = [
-            "codeql", "database", "create", f"{target_dir}_db", f"--language={lang}", 
+            "codeql", "database", "create", f"codeql_db", f"--language={lang}", 
             f"--source-root={target_dir}", "--ram=5120", "--threads=2", "--build-mode", "none"]
 
         subprocess.run(cmd_create_db, check=True)
 
         # 运行查询
         cmd_query = [
-            "codeql", "database", "analyze", f"{target_dir[10]}_db", f"{lang}-security-extended.qls",
+            "codeql", "database", "analyze", f"codeql_db", f"{lang}-security-extended.qls",
             "--format=sarif-latest", f"{results_dir}/{lang}.sarif",
             "--no-download", "--sarif-add-snippets", "--ram=5120", "--threads=2"
         ]

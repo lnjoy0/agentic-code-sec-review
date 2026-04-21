@@ -71,7 +71,7 @@ runs:
       run: |
         wget https://github.com/github/codeql-action/releases/latest/download/codeql-bundle-linux64.tar.gz
         tar -xvzf codeql-bundle-linux64.tar.gz
-        export PATH=$PATH:$(pwd)/codeql
+        echo "$(pwd)/codeql" >> $GITHUB_PATH
 
     # - name: Initialize CodeQL
     #   uses: github/codeql-action/init@v3
@@ -90,7 +90,7 @@ runs:
       uses: actions/cache@v3
       with:
         path: /tmp/trivy_cache
-        key: ${{ runner.os }}-trivy-db-${{ steps.get-date.outputs.date }}
+        key: ${{ runner.os }}-trivy-db-${{ github.run_id }}
         restore-keys: |
           ${{ runner.os }}-trivy-db-
 
