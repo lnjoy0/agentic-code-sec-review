@@ -79,7 +79,7 @@ class CodeSecReviewer:
                 "trivy": trivy_results,
                 "codeql": codeql_results
             }
-            all_comments = self._convert_results_to_comments(all_results)
+            all_comments = self._convert_results_to_comments(all_results, changed_files)
 
             # 将评论提交到 GitHub
             if all_comments:
@@ -96,13 +96,13 @@ class CodeSecReviewer:
             logger.error(f"Error during PR review: {e}")
             raise ReviewerError(f"Review process failed: {e}")
 
-    def _convert_results_to_comments(self, results: Dict[str, Any]) -> List[ReviewComment]:
+    def _convert_results_to_comments(self, results: Dict[str, Any], changed_files: List) -> List[ReviewComment]:
         """Convert raw scanner results to GitHub review comments."""
         comments = []
         for tool, tool_results in results.items():                        
             comment = ReviewComment(
                 body=json.dumps(tool_results[:1000], indent=4),
-                path="test.py",
+                path=changed_files[0],
                 position=1
             )
             comments.append(comment)
