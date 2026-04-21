@@ -117,6 +117,7 @@ class CodeSecReviewer:
         --severity=ERROR 只报告 ERROR 级别的漏洞
         """
         logger.info("Semgrep running...")
+        logger.info(f"Number of files changed: {len(changed_files)}")
         # 将文件列表切片，防止一次性传入过多文件导致命令行参数过长的问题
         chunks = [changed_files[i:i + batch_size] for i in range(0, len(changed_files), batch_size)]
         # 控制并发数量
