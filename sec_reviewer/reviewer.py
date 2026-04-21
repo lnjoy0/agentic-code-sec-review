@@ -88,9 +88,8 @@ class CodeSecReviewer:
                     logger.error("Failed to post review comments to GitHub.")
 
             return ReviewResult(
-                status="success", 
-                comments_count=len(all_comments), 
-                issues_found=len(all_comments) > 0
+                pr_details=pr_details,
+                comments=all_comments,
             )
 
         except Exception as e:
@@ -103,7 +102,7 @@ class CodeSecReviewer:
         for tool, tool_results in results.items():                        
             comment = ReviewComment(
                 body=json.dumps(tool_results[:1000], indent=4),
-                path="",
+                path="test.py",
                 position=1
             )
             comments.append(comment)
