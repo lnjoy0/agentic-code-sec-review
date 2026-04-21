@@ -66,11 +66,11 @@ class CodeSecReviewer:
             logger.info(f"Trivy scanned for {len(trivy_results)} results")
 
             # # 读取 CodeQL 的结果
-            # codeql_results = self._read_codeql_results(codeql_results_dir, language)
-            # logger.info(f"CodeQL scanned for {len(codeql_results)} results")
+            codeql_results = self._read_codeql_results(codeql_results_dir, language)
+            logger.info(f"CodeQL scanned for {len(codeql_results)} results")
 
-            self._run_codeql(workspace_dir, codeql_results_dir, language)
-            codeql_results = self._read_codeql_results(codeql_results_dir)
+            # self._run_codeql(workspace_dir, codeql_results_dir, language)
+            # codeql_results = self._read_codeql_results(codeql_results_dir)
 
             # 整合扫描结果
             all_results = {
@@ -231,21 +231,21 @@ class CodeSecReviewer:
             logger.error(f"json decoding failed: {str(e)}")
             return []
 
-    def _run_codeql(self, target_dir: str, results_dir: str, lang: str):
-        # 创建数据库
-        cmd_create_db = [
-            "codeql", "database", "create", f"codeql_db", f"--language={lang}", 
-            f"--source-root={target_dir}", "--ram=5120", "--threads=2", "--build-mode", "none"]
+    # def _run_codeql(self, target_dir: str, results_dir: str, lang: str):
+    #     # 创建数据库
+    #     cmd_create_db = [
+    #         "codeql", "database", "create", f"codeql_db", f"--language={lang}", 
+    #         f"--source-root={target_dir}", "--ram=5120", "--threads=2", "--build-mode", "none"]
 
-        subprocess.run(cmd_create_db, check=True)
+    #     subprocess.run(cmd_create_db, check=True)
 
-        # 运行查询
-        cmd_query = [
-            "codeql", "database", "analyze", f"codeql_db", f"{lang}-security-extended.qls",
-            "--format=sarif-latest", f"{results_dir}/{lang}.sarif",
-            "--no-download", "--sarif-add-snippets", "--ram=5120", "--threads=2"
-        ]
-        subprocess.run(cmd_query, check=True)
+    #     # 运行查询
+    #     cmd_query = [
+    #         "codeql", "database", "analyze", f"codeql_db", f"{lang}-security-extended.qls",
+    #         "--format=sarif-latest", f"{results_dir}/{lang}.sarif",
+    #         "--no-download", "--sarif-add-snippets", "--ram=5120", "--threads=2"
+    #     ]
+    #     subprocess.run(cmd_query, check=True)
 
     def _read_codeql_results(self, results_dir: str, lang: str) -> List[Dict[str, Any]]:
         """
@@ -255,7 +255,6 @@ class CodeSecReviewer:
         1.Source: 外部输入（如用户的 HTTP 请求参数）
         2.Sink: 敏感操作（如执行 SQL 语句或系统命令）
         3.Taint Tracking: 自动分析不可信的数据是否能在不经过滤的情况下，从 Source 流向 Sink
-        由于官方 action 提供更强的增量分析能力，因此选择调用官方 action ，这里直接读取其生成的結果
         """
         logger.info("Reading CodeQL results...")
         try:
