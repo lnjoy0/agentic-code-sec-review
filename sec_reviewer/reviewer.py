@@ -395,7 +395,6 @@ class CodeSecReviewer:
         
     def close(self):
         """Clean up resources."""
-        
         try:
             self.github_client.close()
         except Exception as e:
@@ -405,6 +404,6 @@ class CodeSecReviewer:
         """Context manager entry."""
         return self
     
-    def __exit__(self):
+    def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
         self.close()
