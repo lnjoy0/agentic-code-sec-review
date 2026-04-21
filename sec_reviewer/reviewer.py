@@ -69,7 +69,7 @@ class CodeSecReviewer:
             # codeql_results = self._read_codeql_results(codeql_results_dir, language)
             # logger.info(f"CodeQL scanned for {len(codeql_results)} results")
 
-            self._run_codeql(workspace_dir, codeql_results_dir)
+            self._run_codeql(workspace_dir, codeql_results_dir, language)
             codeql_results = self._read_codeql_results(codeql_results_dir)
 
             # 整合扫描结果
