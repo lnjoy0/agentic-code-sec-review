@@ -66,13 +66,6 @@ runs:
         echo "Installing Semgrep..."
         python3 -m pip install semgrep
 
-    # - name: Install CodeQL
-    #   shell: bash
-    #   run: |
-    #     wget https://github.com/github/codeql-action/releases/latest/download/codeql-bundle-linux64.tar.gz
-    #     tar -xzf codeql-bundle-linux64.tar.gz
-    #     echo "$(pwd)/codeql" >> $GITHUB_PATH
-
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v3
       with:

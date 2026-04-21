@@ -109,7 +109,7 @@ class CodeSecReviewer:
         
         return comments
 
-    async def _run_semgrep_sync(self, changed_files: list[str], lang: str = '', batch_size: int = 300) -> List[Dict[str, Any]]:
+    async def _run_semgrep_sync(self, changed_files: list[str], lang: str = '', batch_size: int = 200) -> List[Dict[str, Any]]:
         """
         semgrep利用Tree-sitter将源代码解析成抽象语法树 (AST)，并使用预定义的规则集对AST进行模式匹配
         semgrep免费版（不登陆）是对单个文件的AST做模式匹配，不会进行跨文件分析，因此这里只传入变更文件，做增量扫描
@@ -117,6 +117,7 @@ class CodeSecReviewer:
         """
         logger.info("Semgrep running...")
         logger.info(f"Number of files changed: {len(changed_files)}")
+        logger.info(f"Changed files: {str(changed_files)}")
         # 将文件列表切片，防止一次性传入过多文件导致命令行参数过长的问题
         chunks = [changed_files[i:i + batch_size] for i in range(0, len(changed_files), batch_size)]
         # 控制并发数量
@@ -229,22 +230,6 @@ class CodeSecReviewer:
         except json.JSONDecodeError as e:
             logger.error(f"json decoding failed: {str(e)}")
             return []
-
-    # def _run_codeql(self, target_dir: str, results_dir: str, lang: str):
-    #     # 创建数据库
-    #     cmd_create_db = [
-    #         "codeql", "database", "create", f"codeql_db", f"--language={lang}", 
-    #         f"--source-root={target_dir}", "--ram=5120", "--threads=2", "--build-mode", "none"]
-
-    #     subprocess.run(cmd_create_db, check=True)
-
-    #     # 运行查询
-    #     cmd_query = [
-    #         "codeql", "database", "analyze", f"codeql_db", f"{lang}-security-extended.qls",
-    #         "--format=sarif-latest", f"{results_dir}/{lang}.sarif",
-    #         "--no-download", "--sarif-add-snippets", "--ram=5120", "--threads=2"
-    #     ]
-    #     subprocess.run(cmd_query, check=True)
 
     def _read_codeql_results(self, results_dir: str, lang: str) -> List[Dict[str, Any]]:
         """
