@@ -155,11 +155,7 @@ class CodeSecReviewer:
                         logger.warning(f"Semgrep Error: {stderr.decode()}")
                     
                     try:
-                        data = json.loads(stdout.decode('utf-8'))
-                        runs = data.get("runs", [])
-                        if runs and len(runs) > 0:
-                            return runs[0].get("results", [])
-                        return []
+                        return json.loads(stdout.decode('utf-8'))
                     except json.JSONDecodeError as e:
                         logger.error(f"json decoding failed: {str(e)}")
                         return []
@@ -168,7 +164,7 @@ class CodeSecReviewer:
         tasks = [process_chunk(chunk) for chunk in chunks]
         results = await asyncio.gather(*tasks)
         
-        all_results = [item for sublist in results for item in sublist]
+        all_results = [item for sublist in results for item in sublist.get("results", [])]
         return all_results
 
     def _run_gitleaks(self, target_dir: str, base_sha: str, head_sha: str) -> List[Dict[str, Any]]:
