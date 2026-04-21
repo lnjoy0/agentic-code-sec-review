@@ -87,7 +87,7 @@ runs:
     - name: Cache Trivy DB # 缓存Trivy数据库来避免每次都重新下载
       uses: actions/cache@v3
       with:
-        path: /tmp/trivy_cache
+        path: /home/runner/.cache/trivy
         key: ${{ runner.os }}-trivy-db-${{ steps.get-date.outputs.date }}
         restore-keys: |
           ${{ runner.os }}-trivy-db-

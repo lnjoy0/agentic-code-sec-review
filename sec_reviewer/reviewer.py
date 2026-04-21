@@ -165,6 +165,88 @@ class CodeSecReviewer:
         
         return filtered_results
 
+    def _run_gitleaks(self, target_dir: str, base_sha: str, head_sha: str) -> List[Dict[str, Any]]:
+        """
+        gitleaks用于扫描敏感信息泄露，如 API 密钥、密码、证书等
+        其使用正则匹配与香农熵分析等技术，对字符串做检测
+        这里只做增量扫描，因此只传入 diff 内容
+        """
+        logger.info("Gitleaks running...")
+        cmd = [
+            "gitleaks", "detect", target_dir,
+            f"--log-opts={base_sha}...{head_sha}", # 只扫描从 base 到 head 之间新增的 commits
+            "--no-banner", "--redact", # --redact 不输出敏感信息详情
+            # "--log-level", "error",
+            "-f", "sarif",
+            "-r", "-" # 将 JSON 报告输出到标准输出 (stdout)
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        if result.stderr.strip():
+            logger.warning(f"Gitleaks Log/Error: {result.stderr.strip()}")
+
+        try:
+            data = json.loads(result.stdout)
+            runs = data.get("runs", [])
+            if runs and len(runs) > 0:
+                return runs[0].get("results", [])
+            return []
+        except json.JSONDecodeError as e:
+            logger.error(f"json decoding failed: {str(e)}")
+            return []
+
+    def _run_trivy(self, target_dir: str, patched_files: List[PatchedFile]) -> List[Dict[str, Any]]:
+        """
+        Trivy用于进行第三方依赖扫描(SCA)，可以检查requirements.txt等依赖文件，其使用的漏洞库整合了包括GitHub Advisory、OSV等多种数据源
+        此外，其会使用内置的规则集检查配置文件的安全性(IaC 扫描)，关注Dockerfile等文件
+        """
+        logger.info("Trivy running...")
+        cmd = [
+            "trivy", "fs", target_dir,
+            "-f", "sarif", 
+            # "-q",
+            "--severity", "HIGH,CRITICAL",
+            "--cache-dir", "/home/runner/.cache/trivy"
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        if result.stderr.strip():
+            logger.warning(f"Trivy Scanner Log/Error: {result.stderr.strip()}")
+
+        try:
+            data = json.loads(result.stdout)
+            runs = data.get("runs", [])
+            if runs and len(runs) > 0:
+                results = runs[0].get("results", [])
+                return self._filter_results(results, patched_files)
+            return []
+        except json.JSONDecodeError as e:
+            logger.error(f"json decoding failed: {str(e)}")
+            return []
+
+    def _read_codeql_results(self, results_dir: str, lang: str) -> List[Dict[str, Any]]:
+        """
+        codeql会把源码编译成关系型数据库，能够通过预定义规则查询代码里的漏洞
+        它的主要特点是能够进行数据流与污点分析，而不是简单的模式匹配，因此能够发现更复杂的漏洞
+        主要关注以下几点：
+        1.Source: 外部输入（如用户的 HTTP 请求参数）
+        2.Sink: 敏感操作（如执行 SQL 语句或系统命令）
+        3.Taint Tracking: 自动分析不可信的数据是否能在不经过滤的情况下，从 Source 流向 Sink
+        """
+        logger.info("Reading CodeQL results...")
+        try:
+            with open(f"{results_dir}/{lang}.sarif", "r") as f:
+                data = json.load(f)
+                runs = data.get("runs", [])
+                if runs and len(runs) > 0:
+                    return runs[0].get("results", [])
+                return []
+        except Exception as e:
+            print(f"Error reading CodeQL results: {e}")
+            return []
+
     def _filter_results(self, all_results: List[Dict[str, Any]], patched_files: List[PatchedFile]) -> List[Dict[str, Any]]:
         """
         过滤扫描到的结果，只保留与本次 PR 中新增或修改行相关的结果。
@@ -220,87 +302,6 @@ class CodeSecReviewer:
         
         # 完全相等，或者长路径以 "/短路径" 结尾
         return po == pt or po.endswith("/" + pt) or po.endswith("/" + pt)
-
-    def _run_gitleaks(self, target_dir: str, base_sha: str, head_sha: str) -> List[Dict[str, Any]]:
-        """
-        gitleaks用于扫描敏感信息泄露，如 API 密钥、密码、证书等
-        其使用正则匹配与香农熵分析等技术，对字符串做检测
-        这里只做增量扫描，因此只传入 diff 内容
-        """
-        logger.info("Gitleaks running...")
-        cmd = [
-            "gitleaks", "detect", target_dir,
-            f"--log-opts={base_sha}...{head_sha}", # 只扫描从 base 到 head 之间新增的 commits
-            "--no-banner", "--redact", # --redact 不输出敏感信息详情
-            # "--log-level", "error",
-            "-f", "sarif",
-            "-r", "-" # 将 JSON 报告输出到标准输出 (stdout)
-        ]
-        
-        result = subprocess.run(cmd, capture_output=True, text=True)
-
-        if result.stderr.strip():
-            logger.warning(f"Gitleaks Log/Error: {result.stderr.strip()}")
-
-        try:
-            data = json.loads(result.stdout)
-            runs = data.get("runs", [])
-            if runs and len(runs) > 0:
-                return runs[0].get("results", [])
-            return []
-        except json.JSONDecodeError as e:
-            logger.error(f"json decoding failed: {str(e)}")
-            return []
-
-    def _run_trivy(self, target_dir: str) -> List[Dict[str, Any]]:
-        """
-        Trivy用于进行第三方依赖扫描(SCA)，可以检查requirements.txt等依赖文件，其使用的漏洞库整合了包括GitHub Advisory、OSV等多种数据源
-        此外，其会使用内置的规则集检查配置文件的安全性(IaC 扫描)，关注Dockerfile等文件
-        """
-        logger.info("Trivy running...")
-        cmd = [
-            "trivy", "fs", target_dir,
-            "-f", "sarif", 
-            # "-q",
-            "--severity", "HIGH,CRITICAL",
-            "--cache-dir", "/tmp/trivy_cache"
-        ]
-        
-        result = subprocess.run(cmd, capture_output=True, text=True)
-
-        if result.stderr.strip():
-            logger.warning(f"Trivy Scanner Log/Error: {result.stderr.strip()}")
-
-        try:
-            data = json.loads(result.stdout)
-            runs = data.get("runs", [])
-            if runs and len(runs) > 0:
-                return runs[0].get("results", [])
-            return []
-        except json.JSONDecodeError as e:
-            logger.error(f"json decoding failed: {str(e)}")
-            return []
-
-    def _read_codeql_results(self, results_dir: str, lang: str) -> List[Dict[str, Any]]:
-        """
-        codeql会把源码编译成关系型数据库，能够通过预定义规则查询代码里的漏洞
-        它的主要特点是能够进行数据流与污点分析，而不是简单的模式匹配，因此能够发现更复杂的漏洞
-        主要关注以下几点：
-        1.Source: 外部输入（如用户的 HTTP 请求参数）
-        2.Sink: 敏感操作（如执行 SQL 语句或系统命令）
-        3.Taint Tracking: 自动分析不可信的数据是否能在不经过滤的情况下，从 Source 流向 Sink
-        """
-        logger.info("Reading CodeQL results...")
-        try:
-            with open(f"{results_dir}/{lang}.sarif", "r") as f:
-                data = json.load(f)
-                runs = data.get("runs", [])
-                if runs and len(runs) > 0:
-                    return runs[0].get("results", [])
-                return []
-        except Exception as e:
-            print(f"Error reading CodeQL results: {e}")
-            return []
 
     async def _get_pr_diff(self, pr_details: PRDetails) -> str:
         """Get PR diff with error handling."""
