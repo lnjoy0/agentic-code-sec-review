@@ -172,43 +172,54 @@ class CodeSecReviewer:
         # 找出每个补丁文件中的新增行的行号
         added_lines_by_file: Dict[str, Set[int]] = {}
 
-        for patched_file in patched_files:
-            file_path = patched_file.path
-            if file_path not in added_lines_by_file:
-                added_lines_by_file[file_path] = set()
-            
-            for hunk in patched_file:
-                for line in hunk:
-                    if line.is_added:
-                        added_lines_by_file[file_path].add(line.target_line_no)
+        try:
+            for patched_file in patched_files:
+                file_path = patched_file.path
+                if file_path not in added_lines_by_file:
+                    added_lines_by_file[file_path] = set()
+                
+                for hunk in patched_file:
+                    for line in hunk:
+                        if line.is_added:
+                            added_lines_by_file[file_path].add(line.target_line_no)
 
-        # 通过找出的新增行号过滤results
-        filtered_results = []
-        for result in all_results:
-            if "path" in result: # 解析semgrep的json结果
-                res_path = result.get("path", "")
-                res_start = result.get("start", {}).get("line")
-                res_end = result.get("end", {}).get("line")
+            # 通过找出的新增行号过滤results
+            filtered_results = []
+            for result in all_results:
+                if "path" in result: # 解析semgrep的json结果
+                    res_path = result.get("path", "")
+                    res_start = result.get("start", {}).get("line")
+                    res_end = result.get("end", {}).get("line")
 
-            elif "locations" in result and result["locations"]: # 解析trivy的sarif结果
-                loc = result["locations"][0].get("physicalLocation", {})
-                res_path = loc.get("artifactLocation", {}).get("uri")
-                res_start = loc.get("region", {}).get("startLine")
-                res_end = loc.get("region", {}).get("endLine")
+                elif "locations" in result and result["locations"]: # 解析trivy的sarif结果
+                    loc = result["locations"][0].get("physicalLocation", {})
+                    res_path = loc.get("artifactLocation", {}).get("uri")
+                    res_start = loc.get("region", {}).get("startLine")
+                    res_end = loc.get("region", {}).get("endLine")
 
-            if not res_path:
-                continue
-            if not res_start:
-                filtered_results.append(result)
-                continue
+                if not res_path:
+                    continue
 
-            for diff_path, changed_lines in added_lines_by_file.items():
-                if res_path.endswith(diff_path) or diff_path.endswith(res_path): # 可能是相对路径
-                    if any(l in changed_lines for l in range(res_start, res_end+1)):
-                        filtered_results.append(result)
-                    break  # 找到匹配文件后停止
+                for diff_path, changed_lines in added_lines_by_file.items():
+                    if self._is_path_match(res_path, diff_path):
+                        if not res_start:
+                            filtered_results.append(result)
+                        elif any(l in changed_lines for l in range(res_start, res_end+1)):
+                            filtered_results.append(result)
+                        break  # 找到匹配文件后停止
 
-        return filtered_results
+            return filtered_results
+        except Exception as e:
+            logger.error(f"Failed to filter scan results: {e}")
+            return all_results
+
+    def _is_path_match(self, path_one: str, path_two: str) -> bool:
+        """匹配两个路径是否是同一个文件"""
+        po = path_one.replace("\\", "/").strip("/")
+        pt = path_two.replace("\\", "/").strip("/")
+        
+        # 完全相等，或者长路径以 "/短路径" 结尾
+        return po == pt or po.endswith("/" + pt) or po.endswith("/" + pt)
 
     def _run_gitleaks(self, target_dir: str, base_sha: str, head_sha: str) -> List[Dict[str, Any]]:
         """
