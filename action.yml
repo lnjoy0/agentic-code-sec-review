@@ -84,7 +84,7 @@ runs:
       id: get-date
       run: echo "date=$(date -u +'%Y-%m-%d')" >> $GITHUB_OUTPUT
 
-    - name: Cache Trivy DB
+    - name: Cache Trivy DB # 缓存Trivy数据库来避免每次都重新下载
       uses: actions/cache@v3
       with:
         path: /tmp/trivy_cache

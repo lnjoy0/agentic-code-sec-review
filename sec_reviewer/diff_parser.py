@@ -3,12 +3,8 @@ Modified from [truongnh1992/gemini-ai-code-reviewer]
 """
 
 import logging
-import re
 from typing import List, Dict, Any, Optional
 from unidiff import PatchSet, PatchedFile, Hunk
-
-from .data_models import DiffFile, FileInfo, HunkInfo
-
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +19,7 @@ class DiffParser:
     def __init__(self):
         logger.debug("Initialized diff parser")
     
-    def parse_diff(self, diff_content: str) -> List[DiffFile]:
+    def parse_diff(self, diff_content: str) -> List[PatchedFile]:
         """Parse diff content into structured DiffFile objects."""
         if not diff_content or not isinstance(diff_content, str):
             logger.warning("Empty or invalid diff content provided")
@@ -40,7 +36,7 @@ class DiffParser:
             logger.debug(f"Diff content preview: {diff_content[:500]}...")
             raise DiffParsingError(f"Failed to parse diff: {str(e)}")
     
-    def _parse_with_unidiff(self, diff_content: str) -> List[DiffFile]:
+    def _parse_with_unidiff(self, diff_content: str) -> List[PatchedFile]:
         """Parse diff using the unidiff library."""
         try:
             patch_set = PatchSet(diff_content)
@@ -54,108 +50,29 @@ class DiffParser:
                 logger.warning(f"Total lines: {len(lines)}")
                 logger.warning(f"First 10 lines: {lines[:10]}")
                 
-            diff_files = []
+            patched_files = []
             
             for i, patched_file in enumerate(patch_set):
                 logger.debug(f"Processing patched file {i+1}: {patched_file.source_file} -> {patched_file.target_file}")
-                diff_file = self._convert_patched_file(patched_file)
-                if diff_file:
-                    diff_files.append(diff_file)
-                    logger.debug(f"✅ Successfully converted file: {diff_file.file_info.path}")
-                else:
-                    logger.debug(f"⚠️ Skipped file: {patched_file.source_file} -> {patched_file.target_file}")
+
+                if patched_file.is_removed_file: # 排除删除文件的情况
+                    logger.debug(f"⚠️ Skipping removed file: {patched_file.source_file}")
+                    continue
+                
+                if patched_file.is_binary_file: # 跳过二进制文件
+                    logger.debug(f"⚠️ Skipping binary file: {patched_file.path}")
+                    return None
+                
+                patched_files.append(patched_file)
+                logger.debug(f"✅ Successfully parsed file: {patched_file.path}")
             
-            logger.info(f"Unidiff parsing completed: {len(diff_files)} files processed, {len(patch_set) - len(diff_files)} skipped")
-            return diff_files
+            logger.info(f"Unidiff parsing completed: {len(patched_files)} files processed, {len(patch_set) - len(patched_files)} skipped")
+            return patched_files
             
         except Exception as e:
             logger.warning(f"Unidiff parsing error: {str(e)}")
             logger.debug(f"Diff content preview: {diff_content[:1000]}...")
             raise
-    
-    def _convert_patched_file(self, patched_file: PatchedFile) -> Optional[DiffFile]:
-        """Convert unidiff PatchedFile to our DiffFile model."""
-        if not patched_file:
-            logger.warning("Received empty patched file")
-            return None
-        if patched_file.is_removed_file: # 排除删除文件的情况
-            logger.debug(f"File marked as removed: {patched_file.source_file}")
-            return None
-        
-        try:
-            # Extract file information
-            target_file = patched_file.target_file or ""
-            source_file = patched_file.source_file or ""
-            
-            if target_file:
-                file_path = target_file[2:] if target_file.startswith("b/") else target_file
-                old_path = source_file[2:] if source_file.startswith("a/") else source_file
-            else:
-                logger.warning(f"Missing target file path for patched file: {patched_file}")
-                return None
-            
-            # Create FileInfo
-            file_info = FileInfo(
-                path=file_path,
-                old_path=old_path,
-                is_new_file=patched_file.is_added_file,
-                is_renamed_file=patched_file.is_rename
-            )
-            
-            # Skip binary files
-            if file_info.is_binary:
-                logger.debug(f"⚠️ Skipping binary file: {file_path}")
-                return None
-            
-            # Convert hunks
-            hunks = []
-            for hunk in patched_file:
-                hunk_info = self._convert_hunk(hunk)
-                if hunk_info:
-                    hunks.append(hunk_info)
-            
-            if not hunks:
-                logger.debug(f"⚠️ No valid hunks found for file: {file_path}")
-                return None
-            
-            diff_file = DiffFile(file_info=file_info, hunks=hunks)
-            
-            logger.debug(f"Converted file: {file_path} with {len(hunks)} hunks")
-            return diff_file
-            
-        except Exception as e:
-            logger.warning(f"Error converting patched file: {str(e)}")
-            return None
-    
-    def _convert_hunk(self, hunk: Hunk) -> Optional[HunkInfo]:
-        """Convert unidiff Hunk to our HunkInfo model."""
-        try:
-            # Extract hunk lines
-            lines = []
-            for line in hunk:
-                line_content = str(line)
-                lines.append(line_content)
-            
-            if not lines:
-                logger.debug("Empty hunk found")
-                return None
-            
-            # Create HunkInfo
-            hunk_info = HunkInfo(
-                source_start=hunk.source_start,
-                source_length=hunk.source_length,
-                target_start=hunk.target_start,
-                target_length=hunk.target_length,
-                content='\n'.join(lines),
-                header=str(hunk).split('\n')[0],  # First line is the hunk header
-                lines=lines
-            )
-            
-            return hunk_info
-            
-        except Exception as e:
-            logger.warning(f"Error converting hunk: {str(e)}")
-            return None
     
     @staticmethod
     def get_file_language(file_path: str) -> Optional[str]:

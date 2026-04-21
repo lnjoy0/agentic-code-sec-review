@@ -3,12 +3,12 @@ import logging
 import json
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
+from unidiff import PatchedFile
 
 from .config import Config
 from .data_models import (
-    PRDetails, ReviewResult, ReviewComment, DiffFile, HunkInfo,
-    AnalysisContext, ReviewPriority
+    PRDetails, ReviewResult, ReviewComment, HunkInfo
 )
 from .github_client import GitHubClient, GitHubClientError
 from .diff_parser import DiffParser, DiffParsingError
@@ -43,18 +43,15 @@ class CodeSecReviewer:
             # 解析 GitHub Action event.json 获取 PR 详情 
             pr_details = self.github_client.get_pr_details_from_event(event_path)
 
-            # 获取 PR 的 diff 信息，并解析成结构化的 DiffFile 对象列表
+            # 获取 PR 的 diff 信息，并解析成结构化的 PatchedFile 对象列表
             diff_content = await self._get_pr_diff(pr_details)
-            diff_files = await self._parse_diff(diff_content)
-
-            # 提取被修改的文件路径
-            changed_files = [f.file_info.path for f in diff_files]
+            patched_files = await self._parse_diff(diff_content)
 
             # 要扫描的代码已经被 actions/checkout 提取到了当前工作目录
             workspace_dir = "." 
 
             # 调用 Semgrep 扫描
-            semgrep_results = await self._run_semgrep_sync(changed_files, language)
+            semgrep_results = await self._run_semgrep_sync(patched_files, language)
             logger.info(f"Semgrep scanned for {len(semgrep_results)} results")
 
             # 调用 gitleaks 扫描
@@ -69,9 +66,6 @@ class CodeSecReviewer:
             codeql_results = self._read_codeql_results(codeql_results_dir, language)
             logger.info(f"CodeQL scanned for {len(codeql_results)} results")
 
-            # self._run_codeql(workspace_dir, codeql_results_dir, language)
-            # codeql_results = self._read_codeql_results(codeql_results_dir)
-
             # 整合扫描结果
             all_results = {
                 "semgrep": semgrep_results,
@@ -79,7 +73,7 @@ class CodeSecReviewer:
                 "trivy": trivy_results,
                 "codeql": codeql_results
             }
-            all_comments = self._convert_results_to_comments(all_results, changed_files)
+            all_comments = self._convert_results_to_comments(all_results, patched_files)
 
             # 将评论提交到 GitHub
             if all_comments:
@@ -96,30 +90,32 @@ class CodeSecReviewer:
             logger.error(f"Error during PR review: {e}")
             raise ReviewerError(f"Review process failed: {e}")
 
-    def _convert_results_to_comments(self, results: Dict[str, Any], changed_files: List) -> List[ReviewComment]:
+    def _convert_results_to_comments(self, results: Dict[str, Any], patched_files: List[PatchedFile]) -> List[ReviewComment]:
         """Convert raw scanner results to GitHub review comments."""
         comments = []
         for tool, tool_results in results.items():                        
             comment = ReviewComment(
                 body=json.dumps(tool_results[:1000], indent=4),
-                path=changed_files[0],
+                path=patched_files[0].file_info.path,
                 position=1
             )
             comments.append(comment)
         
         return comments
 
-    async def _run_semgrep_sync(self, changed_files: list[str], lang: str = '', batch_size: int = 200) -> List[Dict[str, Any]]:
+    async def _run_semgrep_sync(self, patched_files: List[PatchedFile], lang: str = '', batch_size: int = 200) -> List[Dict[str, Any]]:
         """
         semgrep利用Tree-sitter将源代码解析成抽象语法树 (AST)，并使用预定义的规则集对AST进行模式匹配
         semgrep免费版（不登陆）是对单个文件的AST做模式匹配，不会进行跨文件分析，因此这里只传入变更文件，做增量扫描
         --severity=ERROR 只报告 ERROR 级别的漏洞
         """
+        filenames = [f.path for f in patched_files] # f.path是新增或者修改后的文件路径
         logger.info("Semgrep running...")
-        logger.info(f"Number of files changed: {len(changed_files)}")
-        logger.info(f"Changed files: {str(changed_files)}")
+        logger.info(f"Number of files changed: {len(filenames)}")
+        logger.info(f"Changed files: {str(filenames)}")
+
         # 将文件列表切片，防止一次性传入过多文件导致命令行参数过长的问题
-        chunks = [changed_files[i:i + batch_size] for i in range(0, len(changed_files), batch_size)]
+        chunks = [filenames[i:i + batch_size] for i in range(0, len(filenames), batch_size)]
         # 控制并发数量
         semaphore = asyncio.Semaphore(2)
 
@@ -163,9 +159,56 @@ class CodeSecReviewer:
         # 并行执行所有批次
         tasks = [process_chunk(chunk) for chunk in chunks]
         results = await asyncio.gather(*tasks)
-        
+
         all_results = [item for sublist in results for item in sublist.get("results", [])]
-        return all_results
+        filtered_results = self._filter_results(all_results, patched_files)
+        
+        return filtered_results
+
+    def _filter_results(self, all_results: List[Dict[str, Any]], patched_files: List[PatchedFile]) -> List[Dict[str, Any]]:
+        """
+        过滤扫描到的结果，只保留与本次 PR 中新增或修改行相关的结果。
+        """
+        # 找出每个补丁文件中的新增行的行号
+        added_lines_by_file: Dict[str, Set[int]] = {}
+
+        for patched_file in patched_files:
+            file_path = patched_file.path
+            if file_path not in added_lines_by_file:
+                added_lines_by_file[file_path] = set()
+            
+            for hunk in patched_file:
+                for line in hunk:
+                    if line.is_added:
+                        added_lines_by_file[file_path].add(line.target_line_no)
+
+        # 通过找出的新增行号过滤results
+        filtered_results = []
+        for result in all_results:
+            if "path" in result: # 解析semgrep的json结果
+                res_path = result.get("path", "")
+                res_start = result.get("start", {}).get("line")
+                res_end = result.get("end", {}).get("line")
+
+            elif "locations" in result and result["locations"]: # 解析trivy的sarif结果
+                loc = result["locations"][0].get("physicalLocation", {})
+                res_path = loc.get("artifactLocation", {}).get("uri")
+                res_start = loc.get("region", {}).get("startLine")
+                res_end = loc.get("region", {}).get("endLine")
+
+            if not res_path:
+                continue
+            if not res_start:
+                filtered_results.append(result)
+                continue
+
+            for diff_path, changed_lines in added_lines_by_file.items():
+                if res_path.endswith(diff_path) or diff_path.endswith(res_path): # 可能是相对路径
+                    if any(l in changed_lines for l in range(res_start, res_end+1)):
+                        filtered_results.append(result)
+                    break  # 找到匹配文件后停止
+
+        return filtered_results
 
     def _run_gitleaks(self, target_dir: str, base_sha: str, head_sha: str) -> List[Dict[str, Any]]:
         """
@@ -260,19 +303,19 @@ class CodeSecReviewer:
             logger.error(f"Failed to get PR diff: {str(e)}")
             return ""
     
-    async def _parse_diff(self, diff_content: str) -> List[DiffFile]:
+    async def _parse_diff(self, diff_content: str) -> List[PatchedFile]:
         """Parse diff content with error handling."""
         try:
             logger.info("Parsing diff content...")
-            diff_files = self.diff_parser.parse_diff(diff_content)
-            return diff_files
+            patched_files = self.diff_parser.parse_diff(diff_content)
+            return patched_files
         except DiffParsingError as e:
             logger.error(f"Failed to parse diff: {str(e)}")
             return []
             
     async def _analyze_files_concurrently(
         self, 
-        diff_files: List[DiffFile], 
+        patched_files: List[PatchedFile], 
         pr_details: PRDetails
     ) -> List[ReviewComment]:
         """Analyze files concurrently for improved performance."""
@@ -281,13 +324,13 @@ class CodeSecReviewer:
         
         # Process files in chunks to manage resources
         chunk_size = self.config.performance.chunk_size
-        max_workers = min(self.config.performance.max_concurrent_files, len(diff_files))
+        max_workers = min(self.config.performance.max_concurrent_files, len(patched_files))
         
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Submit all file analysis tasks
             future_to_file = {
                 executor.submit(self._analyze_single_file_sync, diff_file, pr_details): diff_file
-                for diff_file in diff_files
+                for diff_file in patched_files
             }
             
             # Process completed tasks as they finish
@@ -305,18 +348,18 @@ class CodeSecReviewer:
         
         return all_comments
     
-    def _analyze_single_file_sync(self, diff_file: DiffFile, pr_details: PRDetails) -> List[ReviewComment]:
+    def _analyze_single_file_sync(self, diff_file: PatchedFile, pr_details: PRDetails) -> List[ReviewComment]:
         """Synchronous wrapper for analyzing a single file (for thread pool)."""
         return asyncio.run(self._analyze_single_file(diff_file, pr_details))
     
-    async def _analyze_single_file(self, diff_file: DiffFile, pr_details: PRDetails) -> List[ReviewComment]:
+    async def _analyze_single_file(self, diff_file: PatchedFile, pr_details: PRDetails) -> List[ReviewComment]:
         """Analyze a single file and return review comments."""
         pass
         
     def _convert_to_review_comment(
         self,
         ai_response,
-        diff_file: DiffFile,
+        diff_file: PatchedFile,
         hunk: HunkInfo,
         hunk_index: int,
         cumulative_position: int
