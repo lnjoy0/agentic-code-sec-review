@@ -59,7 +59,7 @@ class CodeSecReviewer:
             logger.info(f"Gitleaks scanned for {len(gitleaks_results)} results")
 
             # 调用 trivy 扫描
-            trivy_results = self._run_trivy(workspace_dir)
+            trivy_results = self._run_trivy(workspace_dir, patched_files)
             logger.info(f"Trivy scanned for {len(trivy_results)} results")
 
             # # 读取 CodeQL 的结果
