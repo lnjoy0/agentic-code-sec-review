@@ -65,9 +65,12 @@ class CodeSecReviewer:
             trivy_results = self._run_trivy(workspace_dir)
             logger.info(f"Trivy scanned for {len(trivy_results)} results")
 
-            # 读取 CodeQL 的结果
-            codeql_results = self._read_codeql_results(codeql_results_dir, language)
-            logger.info(f"CodeQL scanned for {len(codeql_results)} results")
+            # # 读取 CodeQL 的结果
+            # codeql_results = self._read_codeql_results(codeql_results_dir, language)
+            # logger.info(f"CodeQL scanned for {len(codeql_results)} results")
+
+            self._run_codeql(workspace_dir, codeql_results_dir)
+            codeql_results = self._read_codeql_results(codeql_results_dir)
 
             # 整合扫描结果
             all_results = {
@@ -76,7 +79,7 @@ class CodeSecReviewer:
                 "trivy": trivy_results,
                 "codeql": codeql_results
             }
-            all_comments = self._convert_results_to_comments(all_results, diff_files)
+            all_comments = self._convert_results_to_comments(all_results)
 
             # 将评论提交到 GitHub
             if all_comments:
@@ -125,7 +128,9 @@ class CodeSecReviewer:
                 cmd_args = ["scan"] + file_chunk + [
                     "--config=p/default", "--config=p/security-audit", "--config=p/secrets", 
                     "--config=p/r2c-security-audit", "--config=p/insecure-transport",
-                    "--json", "--quiet", "--severity=ERROR"]
+                    "--json", "--severity=ERROR", 
+                    # "--quiet"
+                    ]
                 
                 if lang:
                     if lang == "python":
@@ -176,7 +181,7 @@ class CodeSecReviewer:
             "gitleaks", "detect", target_dir,
             f"--log-opts={base_sha}...{head_sha}", # 只扫描从 base 到 head 之间新增的 commits
             "--no-banner", "--redact", # --redact 不输出敏感信息详情
-            "--log-level", "error",
+            # "--log-level", "error",
             "-f", "sarif",
             "-r", "-" # 将 JSON 报告输出到标准输出 (stdout)
         ]
@@ -204,7 +209,8 @@ class CodeSecReviewer:
         logger.info("Trivy running...")
         cmd = [
             "trivy", "fs", target_dir,
-            "-f", "sarif", "-q",
+            "-f", "sarif", 
+            # "-q",
             "--severity", "HIGH,CRITICAL",
             "--cache-dir", "/tmp/trivy_cache"
         ]
@@ -223,7 +229,23 @@ class CodeSecReviewer:
         except json.JSONDecodeError as e:
             logger.error(f"json decoding failed: {str(e)}")
             return []
-        
+
+    def _run_codeql(self, target_dir: str, results_dir: str, lang: str):
+        # 创建数据库
+        cmd_create_db = [
+            "codeql", "database", "create", f"{target_dir}_db", f"--language={lang}", 
+            f"--source-root={target_dir}", "--ram=5120", "--threads=2", "--build-mode", "none"]
+
+        subprocess.run(cmd_create_db, check=True)
+
+        # 运行查询
+        cmd_query = [
+            "codeql", "database", "analyze", f"{target_dir[10]}_db", f"{lang}-security-extended.qls",
+            "--format=sarif-latest", f"{results_dir}/{lang}.sarif",
+            "--no-download", "--sarif-add-snippets", "--ram=5120", "--threads=2"
+        ]
+        subprocess.run(cmd_query, check=True)
+
     def _read_codeql_results(self, results_dir: str, lang: str) -> List[Dict[str, Any]]:
         """
         codeql会把源码编译成关系型数据库，能够通过预定义规则查询代码里的漏洞

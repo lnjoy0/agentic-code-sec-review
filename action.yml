@@ -66,18 +66,25 @@ runs:
         echo "Installing Semgrep..."
         python3 -m pip install semgrep
 
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
-      with:
-        languages: ${{ env.LANGUAGE }}
-        queries: security-extended
-        build-mode: ${{ env.BUILD_MODE }}
+    - name: Install CodeQL
+      shell: bash
+      run: |
+        wget https://github.com/github/codeql-action/releases/latest/download/codeql-bundle-linux64.tar.gz
+        tar -xvzf codeql-bundle-linux64.tar.gz
+        export PATH=$PATH:$(pwd)/codeql
 
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
-      with:
-        upload: false
-        output: ${{ github.workspace }}/sarif-results # 将sarif结果保存到这个文件夹
+    # - name: Initialize CodeQL
+    #   uses: github/codeql-action/init@v3
+    #   with:
+    #     languages: ${{ env.LANGUAGE }}
+    #     queries: security-extended
+    #     build-mode: ${{ env.BUILD_MODE }}
+
+    # - name: Perform CodeQL Analysis
+    #   uses: github/codeql-action/analyze@v3
+    #   with:
+    #     upload: false
+    #     output: ${{ github.workspace }}/sarif-results # 将sarif结果保存到这个文件夹
 
     - name: Cache Trivy DB
       uses: actions/cache@v3
