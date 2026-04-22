@@ -95,7 +95,7 @@ class CodeSecReviewer:
         comments = []
         for tool, tool_results in results.items():                        
             comment = ReviewComment(
-                body=json.dumps(tool_results[:1000], indent=4),
+                body=json.dumps(tool_results[:100], indent=4),
                 path=patched_files[0].path,
                 position=1
             )
