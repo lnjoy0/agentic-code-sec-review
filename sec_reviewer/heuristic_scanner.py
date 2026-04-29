@@ -143,7 +143,7 @@ class HeuristicScanner:
             "--cache-dir", "/home/runner/.cache/trivy"
         ]
         
-        logger.log(f"run: {cmd}")
+        logger.info(f"run: {cmd}")
         result = subprocess.run(cmd, capture_output=True, text=True)
 
         if result.stderr.strip():
