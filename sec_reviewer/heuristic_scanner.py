@@ -72,6 +72,7 @@ class HeuristicScanner:
                 elif self.config.language == "go":
                     cmd_args += ["--config=p/golang", "--config=p/gosec"]
 
+                logger.info(f"run: semgrep {cmd_args}")
                 process = await asyncio.create_subprocess_exec(
                     "semgrep", *cmd_args,
                     stdout=asyncio.subprocess.PIPE,
@@ -113,6 +114,7 @@ class HeuristicScanner:
             "-r", "-" # 将 JSON 报告输出到标准输出 (stdout)
         ]
         
+        logger.info(f"run: {cmd}")
         result = subprocess.run(cmd, capture_output=True, text=True)
 
         if result.stderr.strip():
@@ -141,6 +143,7 @@ class HeuristicScanner:
             "--cache-dir", "/home/runner/.cache/trivy"
         ]
         
+        logger.log(f"run: {cmd}")
         result = subprocess.run(cmd, capture_output=True, text=True)
 
         if result.stderr.strip():
