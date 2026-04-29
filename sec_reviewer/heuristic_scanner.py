@@ -63,13 +63,13 @@ class HeuristicScanner:
                     "--json", "--severity=ERROR", 
                     ]
                 
-                if self.lang == "python":
+                if self.config.language == "python":
                     cmd_args += ["--config=p/python", "--config=p/django", 
                             "--config=p/flask", "--config=p/sql-injection"]
-                elif self.lang == "java":
+                elif self.config.language == "java":
                     cmd_args += ["--config=p/java", "--config=p/spring", 
                             "--config=p/hibernate", "--config=p/xxe"]
-                elif self.lang == "go":
+                elif self.config.language == "go":
                     cmd_args += ["--config=p/golang", "--config=p/gosec"]
 
                 process = await asyncio.create_subprocess_exec(
@@ -106,8 +106,8 @@ class HeuristicScanner:
         """
         logger.info("Gitleaks running...")
         cmd = [
-            "gitleaks", "detect", self.workspace_dir,
-            f"--log-opts={self.base_sha}...{self.head_sha}", # 只扫描从 base 到 head 之间新增的 commits
+            "gitleaks", "detect", self.config.workspace_dir,
+            f"--log-opts={self.config.base_sha}...{self.config.head_sha}", # 只扫描从 base 到 head 之间新增的 commits
             "--no-banner", "--redact", # --redact 不输出敏感信息详情
             "-f", "sarif",
             "-r", "-" # 将 JSON 报告输出到标准输出 (stdout)
@@ -135,7 +135,7 @@ class HeuristicScanner:
         """
         logger.info("Trivy running...")
         cmd = [
-            "trivy", "fs", self.workspace_dir,
+            "trivy", "fs", self.config.workspace_dir,
             "-f", "sarif", 
             "--severity", "HIGH,CRITICAL",
             "--cache-dir", "/home/runner/.cache/trivy"
