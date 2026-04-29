@@ -32,7 +32,7 @@ class CodeSecReviewer:
         # Initialize components
         self.github_client = GitHubClient(config.github)
         self.diff_parser = DiffParser()
-        self.heuristic_scanner = HeuristicScanner()
+        self.heuristic_scanner = HeuristicScanner(config.scanner)
 
     async def review_pull_request(self) -> ReviewResult:
         """Main entry point for reviewing a pull request."""
