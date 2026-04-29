@@ -48,7 +48,7 @@ class CodeSecReviewer:
             patched_files = await self._parse_diff(diff_content)
 
             # 获取传统工具扫描结果
-            heuristic_report = self.heuristic_scanner.get_report(patched_files)
+            heuristic_report = await self.heuristic_scanner.get_report(patched_files)
 
             all_comments = self._convert_results_to_comments(heuristic_report, patched_files)
 
