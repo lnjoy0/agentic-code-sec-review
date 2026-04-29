@@ -47,10 +47,10 @@ class GitHubClient:
         
         logger.info("Initialized GitHub client")
     
-    def get_pr_details_from_event(self, event_path: str) -> PRDetails:
+    def get_pr_details_from_event(self) -> PRDetails:
         """Extract PR details from GitHub Actions event payload."""
         try:
-            with open(event_path, "r") as f:
+            with open(self.config.event_path, "r") as f:
                 event_data = json.load(f)
             logger.info("Successfully loaded GitHub event data")
         except (FileNotFoundError, json.JSONDecodeError) as e:

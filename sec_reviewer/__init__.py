@@ -6,6 +6,7 @@ from .data_models import (
 )
 from .github_client import GitHubClient, GitHubClientError
 from .diff_parser import DiffParser, DiffParsingError
+from .heuristic_scanner import HeuristicScanner
 
 __all__ = [
     'Config',
@@ -14,4 +15,5 @@ __all__ = [
     'HunkInfo', 'AnalysisContext', 'ReviewPriority',
     'GitHubClient', 'GitHubClientError',
     'DiffParser', 'DiffParsingError',
+    'HeuristicScanner'
 ]

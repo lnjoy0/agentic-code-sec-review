@@ -18,28 +18,27 @@ runs:
     - name: Install python dependencies
       shell: bash
       run: |
+        echo "$(date +'%Y-%m-%d %H:%M:%S')"
         pip install -r ${{ github.action_path }}/requirements.txt
+        echo "$(date +'%Y-%m-%d %H:%M:%S')"
 
     - name: Detect Primary Language
       shell: bash
       run: |
         echo "Starting language detection..."
         DETECTED_LANGUAGE=""
-        BUILD_MODE="none" # 为提高速度，对java等编译型语言不进行编译分析
+        BUILD_MODE="none"
 
-        if [ -f "pom.xml" ] || [ -f "build.gradle" ] || [ -f "build.gradle.kts" ]; then
-            DETECTED_LANGUAGE="java"
-            echo "Detected Java build file."
-        elif [ -f "go.mod" ]; then
+        if [ -f "go.mod" ]; then
             DETECTED_LANGUAGE="go"
-            BUILD_MODE="autobuild" # Go 目前还不支持build-mode: none，必须使用 autobuild
+            BUILD_MODE="autobuild" # codeql当前不支持go使用build-mode:none
             echo "Detected Go module file."
         elif [ -f "requirements.txt" ] || [ -f "pyproject.toml" ] || [ -f "setup.py" ] || [ -f "Pipfile" ]; then
             DETECTED_LANGUAGE="python"
             echo "Detected Python configuration file."
-        else
-            echo "Error: Currently supported languages only include Python, Java, and Go."
-            exit 1
+        elif [ -f "pom.xml" ] || [ -f "build.gradle" ] || [ -f "build.gradle.kts" ]; then
+            DETECTED_LANGUAGE="java"
+            echo "Detected Java build file."
         fi
 
         echo "LANGUAGE=$DETECTED_LANGUAGE" >> $GITHUB_ENV
@@ -50,6 +49,7 @@ runs:
       run: |
         echo "Installing Trivy..."
         curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+        echo "$(date +'%Y-%m-%d %H:%M:%S')"
 
     - name: Install Gitleaks
       shell: bash
@@ -59,32 +59,21 @@ runs:
         wget https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz
         tar -zxvf gitleaks_${VERSION}_linux_x64.tar.gz
         sudo mv gitleaks /usr/local/bin/
+        echo "$(date +'%Y-%m-%d %H:%M:%S')"
 
     - name: Install Semgrep
       shell: bash
       run: |
         echo "Installing Semgrep..."
         python3 -m pip install semgrep
-
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
-      with:
-        languages: ${{ env.LANGUAGE }}
-        queries: security-extended
-        build-mode: ${{ env.BUILD_MODE }}
-
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
-      with:
-        upload: false
-        output: ${{ github.workspace }}/sarif-results # 将sarif结果保存到这个文件夹
+        echo "$(date +'%Y-%m-%d %H:%M:%S')"
 
     - name: Get Date
       shell: bash
       id: get-date
       run: echo "date=$(date -u +'%Y-%m-%d')" >> $GITHUB_OUTPUT
 
-    - name: Cache Trivy DB # 缓存Trivy数据库来避免每次都重新下载
+    - name: Cache Trivy DB
       uses: actions/cache@v3
       with:
         path: /home/runner/.cache/trivy
@@ -100,4 +89,5 @@ runs:
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         CODEQL_RESULTS_DIR: ${{ github.workspace }}/sarif-results
       run: |
+        echo "$(date +'%Y-%m-%d %H:%M:%S')"
         python ${{ github.action_path }}/main.py

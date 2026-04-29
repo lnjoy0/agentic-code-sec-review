@@ -42,13 +42,7 @@ async def main_async() -> int:
         with CodeSecReviewer(config) as reviewer:
             
             # Perform the code review
-            result = await reviewer.review_pull_request(
-                event_path=os.environ["GITHUB_EVENT_PATH"],
-                codeql_results_dir=os.environ.get("CODEQL_RESULTS_DIR"),
-                language=os.environ.get("LANGUAGE"),
-                base_sha=os.environ.get("BASE_SHA"),
-                head_sha=os.environ.get("HEAD_SHA")
-            )
+            result = await reviewer.review_pull_request()
 
             # Return appropriate exit code
             if result.errors:

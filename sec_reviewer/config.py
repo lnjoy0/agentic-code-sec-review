@@ -1,10 +1,12 @@
 import os
 from dataclasses import dataclass
 
+
 @dataclass
 class GitHubConfig:
     """Configuration for GitHub integration."""
     token: str
+    event_path: str
     api_base_url: str = "https://api.github.com"
     timeout: int = 30
     max_retries: int = 3
@@ -19,6 +21,7 @@ class GitHubConfig:
         if not (len(self.token) == 40 or self.token.startswith(('ghp_', 'ghs_', 'gho_', 'ghu_'))): 
             raise ValueError("Invalid GitHub token format")
 
+
 @dataclass
 class LoggingConfig:
     """Configuration for logging."""
@@ -28,11 +31,22 @@ class LoggingConfig:
     max_log_size: int = 10 * 1024 * 1024  # 10 MB
     backup_count: int = 3
 
+
+@dataclass
+class ScannerConfig:
+    """配置扫描器参数"""
+    workspace_dir: str = '.'
+    language: str
+    base_sha: str
+    head_sha: str
+
+
 @dataclass
 class Config:
     """Main configuration class that combines all configuration sections."""
     github: GitHubConfig
     logging: LoggingConfig
+    scanner: ScannerConfig
     
     @classmethod
     def from_environment(cls) -> 'Config':
@@ -45,6 +59,7 @@ class Config:
         # GitHub configuration
         github_config = GitHubConfig(
             token=github_token,
+            event_path=os.environ["GITHUB_EVENT_PATH"],
             timeout=int(os.environ.get("GITHUB_TIMEOUT", "30")),
             max_retries=int(os.environ.get("GITHUB_MAX_RETRIES", "3"))
         )
@@ -58,7 +73,16 @@ class Config:
             level=log_level_str
         )
 
+        # Scanner configuration
+        scanner_config = ScannerConfig(
+            language=os.environ.get("LANGUAGE"),
+            base_sha=os.environ.get("BASE_SHA"),
+            head_sha=os.environ.get("HEAD_SHA")
+        )
+
+
         return cls(
             github = github_config,
-            logging = logging_config
+            logging = logging_config,
+            scanner = scanner_config
         )
