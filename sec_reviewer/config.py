@@ -35,10 +35,10 @@ class LoggingConfig:
 @dataclass
 class ScannerConfig:
     """配置扫描器参数"""
-    workspace_dir: str = '.'
     language: str
     base_sha: str
     head_sha: str
+    workspace_dir: str = '.'
 
 
 @dataclass
