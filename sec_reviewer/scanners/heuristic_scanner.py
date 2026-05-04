@@ -5,7 +5,7 @@ import asyncio
 import json
 import subprocess
 
-from .config import ScannerConfig
+from core.config import ScannerConfig
 
 
 logger = logging.getLogger(__name__)

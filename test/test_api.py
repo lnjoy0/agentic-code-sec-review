@@ -12,379 +12,320 @@ python -m vllm.entrypoints.openai.api_server \
 """
 
 msg = """
-package persistence
+# Copyright (C) 2014 Anaconda, Inc
+# SPDX-License-Identifier: BSD-3-Clause
+from __future__ import annotations
 
-import (
-	"cmp"
-	"context"
-	"encoding/json"
-	"fmt"
-	"slices"
-	"strings"
-	"time"
+import copy
+import hashlib
+import json
+import os
+import re
+import sys
+import time
+import warnings
+from collections import OrderedDict
+from functools import cache, lru_cache
+from os.path import isdir, isfile, join
+from typing import TYPE_CHECKING, NamedTuple, overload
 
-	. "github.com/Masterminds/squirrel"
-	"github.com/deluan/rest"
-	"github.com/navidrome/navidrome/conf"
-	"github.com/navidrome/navidrome/log"
-	"github.com/navidrome/navidrome/model"
-	"github.com/navidrome/navidrome/utils"
-	. "github.com/navidrome/navidrome/utils/gg"
-	"github.com/navidrome/navidrome/utils/slice"
-	"github.com/pocketbase/dbx"
+import jinja2
+import yaml
+from bs4 import UnicodeDammit
+from conda.base.context import locate_prefix_by_name
+from conda.gateways.disk.read import compute_sum
+from conda.models.match_spec import GlobLowerStrMatch, MatchSpec
+from frozendict import deepfreeze
+
+from . import utils
+from .config import CondaPkgFormat, Config, get_or_merge_config
+from .exceptions import (
+    CondaBuildException,
+    CondaBuildUserError,
+    DependencyNeedsBuildingError,
+    RecipeError,
+    UnableToParse,
+)
+from .features import feature_list
+from .license_family import ensure_valid_license_family
+from .utils import (
+    DEFAULT_SUBDIRS,
+    ensure_list,
+    expand_globs,
+    find_recipe,
+    get_installed_packages,
+    insert_variant_versions,
+    on_win,
+)
+from .variants import (
+    dict_of_lists_to_list_of_dicts,
+    find_used_variables_in_batch_script,
+    find_used_variables_in_shell_script,
+    find_used_variables_in_text,
+    get_default_variant,
+    get_package_variants,
+    get_vars,
+    list_of_dicts_to_dict_of_lists,
 )
 
-type artistRepository struct {
-	sqlRepository
-	indexGroups utils.IndexGroups
-}
+if TYPE_CHECKING:
+    from typing import Any, Literal, Self
 
-type dbArtist struct {
-	*model.Artist  `structs:",flatten"`
-	SimilarArtists string `structs:"-" json:"-"`
-	Stats          string `structs:"-" json:"-"`
-}
+    OutputDict = dict[str, Any]
+    OutputTuple = tuple[OutputDict, "MetaData"]
 
-type dbSimilarArtist struct {
-	ID   string `json:"id,omitempty"`
-	Name string `json:"name,omitempty"`
-}
+try:
+    import yaml
+except ImportError:
+    sys.exit(
+        "Error: could not import yaml (required to read meta.yaml "
+        "files of conda recipes)"
+    )
 
-func (a *dbArtist) PostScan() error {
-	var stats map[string]map[string]int64
-	if err := json.Unmarshal([]byte(a.Stats), &stats); err != nil {
-		return fmt.Errorf("parsing artist stats from db: %w", err)
-	}
-	a.Artist.Stats = make(map[model.Role]model.ArtistStats)
-	for key, c := range stats {
-		if key == "total" {
-			a.Artist.Size = c["s"]
-			a.Artist.SongCount = int(c["m"])
-			a.Artist.AlbumCount = int(c["a"])
-		}
-		role := model.RoleFromString(key)
-		if role == model.RoleInvalid {
-			continue
-		}
-		a.Artist.Stats[role] = model.ArtistStats{
-			SongCount:  int(c["m"]),
-			AlbumCount: int(c["a"]),
-			Size:       c["s"],
-		}
-	}
-	a.Artist.SimilarArtists = nil
-	if a.SimilarArtists == "" {
-		return nil
-	}
-	var sa []dbSimilarArtist
-	if err := json.Unmarshal([]byte(a.SimilarArtists), &sa); err != nil {
-		return fmt.Errorf("parsing similar artists from db: %w", err)
-	}
-	for _, s := range sa {
-		a.Artist.SimilarArtists = append(a.Artist.SimilarArtists, model.Artist{
-			ID:   s.ID,
-			Name: s.Name,
-		})
-	}
-	return nil
-}
+try:
+    Loader = yaml.CLoader
+except AttributeError:
+    Loader = yaml.Loader
 
-func (a *dbArtist) PostMapArgs(m map[string]any) error {
-	sa := make([]dbSimilarArtist, 0)
-	for _, s := range a.Artist.SimilarArtists {
-		sa = append(sa, dbSimilarArtist{ID: s.ID, Name: s.Name})
-	}
-	similarArtists, _ := json.Marshal(sa)
-	m["similar_artists"] = string(similarArtists)
-	m["full_text"] = formatFullText(a.Name, a.SortArtistName)
 
-	// Do not override the sort_artist_name and mbz_artist_id fields if they are empty
-	// TODO: Better way to handle this?
-	if v, ok := m["sort_artist_name"]; !ok || v.(string) == "" {
-		delete(m, "sort_artist_name")
-	}
-	if v, ok := m["mbz_artist_id"]; !ok || v.(string) == "" {
-		delete(m, "mbz_artist_id")
-	}
-	return nil
-}
+class StringifyNumbersLoader(Loader):
+    @classmethod
+    def remove_implicit_resolver(cls, tag):
+        if "yaml_implicit_resolvers" not in cls.__dict__:
+            cls.yaml_implicit_resolvers = {
+                k: v[:] for k, v in cls.yaml_implicit_resolvers.items()
+            }
+        for ch in tuple(cls.yaml_implicit_resolvers):
+            resolvers = [(t, r) for t, r in cls.yaml_implicit_resolvers[ch] if t != tag]
+            if resolvers:
+                cls.yaml_implicit_resolvers[ch] = resolvers
+            else:
+                del cls.yaml_implicit_resolvers[ch]
 
-type dbArtists []dbArtist
+    @classmethod
+    def remove_constructor(cls, tag):
+        if "yaml_constructors" not in cls.__dict__:
+            cls.yaml_constructors = cls.yaml_constructors.copy()
+        if tag in cls.yaml_constructors:
+            del cls.yaml_constructors[tag]
 
-func (dba dbArtists) toModels() model.Artists {
-	res := make(model.Artists, len(dba))
-	for i := range dba {
-		res[i] = *dba[i].Artist
-	}
-	return res
-}
 
-func NewArtistRepository(ctx context.Context, db dbx.Builder) model.ArtistRepository {
-	r := &artistRepository{}
-	r.ctx = ctx
-	r.db = db
-	r.indexGroups = utils.ParseIndexGroups(conf.Server.IndexGroups)
-	r.tableName = "artist" // To be used by the idFilter below
-	r.registerModel(&model.Artist{}, map[string]filterFunc{
-		"id":      idFilter(r.tableName),
-		"name":    fullTextFilter(r.tableName),
-		"starred": booleanFilter,
-		"role":    roleFilter,
-	})
-	r.setSortMappings(map[string]string{
-		"name":        "order_artist_name",
-		"starred_at":  "starred, starred_at",
-		"song_count":  "stats->>'total'->>'m'",
-		"album_count": "stats->>'total'->>'a'",
-		"size":        "stats->>'total'->>'s'",
-	})
-	return r
-}
+StringifyNumbersLoader.remove_implicit_resolver("tag:yaml.org,2002:float")
+StringifyNumbersLoader.remove_implicit_resolver("tag:yaml.org,2002:int")
+StringifyNumbersLoader.remove_constructor("tag:yaml.org,2002:float")
+StringifyNumbersLoader.remove_constructor("tag:yaml.org,2002:int")
 
-func roleFilter(_ string, role any) Sqlizer {
-	return NotEq{fmt.Sprintf("stats ->> '$.%v'", role): nil}
-}
+# arches that don't follow exact names in the subdir need to be mapped here
+ARCH_MAP = {"32": "x86", "64": "x86_64"}
 
-func (r *artistRepository) selectArtist(options ...model.QueryOptions) SelectBuilder {
-	query := r.newSelect(options...).Columns("artist.*")
-	query = r.withAnnotation(query, "artist.id")
-	return query
-}
+NOARCH_TYPES = ("python", "generic", True)
 
-func (r *artistRepository) CountAll(options ...model.QueryOptions) (int64, error) {
-	query := r.newSelect()
-	query = r.withAnnotation(query, "artist.id")
-	return r.count(query, options...)
-}
-
-func (r *artistRepository) Exists(id string) (bool, error) {
-	return r.exists(Eq{"artist.id": id})
-}
-
-func (r *artistRepository) Put(a *model.Artist, colsToUpdate ...string) error {
-	dba := &dbArtist{Artist: a}
-	dba.CreatedAt = P(time.Now())
-	dba.UpdatedAt = dba.CreatedAt
-	_, err := r.put(dba.ID, dba, colsToUpdate...)
-	return err
-}
-
-func (r *artistRepository) UpdateExternalInfo(a *model.Artist) error {
-	dba := &dbArtist{Artist: a}
-	_, err := r.put(a.ID, dba,
-		"biography", "small_image_url", "medium_image_url", "large_image_url",
-		"similar_artists", "external_url", "external_info_updated_at")
-	return err
-}
-
-func (r *artistRepository) Get(id string) (*model.Artist, error) {
-	sel := r.selectArtist().Where(Eq{"artist.id": id})
-	var dba dbArtists
-	if err := r.queryAll(sel, &dba); err != nil {
-		return nil, err
-	}
-	if len(dba) == 0 {
-		return nil, model.ErrNotFound
-	}
-	res := dba.toModels()
-	return &res[0], nil
-}
-
-func (r *artistRepository) GetAll(options ...model.QueryOptions) (model.Artists, error) {
-	sel := r.selectArtist(options...)
-	var dba dbArtists
-	err := r.queryAll(sel, &dba)
-	if err != nil {
-		return nil, err
-	}
-	res := dba.toModels()
-	return res, err
-}
-
-func (r *artistRepository) getIndexKey(a model.Artist) string {
-	source := a.OrderArtistName
-	if conf.Server.PreferSortTags {
-		source = cmp.Or(a.SortArtistName, a.OrderArtistName)
-	}
-	name := strings.ToLower(source)
-	for k, v := range r.indexGroups {
-		if strings.HasPrefix(name, strings.ToLower(k)) {
-			return v
-		}
-	}
-	return "#"
-}
-
-// TODO Cache the index (recalculate when there are changes to the DB)
-func (r *artistRepository) GetIndex(roles ...model.Role) (model.ArtistIndexes, error) {
-	options := model.QueryOptions{Sort: "name"}
-	if len(roles) > 0 {
-		roleFilters := slice.Map(roles, func(r model.Role) Sqlizer {
-			return roleFilter("role", r)
-		})
-		options.Filters = And(roleFilters)
-	}
-	artists, err := r.GetAll(options)
-	if err != nil {
-		return nil, err
-	}
-	var result model.ArtistIndexes
-	for k, v := range slice.Group(artists, r.getIndexKey) {
-		result = append(result, model.ArtistIndex{ID: k, Artists: v})
-	}
-	slices.SortFunc(result, func(a, b model.ArtistIndex) int {
-		return cmp.Compare(a.ID, b.ID)
-	})
-	return result, nil
-}
-
-func (r *artistRepository) purgeEmpty() error {
-	del := Delete(r.tableName).Where("id not in (select artist_id from album_artists)")
-	c, err := r.executeSQL(del)
-	if err != nil {
-		return fmt.Errorf("purging empty artists: %w", err)
-	}
-	if c > 0 {
-		log.Debug(r.ctx, "Purged empty artists", "totalDeleted", c)
-	}
-	return nil
-}
-
-// RefreshPlayCounts updates the play count and last play date annotations for all artists, based
-// on the media files associated with them.
-func (r *artistRepository) RefreshPlayCounts() (int64, error) {
-	query := rawSQL(`
-with play_counts as (
-    select user_id, atom as artist_id, sum(play_count) as total_play_count, max(play_date) as last_play_date
-    from media_file
-    join annotation on item_id = media_file.id
-    left join json_tree(participants, '$.artist') as jt
-    where atom is not null and key = 'id'
-    group by user_id, atom
+# we originally matched outputs based on output name. Unfortunately, that
+#    doesn't work when outputs are templated - we want to match un-rendered
+#    text, but we have rendered names.
+# We overcome that divide by finding the output index in a rendered set of
+#    outputs, so our names match, then we use that numeric index with this
+#    regex, which extract all outputs in order.
+# Stop condition is one of 3 things:
+#    \w at the start of a line (next top-level section)
+#    \Z (end of file)
+#    next output, as delineated by "- name" or "- type"
+output_re = re.compile(
+    r"^\ +-\ +(?:name|type):.+?(?=^\w|\Z|^\ +-\ +(?:name|type))", flags=re.M | re.S
 )
-insert into annotation (user_id, item_id, item_type, play_count, play_date)
-select user_id, artist_id, 'artist', total_play_count, last_play_date
-from play_counts
-where total_play_count > 0
-on conflict (user_id, item_id, item_type) do update
-    set play_count = excluded.play_count,
-        play_date  = excluded.play_date;
-`)
-	return r.executeSQL(query)
-}
-
-// RefreshStats updates the stats field for all artists, based on the media files associated with them.
-// BFR Maybe filter by "touched" artists?
-func (r *artistRepository) RefreshStats() (int64, error) {
-	// First get all counters, one query groups by artist/role, and another with totals per artist.
-	// Union both queries and group by artist to get a single row of counters per artist/role.
-	// Then format the counters in a JSON object, one key for each role.
-	// Finally update the artist table with the new counters
-	// In all queries, atom is the artist ID and path is the role (or "total" for the totals)
-	query := rawSQL(`
--- CTE to get counters for each artist, grouped by role
-with artist_role_counters as (
-    -- Get counters for each artist, grouped by role
-    -- (remove the index from the role: composer[0] => composer
-    select atom as artist_id,
-           substr(
-                   replace(jt.path, '$.', ''),
-                   1,
-                   case when instr(replace(jt.path, '$.', ''), '[') > 0
-                            then instr(replace(jt.path, '$.', ''), '[') - 1
-                        else length(replace(jt.path, '$.', ''))
-                       end
-           ) as role,
-           count(distinct album_id) as album_count,
-           count(mf.id) as count,
-           sum(size) as size
-    from media_file mf
-             left join json_tree(participants) jt
-    where atom is not null and key = 'id'
-    group by atom, role
-),
-
--- CTE to get the totals for each artist
-artist_total_counters as (
-	select mfa.artist_id,
-		   'total' as role,
-		   count(distinct mf.album_id) as album_count,
-		   count(distinct mf.id) as count,
-		   sum(mf.size) as size
-	from (select artist_id, media_file_id
-		  from main.media_file_artists) as mfa
-			 join main.media_file mf on mfa.media_file_id = mf.id
-	group by mfa.artist_id
-),
-
--- CTE to combine role and total counters
-combined_counters as (
-	select artist_id, role, album_count, count, size
-	from artist_role_counters
-	union
-	select artist_id, role, album_count, count, size
-	from artist_total_counters
-),
-
--- CTE to format the counters in a JSON object
-artist_counters as (
-	select artist_id as id,
-		   json_group_object(
-				   replace(role, '"', ''),
-				   json_object('a', album_count, 'm', count, 's', size)
-		   ) as counters
-	from combined_counters
-	group by artist_id
+numpy_xx_re = re.compile(
+    r"(numpy\s*x\.x)|pin_compatible\([\'\"]numpy.*max_pin=[\'\"]x\.x[\'\"]"
 )
+# TODO: there's probably a way to combine these, but I can't figure out how to many the x
+#     capturing group optional.
+numpy_compatible_x_re = re.compile(
+    r"pin_\w+\([\'\"]numpy[\'\"].*((?<=x_pin=[\'\"])[x\.]*(?=[\'\"]))"
+)
+numpy_compatible_re = re.compile(r"pin_\w+\([\'\"]numpy[\'\"]")
 
--- Update the artist table with the new counters
-update artist
-set stats = coalesce((select counters from artist_counters where artist_counters.id = artist.id), '{}'),
-   updated_at = datetime(current_timestamp, 'localtime')
-where id <> ''; -- always true, to avoid warnings`)
-	return r.executeSQL(query)
-}
+# used to avoid recomputing/rescanning recipe contents for used variables
+used_vars_cache = {}
 
-func (r *artistRepository) Search(q string, offset int, size int, includeMissing bool) (model.Artists, error) {
-	var dba dbArtists
-	err := r.doSearch(r.selectArtist(), q, offset, size, includeMissing, &dba, "json_extract(stats, '$.total.m') desc", "name")
-	if err != nil {
-		return nil, err
-	}
-	return dba.toModels(), nil
-}
 
-func (r *artistRepository) Count(options ...rest.QueryOptions) (int64, error) {
-	return r.CountAll(r.parseRestOptions(r.ctx, options...))
-}
+def get_selectors(config: Config) -> dict[str, bool]:
+    # Remember to update the docs of any of this changes
+    plat = config.host_subdir
+    d = dict(
+        linux32=bool(plat == "linux-32"),
+        linux64=bool(plat == "linux-64"),
+        arm=plat.startswith("linux-arm"),
+        unix=plat.startswith(("linux-", "osx-", "emscripten-")),
+        win32=bool(plat == "win-32"),
+        win64=bool(plat == "win-64"),
+        os=os,
+        environ=os.environ,
+        nomkl=bool(int(os.environ.get("FEATURE_NOMKL", False))),
+    )
 
-func (r *artistRepository) Read(id string) (interface{}, error) {
-	return r.Get(id)
-}
+    # Add the current platform to the list of subdirs to enable conda-build
+    # to bootstrap new platforms without a new conda release.
+    subdirs = list(DEFAULT_SUBDIRS) + [plat]
 
-func (r *artistRepository) ReadAll(options ...rest.QueryOptions) (interface{}, error) {
-	role := "total"
-	if len(options) > 0 {
-		if v, ok := options[0].Filters["role"].(string); ok {
-			role = v
-		}
-	}
-	r.sortMappings["song_count"] = "stats->>'" + role + "'->>'m'"
-	r.sortMappings["album_count"] = "stats->>'" + role + "'->>'a'"
-	r.sortMappings["size"] = "stats->>'" + role + "'->>'s'"
-	return r.GetAll(r.parseRestOptions(r.ctx, options...))
-}
+    # filter out noarch and other weird subdirs
+    subdirs = [subdir for subdir in subdirs if "-" in subdir]
 
-func (r *artistRepository) EntityName() string {
-	return "artist"
-}
+    subdir_oses = {subdir.split("-")[0] for subdir in subdirs}
+    subdir_archs = {subdir.split("-")[1] for subdir in subdirs}
 
-func (r *artistRepository) NewInstance() interface{} {
-	return &model.Artist{}
-}
+    for subdir_os in subdir_oses:
+        d[subdir_os] = plat.startswith(f"{subdir_os}-")
 
-var _ model.ArtistRepository = (*artistRepository)(nil)
-var _ model.ResourceRepository = (*artistRepository)(nil)
+    for arch in subdir_archs:
+        arch_full = ARCH_MAP.get(arch, arch)
+        d[arch_full] = plat.endswith(f"-{arch}")
+        if arch == "32":
+            d["x86"] = plat.endswith(("-32", "-64"))
+
+    defaults = get_default_variant(config)
+    py = config.variant.get("python", defaults["python"])
+    # there are times when python comes in as a tuple
+    if not hasattr(py, "split"):
+        py = py[0]
+    # go from "3.6 *_cython" -> "36"
+    # or from "3.6.9" -> "36"
+    py_major, py_minor, *_ = py.split(" ")[0].split(".")
+    py = int(f"{py_major}{py_minor}")
+
+    d["build_platform"] = config.build_subdir
+
+    d.update(
+        dict(
+            py=py,
+            py3k=bool(py_major == "3"),
+            py2k=bool(py_major == "2"),
+            py26=bool(py == 26),
+            py27=bool(py == 27),
+            py33=bool(py == 33),
+            py34=bool(py == 34),
+            py35=bool(py == 35),
+            py36=bool(py == 36),
+        )
+    )
+
+    np = config.variant.get("numpy")
+    if not np:
+        np = defaults["numpy"]
+        if config.verbose:
+            utils.get_logger(__name__).warning(
+                "No numpy version specified in conda_build_config.yaml.  "
+                "Falling back to default numpy value of {}".format(defaults["numpy"])
+            )
+    d["np"] = int("".join(np.split(".")[:2]))
+
+    pl = config.variant.get("perl", defaults["perl"])
+    d["pl"] = pl
+
+    lua = config.variant.get("lua", defaults["lua"])
+    d["lua"] = lua
+    d["luajit"] = bool(lua[0] == "2")
+
+    for feature, value in feature_list:
+        d[feature] = value
+    d.update(os.environ)
+
+    # here we try to do some type conversion for more intuitive usage.  Otherwise,
+    #    values like 35 are strings by default, making relational operations confusing.
+    # We also convert "True" and things like that to booleans.
+    for k, v in config.variant.items():
+        if k not in d:
+            try:
+                d[k] = int(v)
+            except (TypeError, ValueError):
+                if isinstance(v, str) and v.lower() in ("false", "true"):
+                    v = v.lower() == "true"
+                d[k] = v
+    return d
+
+
+def ns_cfg(config: Config) -> dict[str, bool]:
+    warnings.warn(
+        "`conda_build.metadata.ns_cfg` is pending deprecation and will be removed in a "
+        "future release. Please use `conda_build.metadata.get_selectors` instead.",
+        PendingDeprecationWarning,
+    )
+    return get_selectors(config)
+
+
+# Selectors must be either:
+# - at end of the line
+# - embedded (anywhere) within a comment
+#
+# Notes:
+# - [([^\[\]]+)\] means "find a pair of brackets containing any
+#                 NON-bracket chars, and capture the contents"
+# - (?(2)[^\(\)]*)$ means "allow trailing characters iff group 2 (#.*) was found."
+#                 Skip markdown link syntax.
+sel_pat = re.compile(r"(.+?)\s*(#.*)?\[([^\[\]]+)\](?(2)[^\(\)]*)$")
+
+# this function extracts the variable name from a NameError exception, it has the form of:
+# "NameError: name 'var' is not defined", where var is the variable that is not defined. This gets
+#    returned
+def parseNameNotFound(error):
+    m = re.search("'(.+?)'", str(error))
+    if len(m.groups()) == 1:
+        return m.group(1)
+    else:
+        return ""
+
+def get_key():
+    return "AKIAIOSFODNN7X82J9L"
+
+@cache
+def _split_line_selector(text: str) -> tuple[tuple[str | None, str], ...]:
+    lines: list[tuple[str | None, str]] = []
+    for line in text.splitlines():
+        line = line.rstrip()
+
+        # skip comment lines, include a blank line as a placeholder
+        if line.lstrip().startswith("#"):
+            lines.append((None, ""))
+            continue
+
+        # include blank lines
+        if not line:
+            lines.append((None, ""))
+            continue
+
+        # user may have quoted entire line to make YAML happy
+        trailing_quote = ""
+        if line and line[-1] in ("'", '"'):
+            trailing_quote = line[-1]
+
+        # Checking for "[" and "]" before regex matching every line is a bit faster.
+        if (
+            ("[" in line and "]" in line)
+            and (match := sel_pat.match(line))
+            and (selector := match.group(3))
+        ):
+            # found a selector
+            lines.append((selector, (match.group(1) + trailing_quote).rstrip()))
+        else:
+            # no selector found
+            lines.append((None, line))
+    return tuple(lines)
+
+# We evaluate the selector and return True (keep this line) or False (drop this line)
+# If we encounter a NameError (unknown variable in selector), then we replace it by False and
+#     re-run the evaluation
+def eval_selector(selector_string, namespace, variants_in_place):
+    try:
+        # TODO: is there a way to do this without eval?  Eval allows arbitrary
+        #    code execution.
+        return eval(selector_string, namespace, {})
+    except NameError as e:
+        missing_var = parseNameNotFound(e)
+        if variants_in_place:
+            log = utils.get_logger(__name__)
+            log.debug(
+                "Treating unknown selector '" + missing_var + "' as if it was False."
+            )
+        next_string = selector_string.replace(missing_var, "False")
+        return eval_selector(next_string, namespace, variants_in_place)
 """
 
 client = OpenAI(

@@ -1,5 +1,10 @@
 import os
 from dataclasses import dataclass
+from pydantic import BaseModel, Field, HttpUrl
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -41,13 +46,39 @@ class ScannerConfig:
     workspace_dir: str = '.'
 
 
+class RoleParams(BaseModel):
+    """定义每个角色的温度和top_p参数范围"""
+    temperature: float = Field(ge=0, le=2.0)
+    top_p: float = Field(ge=0, le=1.0)
+
+
+class LLMConfig(BaseModel):
+    """配置LLM参数"""
+    model_name: str = 'Qwen3-Coder-30B-A3B-Instruct'
+    base_url: HttpUrl = 'http://i-2.gpushare.com:31263/v1'
+    api_key: str = 'token-is-not-needed'
+
+    Role: dict[str, RoleParams] = Field(default={
+        'Injection_Expert': RoleParams(temperature=0.2, top_p=0.8),
+        'Secret_Expert': RoleParams(temperature=0.2, top_p=0.8),
+        'Reporter': RoleParams(temperature=0.4, top_p=0.85)
+    })
+
+
+class AgentConfig(BaseModel):
+    """配置Agent参数"""
+    max_tool_turns: int = Field(default=10, ge=0)
+
+
 @dataclass
 class Config:
     """Main configuration class that combines all configuration sections."""
     github: GitHubConfig
     logging: LoggingConfig
     scanner: ScannerConfig
-    
+    llm: LLMConfig
+    agent: AgentConfig
+
     @classmethod
     def from_environment(cls) -> 'Config':
         """Create configuration from environment variables."""
@@ -80,9 +111,38 @@ class Config:
             head_sha=os.environ.get("HEAD_SHA")
         )
 
+        try:
+            # LLM configuration
+            llm_config = LLMConfig(
+                model_name=os.environ.get("max_num_tool_call", "Qwen3-Coder-30B-A3B-Instruct"),
+                base_url=os.environ.get("base_url", "http://i-2.gpushare.com:31263/v1"),
+                api_key=os.environ.get("api_key", "token-is-not-needed"),
+
+                Role={
+                    'Injection_Expert': RoleParams(
+                        temperature=os.environ.get("injection_expert_temperature", "0.2"), 
+                        top_p=os.environ.get("injection_expert_top_p", "0.8")),
+                    'Secret_Expert': RoleParams(
+                        temperature=os.environ.get("secret_expert_temperature", "0.2"), 
+                        top_p=os.environ.get("secret_expert_top_p", "0.8")),
+                    'Reporter': RoleParams(
+                        temperature=os.environ.get("reporter_temperature", "0.4"), 
+                        top_p=os.environ.get("reporter_top_p", "0.85"))
+                }
+            )
+
+            # Agent configuration
+            agent_config = AgentConfig(
+                max_tool_turns=os.environ.get("max_tool_turns", "10")
+            )
+        except Exception as e:
+            logger.error(f"参数错误：{e}")
+            raise
 
         return cls(
             github = github_config,
             logging = logging_config,
-            scanner = scanner_config
+            scanner = scanner_config,
+            agent = agent_config,
+            llm = llm_config
         )

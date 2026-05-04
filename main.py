@@ -4,7 +4,8 @@ import os
 import logging
 import sys
 
-from sec_reviewer import Config, CodeSecReviewer
+from sec_reviewer.core import Config
+from sec_reviewer import CodeSecReviewer
 
 def validate_environment() -> bool:
     required_vars = ["GITHUB_TOKEN", "GITHUB_EVENT_PATH"]
@@ -42,7 +43,7 @@ async def main_async() -> int:
         with CodeSecReviewer(config) as reviewer:
             
             # Perform the code review
-            result = await reviewer.review_pull_request()
+            result = await reviewer.run()
 
             # Return appropriate exit code
             if result.errors:

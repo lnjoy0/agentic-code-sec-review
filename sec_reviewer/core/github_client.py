@@ -9,8 +9,8 @@ from typing import List, Dict, Any, Optional
 from github import Github
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-from .config import GitHubConfig
-from .data_models import PRDetails, ReviewComment
+from config import GitHubConfig
+from data_models import PRDetails, ReviewComment, PRDetails
 
 
 logger = logging.getLogger(__name__)
@@ -91,9 +91,7 @@ class GitHubClient:
                 repo=repo,
                 pull_number=pull_number,
                 title=title,
-                description=description,
-                head_sha=pr.head.sha,
-                base_sha=pr.base.sha
+                description=description
             )
             
             logger.debug(f"Retrieved PR details: {title}")
@@ -138,10 +136,12 @@ class GitHubClient:
         wait=wait_exponential(multiplier=1, min=4, max=10),
         retry=retry_if_exception_type((requests.exceptions.RequestException, requests.exceptions.Timeout))
     )
-    def get_pr_diff(self, owner: str, repo: str, pull_number: int) -> str:
+    def get_pr_diff(self, pr_details: PRDetails) -> str:
         """Fetch the diff of a pull request with retry logic."""
+        pull_number = pr_details.pull_number
+
         # Validate inputs
-        if not all([owner, repo, pull_number]):
+        if not all([pr_details.owner, pr_details.repo, pull_number]):
             logger.error("Invalid parameters provided to get_pr_diff")
             raise GitHubClientError("Invalid parameters")
         
@@ -149,7 +149,7 @@ class GitHubClient:
             logger.error(f"Invalid pull request number: {pull_number}")
             raise GitHubClientError(f"Invalid pull request number: {pull_number}")
         
-        repo_name = f"{self._sanitize_input(owner)}/{self._sanitize_input(repo)}"
+        repo_name = f"{self._sanitize_input(pr_details.owner)}/{self._sanitize_input(pr_details.repo)}"
         logger.info(f"Fetching diff for: {repo_name} PR#{pull_number}")
         
         try:

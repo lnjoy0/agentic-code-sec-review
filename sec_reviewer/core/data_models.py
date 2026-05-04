@@ -2,9 +2,12 @@
 Modified from [truongnh1992/gemini-ai-code-reviewer]
 """
 
+import operator
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, TypedDict, Annotated
+from unidiff import PatchedFile
 from enum import Enum
+from langgraph.graph.message import BaseMessage, add_messages
 
 
 @dataclass
@@ -15,9 +18,7 @@ class PRDetails:
     pull_number: int
     title: str
     description: str
-    head_sha: Optional[str] = None
-    base_sha: Optional[str] = None
-    
+        
     @property
     def repo_full_name(self) -> str:
         """Get the full repository name."""
@@ -83,6 +84,7 @@ class ReviewPriority(Enum):
     HIGH = "high"
     CRITICAL = "critical"
 
+
 @dataclass
 class ReviewComment:
     """A code review comment."""
@@ -101,6 +103,7 @@ class ReviewComment:
             "path": self.path,
             "position": self.position
         }
+
 
 @dataclass
 class ReviewResult:
@@ -145,3 +148,20 @@ class AnalysisContext:
         """Check if this is a test file."""
         test_patterns = ['test_', '_test.', 'spec_', '_spec.', '/test/', '/tests/']
         return any(pattern in self.file_info.path.lower() for pattern in test_patterns)
+
+
+# 全局状态
+class AuditState(TypedDict):
+    patched_files: List[PatchedFile]
+    scanner_reports: Annotated[Dict[str, Any], operator.add] # 使用operator.add聚合不同节点返回的结果
+    refined_results: Annotated[List[Dict], operator.add]
+    final_comment: List[ReviewComment]
+
+
+# 单个Agent的子图状态
+class AgentState(TypedDict):
+    issue: Dict[str, Any]
+    pr_diff: str
+    messages: Annotated[list[BaseMessage], add_messages] # 使用add_messages自动合并多轮对话
+    remaining_tool_turns: int
+    refined_results: Annotated[List[Dict], operator.add]
