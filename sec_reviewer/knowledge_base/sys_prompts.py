@@ -10,18 +10,22 @@ ROUTER_PROMPT = """# ROLE (角色定位)
 1. 【Injection_Expert】(注入与数据流专家)
    - 负责：所有由于输入未经过滤导致的数据流污染与执行类漏洞。
    - 涵盖：SQL注入、OS命令注入、代码注入、XSS、SSRF、路径遍历、反序列化等。
+   - 典型长尾标签：Template Injection, LDAP Injection, XPath Injection, HTTP Request Smuggling (涉及畸形数据解析阶段)。
 
 2. 【Data_Asset_Expert】(数据与资产安全专家)
    - 负责：静态敏感资产保护与加密算法合规性。
-   - 涵盖：硬编码凭据泄露（Token/Key/Password）、弱密码学算法（MD5/SHA1等）、弱随机数、不安全哈希等。
+   - 涵盖：硬编码凭据泄露（Token/Key/Password）、弱密码学算法（MD5/SHA1等）、弱随机数、不安全哈希。
+   - 典型长尾标签：Custom Token Leak, Insecure Pseudo-Random Number Generator (PRNG), Downgrade Attack 弱点。
 
 3. 【Infra_Supply_Expert】(环境与供应链安全专家)
    - 负责：应用外部依赖与底层环境基线风险。
-   - 涵盖：第三方依赖组件 CVE、Dockerfile/K8s 配置风险、IaC 配置不当等。
+   - 涵盖：第三方依赖组件 CVE、Dockerfile/K8s 配置风险、IaC 配置不当。
+   - 典型长尾标签：Cloud-init 注入, Insecure CORS Policy, CI/CD Pipeline 污染。
 
 4. 【Logic_Security_Expert】(业务与身份安全专家)
    - 负责：应用上下文相关的权限与业务流程缺陷。
-   - 涵盖：越权访问（IDOR）、未授权访问、鉴权绕过、支付漏洞、状态机绕过等。
+   - 涵盖：越权访问（IDOR）、未授权访问、鉴权绕过、支付漏洞、状态机绕过。
+   - 典型长尾标签：Race Condition (Time-of-check to time-of-use, TOCTOU), Mass Assignment, Insecure Direct Object Reference (IDOR), 验证码绕过。
 
 5. 【General_Expert】(全科/兜底专家)
    - 负责：所有无法清晰归类到上述 5 类专家的漏洞，或跨域特征极度模糊的边缘漏洞。
