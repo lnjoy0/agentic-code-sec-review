@@ -5,12 +5,18 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 import functools
 import logging
+from pydantic import ValidationError
 
-from core.data_models import AgentState
+from core.data_models import AgentState, AuditResult, Rejection
 from core.config import LLMConfig
 
 
 logger = logging.getLogger(__name__)
+
+
+class AgentError(Exception):
+    """Exception raised when agent working."""
+    pass
 
 
 class ModelProvider:
@@ -39,20 +45,23 @@ class BaseExpertAgent():
         self.expert_name = expert_name
         self.system_prompt = system_prompt
         self.tools = tools or []
-        self.tools_by_name = {tool.name: tool for tool in self.tools}
+        self.tools_by_name = {tool.name: tool for tool in self.tools 
+                              if tool not in (AuditResult, Rejection)}
         
     def _reasoning_node(self, state: AgentState, config: RunnableConfig):
         """核心推理节点：LLM 观察当前状态并决定下一步动作"""
         messages = state.get("messages", [])
-        remaining_tool_turns = state.get('remaining_tool_turns')
+        remaining_turns = state.get('remaining_turns')
+        rejection_history = state.get('rejection_history', {})
+        issue_id = state["issue"].get("id")
         state_update_messages = []
 
-        # 记录剩余工具调用轮次
-        if remaining_tool_turns > 0:
-            tool_sys_prompt = f"【系统提示】你还可以调用工具 {remaining_tool_turns} 轮。请合理规划，如果已有足够信心，可以直接给出最终的漏洞研判结果。"
+        # 记录剩余行动轮数
+        if remaining_turns > 0:
+            tool_sys_prompt = f"【系统提示】你还可以行动 {remaining_turns} 轮。请合理规划，如果已有足够信心，可以直接调用 AuditResult 工具，填入最终的漏洞研判结果。"
         else:
-            logger.warning(f"[{self.expert_name}] ⚠️ 工具调用轮次耗尽，强制要求大模型输出结论。")
-            tool_sys_prompt = f"【系统提示】警告：你的工具调用轮次已全部用尽！你现在无法再查询知识库或调用工具。请立刻基于上述对话历史中的已知信息，给出最终研判结果。"
+            logger.warning(f"[{self.expert_name}] ⚠️ 行动轮数耗尽，强制要求大模型输出结论。")
+            tool_sys_prompt = f"【系统提示】警告：你的行动轮数已全部用尽！无法再调用除了 AuditResult 以外的其他工具。请立刻基于上述对话历史中的已知信息，调用 AuditResult 给出最终研判结果。"
 
         # 如果是第一轮，初始化 System Prompt 和初始输入
         if not messages:
@@ -60,11 +69,15 @@ class BaseExpertAgent():
             sys_msg = SystemMessage(
                 content=self.system_prompt+"\n\n"+tool_sys_prompt
             )
-            human_msg = HumanMessage(
-                content=f"请对以下漏洞报告进行深度研判，你可以多次调用工具获取信息。\n"
-                        f"【PR Diff】:\n{state['pr_diff']}\n\n"
-                        f"【扫描报告】:\n{state['issue']}"
-            )
+
+            human_content = f"请对以下漏洞报告进行深度研判，你可以多轮调用工具获取信息。\n【扫描报告】：\n{state['issue']}"
+            if issue_id in rejection_history:
+                rejection_reason = "\n【退回历史】该漏洞之前已被以下专家退回过，可以参考其退回原因，从中获取你需要的信息："
+                for record in rejection_history[issue_id]:
+                    rejection_reason += f"\n- 专家 [{record['expert']}]: {record['reason']}"
+                human_content += rejection_reason
+            human_msg = HumanMessage(content=human_content)
+
             invocation_messages = [sys_msg, human_msg]
             state_update_messages = [human_msg]
         else:
@@ -87,16 +100,19 @@ class BaseExpertAgent():
         # 将 LLM 的回复（可能包含 tool_calls 或最终文字）加入状态
         return {"messages": state_update_messages}
 
-    def _tools_call_node(self, state: AgentState, config: RunnableConfig):
+    def _tools_call_node(self, state: AgentState):
         """动作执行节点：执行 LLM 要求的工具，并将结果返回"""
         tool_calls_message = state["messages"][-1] # 获取 LLM 的 tool_calls 消息
-        remaining_tool_turns = state.get('remaining_tool_turns')
+        remaining_turns = state.get('remaining_turns')
         tool_outputs = []
 
-        if remaining_tool_turns <= 0:
-            logger.warning(f"[{self.expert_name}] 🚫 拦截工具调用：次数已耗尽。")
+        if remaining_turns <= -3:
+            logger.error(f"[{self.expert_name}] 🚫 LLM 在行动轮数耗尽后仍然连续三轮没有调用 AuditResult 输出最终结果")
+            raise AgentError(f"{self.expert_name}故障，行动轮数耗尽，且 LLM 仍然连续三轮没有输出结果")
+        elif remaining_turns <= 0:
+            logger.warning(f"[{self.expert_name}] 🚫 拦截工具调用：行动轮数已耗尽。")
             for tool_call in tool_calls_message.tool_calls:
-                refusal_msg = "工具调用失败: 工具调用轮次已全部用尽，你必须立即输出最终的研判结果"
+                refusal_msg = "工具调用失败: 行动轮数已全部用尽，你当前只能调用 AuditResult 工具"
                 tool_outputs.append(
                     ToolMessage(
                         content=refusal_msg, 
@@ -130,36 +146,127 @@ class BaseExpertAgent():
                                     tool_call_id=tool_call_id
                                 ))
 
-        return {"messages": tool_outputs, "remaining_tool_turns": remaining_tool_turns - 1}
+        return {"messages": tool_outputs, "remaining_turns": remaining_turns - 1}
 
-    def _format_output_node(self, state: AgentState, config: RunnableConfig):
-        """格式化节点：提取 LLM 的最终研判结论"""
-        print(f"[{self.expert_name}] ✅ 推理结束，格式化输出结果。\n")
+    def _format_output_node(self, state: AgentState):
+        """格式化节点：提取 LLM 的最终研判结论并进行 Pydantic 强校验"""
+        logger.info(f"[{self.expert_name}] ⚖️ 准备校验并格式化输出结果...")
+        last_message = state["messages"][-1]
         
-        # 最后一条消息就是 LLM 最终文本回复
-        final_answer = state["messages"][-1].content
+        for tool_call in last_message.tool_calls:
+            if tool_call["name"] == "AuditResult":
+                raw_args = tool_call["args"] # 获取 AuditResult 的参数
+                
+                try:
+                    # 实例化 Pydantic 模型，如果数据校验不通过会抛出异常
+                    audit_obj = AuditResult(**raw_args) 
+                    
+                    audit_data = audit_obj.model_dump() 
+                    
+                    audit_result = {
+                        "id": state['issue'].get('id'),
+                        "expert": self.expert_name,
+                        "details": audit_data
+                    }
+
+                    logger.info(f"[{self.expert_name}] ✅ 结果校验通过，研判完成。")
+                    return {"audit_result": [audit_result]}
+                
+                except ValidationError as e:
+                    error_str = str(e)
+                    logger.warning(f"[{self.expert_name}] ❌ AuditResult 数据校验失败，打回重做: \n{error_str}")
+                    
+                    # 构造一个 ToolMessage，将报错扔回给大模型
+                    error_msg = ToolMessage(
+                        content=f"【提交失败】你提交的最终结论未通过逻辑校验，请根据以下报错修正后重新调用 AuditResult:\n{error_str}",
+                        name=tool_call["name"],
+                        tool_call_id=tool_call["id"]
+                    )
+                    return {"messages": [error_msg]}    
+
+    def _retry_node(self, state: AgentState):
+        """
+        当模型输出纯文本而没有调用工具时，触发此节点进行警告。
+        """
+        remaining_turns = state.get('remaining_turns')
+
+        if remaining_turns <= -3:
+            logger.error(f"[{self.expert_name}] ⚠️ LLM 在行动轮数耗尽后仍然连续三轮没有调用 AuditResult 输出最终结果")
+            raise AgentError(f"{self.expert_name}故障，行动轮数耗尽，且 LLM 仍然连续三轮没有输出结果")
+        elif remaining_turns <= 0:
+            logger.warning(f"[{self.expert_name}] ⚠️ 行动轮数已耗尽。")
+            warning_content = "行动轮数已全部用尽，你当前只能调用 AuditResult 工具"
+        else:
+            logger.warning(f"[{self.expert_name}] ⚠️ 检测到LLM仅输出了纯文本内容，进行警告")
+            # 构造一条警告消息
+            warning_content = (
+                "【系统拦截】你只能进行工具调用，禁止输出纯文本内容。\n"
+                "请调用 `AuditResult` 工具来提交最终的研判结果，或者调用其他工具来辅助研判分析。"
+            )
         
-        status = "True Positive" if "真实漏洞" in final_answer else "False Positive"
-        
-        final_result = {
-            "id": state["issue"].get("id", "unknown"),
-            "expert": self.expert_name,
-            "status": status,
-            "details": final_answer
-        }
-        
-        return {"refined_results": [final_result]}        
+        warning_msg = HumanMessage(content=warning_content)
     
-    def _should_continue(self, state: AgentState) -> Literal["tools_call", "format_output"]:
+        return {"messages": [warning_msg], "remaining_turns": remaining_turns - 1}
+
+    def _reject_node(self, state: AgentState):
+        """当该专家认为分配的漏洞不在它的职能范围时，触发该节点进行退回"""
+        logger.warning(f"[{self.expert_name}] ↩️ 拒绝处理该漏洞，将其退回给Router。")
+
+        last_message = state["messages"][-1]
+        issue_id = state["issue"].get("id")
+        
+        for tool_call in last_message.tool_calls:
+            if tool_call["name"] == "Rejection":
+                raw_args = tool_call["args"]
+
+                try:
+                    reject_obj = Rejection(**raw_args) 
+                    reject_reason = reject_obj.model_dump()['reject_reason']
+
+                    record = {
+                        "expert": self.expert_name,
+                        "reason": reject_reason
+                    }
+                    
+                    return {"rejection_history": [{issue_id: [record]}]}
+                
+                except ValidationError as e:
+                    logger.warning(f"[{self.expert_name}] ❌ Rejection 数据校验失败，打回重做: \n{str(e)}")
+                    
+                    error_msg = ToolMessage(
+                        content=f"【退回漏洞失败】必须填写拒绝原因。",
+                        name=tool_call["name"],
+                        tool_call_id=tool_call["id"]
+                    )
+                    return {"messages": [error_msg]}
+
+    def _router_edge(self, state: AgentState) -> Literal["reject", "retry", "tools_call", "format_output"]:
         """条件边路由逻辑：判断是否需要调用工具"""
         last_message = state["messages"][-1]
         
-        # 如果 LLM 在回答中包含了 tool_calls 属性，说明需要调用工具
-        if last_message.tool_calls:
+        # 如果没有调用任何工具，路由到 retry 节点
+        if not last_message.tool_calls:
+            return "retry" 
+            
+        tool_name = last_message.tool_calls[0]["name"]
+        
+        if tool_name == "AuditResult":
+            return "format_output"
+        elif tool_name == "Rejection":
+            return "reject"
+        else:
             return "tools_call"
+
+    def _data_validation_router_edge(self, state: AgentState) -> Literal["reasoning", "__end__"]:
+        """在 Pydantic 数据校验之后，判断是否校验成功，如果校验失败则需要路由回 LLM"""
+        last_message = state["messages"][-1]
         
-        return "format_output"
-        
+        # 如果最后一条消息是 ToolMessage，则说明校验没有通过
+        if isinstance(last_message, ToolMessage):
+            return "reasoning"
+            
+        return END
+
     def compile(self):
         """构建并返回编译好的子图"""
         builder = StateGraph(AgentState)
@@ -167,81 +274,66 @@ class BaseExpertAgent():
         builder.add_node("reasoning", self._reasoning_node)
         builder.add_node("tools_call", self._tools_call_node)
         builder.add_node("format_output", self._format_output_node)
+        builder.add_node("retry", self._retry_node)
+        builder.add_node("reject", self._reject_node)
     
         builder.add_edge(START, "reasoning")
         builder.add_conditional_edges(
             "reasoning",
-            self._should_continue,
+            self._router_edge,
             {
+                "reject": "reject",
+                "retry": "retry",
                 "tools_call": "tools_call",
                 "format_output": "format_output"
             }
         )
+        builder.add_edge("retry", "reasoning")
         builder.add_edge("tools_call", "reasoning")
-        builder.add_edge("format_output", END)
+        builder.add_conditional_edges(
+            "reject",
+            self._data_validation_router_edge,
+            {
+                "reasoning": "reasoning",
+                END: END
+            }
+        )
+        builder.add_conditional_edges(
+            "format_output",
+            self._data_validation_router_edge,
+            {
+                "reasoning": "reasoning",
+                END: END
+            }
+        )
         
         return builder.compile()
 
 
-class DatabaseInjectionExpert(BaseExpertAgent):
-    """负责数据库注入相关漏洞，例如 SQL 注入、NoSQL 注入、XPath 注入、LDAP 注入等"""
+class InjectionExpert(BaseExpertAgent):
+    """负责SQL注入、OS命令注入、代码注入、XSS、SSRF、路径遍历、反序列化等各种注入"""
     def __init__(self):
         super().__init__(
-            expert_name="Database_Injection_Expert"
+            expert_name="Injection_Expert",
+            tools=[AuditResult, Rejection]
         )
 
 
-class BackEndInjectionExpert(BaseExpertAgent):
-    """负责后端注入相关漏洞，如 OS 命令注入、代码注入、路径遍历、SSRF、反序列化、XXE等"""
-    def __init__(self):
-        super().__init__(
-
-        )
-
-
-class FrontEndInjectionExpert(BaseExpertAgent):
-    """负责前端注入相关漏洞，如 XSS、SSTI、HTTP 响应头注入 (CRLF) """
-    def __init__(self):
-        super().__init__(
-
-        )
-
-
-class SecretExpert(BaseExpertAgent):
-    """负责 Secrets 泄露：执行熵值与环境有效性研判"""
-    def __init__(self):
-        super().__init__(
-            expert_name="Secret_Expert",
-            system_prompt="你是一个高级安全专家，专门负责研判代码中硬编码的密钥、Token 和密码...",
-            tools=["gitleaks_secrets_kb", "verify_token_validity_api"]
-        )
-
-
-class AccessControlExpert(BaseExpertAgent):
-    """负责鉴权绕过/越权：执行逆向调用链与拦截器研判"""
+class DataAssetExpert(BaseExpertAgent):
+    """负责凭据泄露和密码学"""
     pass
 
 
-class CryptographyExpert(BaseExpertAgent):
-    """负责弱加密/哈希：执行算法标准与参数合规研判"""
+class InfraSupplyExpert(BaseExpertAgent):
+    """负责依赖项与基础设施配置"""
     pass
 
 
-class MemoryResourceExpert(BaseExpertAgent):
-    """负责内存破坏/泄露：执行分支对称性与生命周期研判"""
+class LogicSecurityExpert(BaseExpertAgent):
+    """负责访问控制和业务逻辑"""
     pass
 
 
-class DependencyExpert(BaseExpertAgent):
-    """负责 SCA 漏洞：执行跨库调用图寻址研判"""
-    pass
-
-
-class InfrastructureConfigExpert(BaseExpertAgent):
-    """负责 IaC/配置：执行属性树与安全基线研判"""
-    pass
-
-
-class BusinessLogicExpert(BaseExpertAgent):
-    """负责业务漏洞：执行逻辑契约与状态约束研判"""
+class GeneralExpert(BaseExpertAgent):
+    """负责无法清晰划分给其他专家的通用漏洞"""
     pass

@@ -5,7 +5,9 @@ import asyncio
 import json
 import subprocess
 
-from core.config import ScannerConfig
+from core.config import ScannerConfig, CodeRetrieverConfig
+from core.data_models import ScannedIssue
+from core.code_retriever import get_snippet_and_context
 
 
 logger = logging.getLogger(__name__)
@@ -14,8 +16,9 @@ logger = logging.getLogger(__name__)
 class HeuristicScanner:
     """传统启发式工具扫描类"""
 
-    def __init__(self, config: ScannerConfig):
-        self.config = config
+    def __init__(self, scanner_config: ScannerConfig, code_retriever_config: CodeRetrieverConfig):
+        self.scanner_config = scanner_config
+        self.code_retriever_config = code_retriever_config
     
     async def get_report(self, patched_files: List[PatchedFile]) -> Dict[str, Any]:
         """获取传统工具的扫描报告"""
@@ -60,18 +63,10 @@ class HeuristicScanner:
                 cmd_args = ["scan"] + file_chunk + [
                     "--config=p/default", "--config=p/security-audit", "--config=p/secrets", 
                     "--config=p/r2c-security-audit", "--config=p/insecure-transport",
+                    "--config=p/python", "--config=p/django", "--config=p/flask", "--config=p/sql-injection" # python相关规则集
                     "--json", "--severity=ERROR", 
                     ]
                 
-                if self.config.language == "python":
-                    cmd_args += ["--config=p/python", "--config=p/django", 
-                            "--config=p/flask", "--config=p/sql-injection"]
-                elif self.config.language == "java":
-                    cmd_args += ["--config=p/java", "--config=p/spring", 
-                            "--config=p/hibernate", "--config=p/xxe"]
-                elif self.config.language == "go":
-                    cmd_args += ["--config=p/golang", "--config=p/gosec"]
-
                 logger.info(f"run: semgrep {cmd_args}")
                 process = await asyncio.create_subprocess_exec(
                     "semgrep", *cmd_args,
@@ -97,7 +92,7 @@ class HeuristicScanner:
         all_results = [item for sublist in results for item in sublist.get("results", [])]
         filtered_results = self._filter_results(all_results, patched_files)
         
-        return filtered_results
+        return self._convert_to_scanned_issue(filtered_results, tool_name='semgrep')
 
     def _run_gitleaks(self) -> List[Dict[str, Any]]:
         """
@@ -107,8 +102,8 @@ class HeuristicScanner:
         """
         logger.info("Gitleaks running...")
         cmd = [
-            "gitleaks", "detect", self.config.workspace_dir,
-            f"--log-opts={self.config.base_sha}...{self.config.head_sha}", # 只扫描从 base 到 head 之间新增的 commits
+            "gitleaks", "detect", self.scanner_config.workspace_dir,
+            f"--log-opts={self.scanner_config.base_sha}...{self.scanner_config.head_sha}", # 只扫描从 base 到 head 之间新增的 commits
             "--no-banner", "--redact", # --redact 不输出敏感信息详情
             "-f", "sarif",
             "-r", "-" # 将 JSON 报告输出到标准输出 (stdout)
@@ -124,7 +119,8 @@ class HeuristicScanner:
             data = json.loads(result.stdout)
             runs = data.get("runs", [])
             if runs and len(runs) > 0:
-                return runs[0].get("results", [])
+                results = runs[0].get("results", [])
+                return self._convert_to_scanned_issue(results, tool_name='gitleaks')
             return []
         except json.JSONDecodeError as e:
             logger.error(f"json decoding failed: {str(e)}")
@@ -137,7 +133,7 @@ class HeuristicScanner:
         """
         logger.info("Trivy running...")
         cmd = [
-            "trivy", "fs", self.config.workspace_dir,
+            "trivy", "fs", self.scanner_config.workspace_dir,
             "-f", "sarif", 
             "--severity", "HIGH,CRITICAL",
             "--cache-dir", "/home/runner/.cache/trivy"
@@ -154,7 +150,8 @@ class HeuristicScanner:
             runs = data.get("runs", [])
             if runs and len(runs) > 0:
                 results = runs[0].get("results", [])
-                return self._filter_results(results, patched_files)
+                filtered_results = self._filter_results(results, patched_files)
+                return self._convert_to_scanned_issue(filtered_results, tool_name='trivy')
             return []
         except json.JSONDecodeError as e:
             logger.error(f"json decoding failed: {str(e)}")
@@ -215,3 +212,50 @@ class HeuristicScanner:
         
         # 完全相等，或者长路径以 "/短路径" 结尾
         return po == pt or po.endswith("/" + pt) or po.endswith("/" + pt)
+
+    def _convert_to_scanned_issue(self, raw_results: List[Dict[str, Any]], tool_name: str) -> List[ScannedIssue]:
+        """将原始结果转换成 ScannedIssue 结构"""
+        scan_results = []
+        for raw_result in raw_results:
+            if tool_name == "semgrep": # semgrep 输出的是自己的 json 格式，trivy 和 gitleaks 输出的是 sarif 格式
+                path = raw_result.get("path", "")
+                message = raw_result.get("extra", {}).get("message", "")
+                cwe = raw_result.get("extra", {}).get("metadata", {}).get("cwe", "")
+                snippet_region={
+                    "start_line": raw_result.get("start", {}).get("line"),
+                    "end_line": raw_result.get("end", {}).get("line"),
+                    "start_column": raw_result.get("start", {}).get("col"),
+                    "end_column": raw_result.get("end", {}).get("col")
+                }
+            else:
+                path = raw_result.get("locations", [{}])[0].get("physicalLocation", {}).get("artifactLocation", {}).get("uri", "")
+                message = raw_result.get("message", {}).get("text", "")
+                cwe = None
+                snippet_region = {
+                    "start_line": raw_result.get("locations", [{}])[0].get("physicalLocation", {}).get("region", {}).get("startLine"),
+                    "end_line": raw_result.get("locations", [{}])[0].get("physicalLocation", {}).get("region", {}).get("endLine"),
+                    "start_column": raw_result.get("locations", [{}])[0].get("physicalLocation", {}).get("region", {}).get("startColumn"),
+                    "end_column": raw_result.get("locations", [{}])[0].get("physicalLocation", {}).get("region", {}).get("endColumn")
+                }
+
+            snippet_text, context = get_snippet_and_context(
+                file_path=path,
+                start_point=(snippet_region["start_line"], snippet_region["start_column"]),
+                end_point=(snippet_region["end_line"], snippet_region["end_column"]),
+                min_lines=self.code_retriever_config.context_min_lines,
+                max_lines=self.code_retriever_config.context_max_lines
+            )
+            if not snippet_text:
+                logger.warning(f"Failed to retrieve code snippet for {tool_name} result at {path}:{snippet_region['start_line']}")
+                continue
+
+            scan_results.append(ScannedIssue(
+                file_path=path,
+                message=message,
+                cwe=cwe,
+                snippet_region=snippet_region,
+                snippet_text=snippet_text,
+                context=context
+            ))
+
+        return scan_results 

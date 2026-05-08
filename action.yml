@@ -22,28 +22,6 @@ runs:
         pip install -r ${{ github.action_path }}/requirements.txt
         echo "$(date +'%Y-%m-%d %H:%M:%S')"
 
-    - name: Detect Primary Language
-      shell: bash
-      run: |
-        echo "Starting language detection..."
-        DETECTED_LANGUAGE=""
-        BUILD_MODE="none"
-
-        if [ -f "go.mod" ]; then
-            DETECTED_LANGUAGE="go"
-            BUILD_MODE="autobuild" # codeql当前不支持go使用build-mode:none
-            echo "Detected Go module file."
-        elif [ -f "requirements.txt" ] || [ -f "pyproject.toml" ] || [ -f "setup.py" ] || [ -f "Pipfile" ]; then
-            DETECTED_LANGUAGE="python"
-            echo "Detected Python configuration file."
-        elif [ -f "pom.xml" ] || [ -f "build.gradle" ] || [ -f "build.gradle.kts" ]; then
-            DETECTED_LANGUAGE="java"
-            echo "Detected Java build file."
-        fi
-
-        echo "LANGUAGE=$DETECTED_LANGUAGE" >> $GITHUB_ENV
-        echo "BUILD_MODE=$BUILD_MODE" >> $GITHUB_ENV
-
     - name: Install Trivy
       shell: bash
       run: |

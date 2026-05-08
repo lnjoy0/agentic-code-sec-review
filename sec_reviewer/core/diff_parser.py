@@ -73,22 +73,3 @@ class DiffParser:
             logger.warning(f"Unidiff parsing error: {str(e)}")
             logger.debug(f"Diff content preview: {diff_content[:1000]}...")
             raise
-    
-    @staticmethod
-    def get_file_language(file_path: str) -> Optional[str]:
-        """Detect programming language from file extension."""
-        if not file_path or '.' not in file_path:
-            return None
-        
-        extension = file_path.split('.')[-1].lower()
-        language_mapping = {
-            'py': 'Python', 'js': 'JavaScript', 'ts': 'TypeScript',
-            'jsx': 'React', 'tsx': 'TypeScript React',
-            'java': 'Java', 'cpp': 'C++', 'c': 'C', 'cs': 'C#',
-            'go': 'Go', 'rs': 'Rust', 'php': 'PHP', 'rb': 'Ruby',
-            'swift': 'Swift', 'kt': 'Kotlin', 'scala': 'Scala',
-            'html': 'HTML', 'css': 'CSS', 'scss': 'SCSS',
-            'json': 'JSON', 'yaml': 'YAML', 'yml': 'YAML',
-            'sql': 'SQL', 'sh': 'Shell', 'bash': 'Bash'
-        }
-        return language_mapping.get(extension)

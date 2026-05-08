@@ -43,17 +43,15 @@ class CodeSecReviewer:
             logger.info("Parsing diff content...")
             patched_files = self.diff_parser.parse_diff(diff_content)
 
-            # 初始化工作流状态
+            # 初始化工作流状态，并传入配置信息
             initial_state = {
-                'patched_files': patched_files,
-                'scanner_reports': {},
-                'refined_results': [],
-                'final_comment': []
+                'patched_files': patched_files
             }
             workflow_config = {'configurable': {
                 'scanner_config': self.config.scanner,
                 'llm_config': self.config.llm,
-                'agent_config': self.config.agent
+                'agent_config': self.config.agent,
+                'code_retriever_config': self.config.code_retriever
             }}
 
             # 启动多智能体工作流，得到最终评论

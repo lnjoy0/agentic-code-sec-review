@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, ValidationError
 import logging
 
 
@@ -40,7 +40,6 @@ class LoggingConfig:
 @dataclass
 class ScannerConfig:
     """配置扫描器参数"""
-    language: str
     base_sha: str
     head_sha: str
     workspace_dir: str = '.'
@@ -61,13 +60,20 @@ class LLMConfig(BaseModel):
     Role: dict[str, RoleParams] = Field(default={
         'Injection_Expert': RoleParams(temperature=0.2, top_p=0.8),
         'Secret_Expert': RoleParams(temperature=0.2, top_p=0.8),
-        'Reporter': RoleParams(temperature=0.4, top_p=0.85)
+        'Reporter': RoleParams(temperature=0.4, top_p=0.85),
+        'Router': RoleParams(temperature=0.2, top_p=0.8)
     })
 
 
 class AgentConfig(BaseModel):
     """配置Agent参数"""
-    max_tool_turns: int = Field(default=10, ge=0)
+    max_turns: int = Field(default=10, ge=0) # Agent的最大行动轮数
+
+
+class CodeRetrieverConfig(BaseModel):
+    """配置代码检索参数"""
+    context_min_lines: int = Field(default=20, ge=0)
+    context_max_lines: int = Field(default=10, ge=1)
 
 
 @dataclass
@@ -78,6 +84,7 @@ class Config:
     scanner: ScannerConfig
     llm: LLMConfig
     agent: AgentConfig
+    code_retriever: CodeRetrieverConfig
 
     @classmethod
     def from_environment(cls) -> 'Config':
@@ -106,7 +113,6 @@ class Config:
 
         # Scanner configuration
         scanner_config = ScannerConfig(
-            language=os.environ.get("LANGUAGE"),
             base_sha=os.environ.get("BASE_SHA"),
             head_sha=os.environ.get("HEAD_SHA")
         )
@@ -127,15 +133,24 @@ class Config:
                         top_p=os.environ.get("secret_expert_top_p", "0.8")),
                     'Reporter': RoleParams(
                         temperature=os.environ.get("reporter_temperature", "0.4"), 
-                        top_p=os.environ.get("reporter_top_p", "0.85"))
+                        top_p=os.environ.get("reporter_top_p", "0.85")),
+                    'Router': RoleParams(
+                        temperature=os.environ.get("router_temperature", "0.2"), 
+                        top_p=os.environ.get("router_top_p", "0.8")),
                 }
             )
 
             # Agent configuration
             agent_config = AgentConfig(
-                max_tool_turns=os.environ.get("max_tool_turns", "10")
+                max_turns=os.environ.get("max_turns", "10")
             )
-        except Exception as e:
+
+            # Code retriever configuration
+            code_retriever_config = CodeRetrieverConfig(
+                context_min_lines=os.environ.get("context_min_lines", "20"),
+                context_max_lines=os.environ.get("context_max_lines", "10")
+            )
+        except ValidationError as e:
             logger.error(f"参数错误：{e}")
             raise
 
@@ -144,5 +159,6 @@ class Config:
             logging = logging_config,
             scanner = scanner_config,
             agent = agent_config,
-            llm = llm_config
+            llm = llm_config,
+            code_retriever = code_retriever_config
         )
