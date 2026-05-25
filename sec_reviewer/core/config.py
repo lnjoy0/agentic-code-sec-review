@@ -44,6 +44,13 @@ class ScannerConfig:
     head_sha: str
     workspace_dir: str = '.'
 
+@dataclass
+class EmbeddingConfig:
+    """配置 Embedding 模型参数"""
+    model_name: str = 'Qwen3-Embedding-8B'
+    base_url: HttpUrl = 'http://i-2.gpushare.com:56520/v1'
+    api_key: str = 'token-is-not-needed'
+
 
 class RoleParams(BaseModel):
     """定义每个角色的温度和top_p参数范围"""
@@ -70,10 +77,10 @@ class AgentConfig(BaseModel):
     max_turns: int = Field(default=10, ge=0) # Agent的最大行动轮数
 
 
-class CodeRetrieverConfig(BaseModel):
+class ContextConfig(BaseModel):
     """配置代码检索参数"""
-    context_min_lines: int = Field(default=20, ge=0)
-    context_max_lines: int = Field(default=10, ge=1)
+    context_min_lines: int = Field(default=0, ge=0)
+    context_max_lines: int = Field(default=200, ge=1)
 
 
 @dataclass
@@ -84,7 +91,7 @@ class Config:
     scanner: ScannerConfig
     llm: LLMConfig
     agent: AgentConfig
-    code_retriever: CodeRetrieverConfig
+    context: ContextConfig
 
     @classmethod
     def from_environment(cls) -> 'Config':
@@ -146,9 +153,9 @@ class Config:
             )
 
             # Code retriever configuration
-            code_retriever_config = CodeRetrieverConfig(
-                context_min_lines=os.environ.get("context_min_lines", "20"),
-                context_max_lines=os.environ.get("context_max_lines", "10")
+            context_config = ContextConfig(
+                context_min_lines=os.environ.get("context_min_lines", "0"),
+                context_max_lines=os.environ.get("context_max_lines", "200")
             )
         except ValidationError as e:
             logger.error(f"参数错误：{e}")
@@ -160,5 +167,5 @@ class Config:
             scanner = scanner_config,
             agent = agent_config,
             llm = llm_config,
-            code_retriever = code_retriever_config
+            context = context_config
         )

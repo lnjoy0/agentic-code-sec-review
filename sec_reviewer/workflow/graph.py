@@ -4,10 +4,13 @@ from typing import Literal
 import logging
 
 from core.data_models import AgentState, AuditState
+from tools.code_retriever import CodeRetriever
+from tools.project_analyzer import ProjectAnalyzer
+from tools.knowledge_retriever import VulnKnowledgeBase
 from nodes import (heuristic_scanner_node, aggregate_and_check_node, dynamic_router_node,
                    get_comment_node)
-from agents.expert_agents import (InjectionExpert, DataAssetExpert, InfraSupplyExpert,
-                                  LogicSecurityExpert, GeneralExpert)
+from core.expert_agents import (InjectionExpert, DataAssetExpert, InfraSupplyExpert,
+                                  LogicIdentityExpert, GeneralExpert)
 
 
 logger = logging.getLogger(__name__)
@@ -47,12 +50,24 @@ def check_rejection_edge(state: AuditState) -> Literal["dynamic_router", "__end_
 def create_graph():
     """代码安全审计工作流主图"""
 
+    # 实例化工具类
+    code_retriever = CodeRetriever(repo_path="/my/code/repo")
+    analyzer = ProjectAnalyzer(repo_path="/my/code/repo")
+    knowledge_base = VulnKnowledgeBase()
+    
+    general_tools = [*code_retriever.as_tools(), *analyzer.as_tools()]
+    injection_knowledge = knowledge_base.create_expert_tool('Injection_Expert')
+    data_knowledge = knowledge_base.create_expert_tool('Data_Asset_Expert')
+    infra_knowledge = knowledge_base.create_expert_tool('Infra_Supply_Expert')
+    logic_knowledge = knowledge_base.create_expert_tool('Logic_Identity_Expert')
+    general_knowledge = knowledge_base.create_expert_tool('General_Expert')
+
     # 编译专家智能体子图
-    injection_expert = InjectionExpert().compile()
-    data_asset_expert = DataAssetExpert().compile()
-    infra_supply_expert = InfraSupplyExpert().compile()
-    logic_security_expert = LogicSecurityExpert().compile()
-    general_expert = GeneralExpert().compile()
+    injection_expert = InjectionExpert(additional_tools=[*general_tools, injection_knowledge]).compile()
+    data_asset_expert = DataAssetExpert(additional_tools=[*general_tools, data_knowledge]).compile()
+    infra_supply_expert = InfraSupplyExpert(additional_tools=[*general_tools, infra_knowledge]).compile()
+    logic_identity_expert = LogicIdentityExpert(additional_tools=[*general_tools, logic_knowledge]).compile()
+    general_expert = GeneralExpert(additional_tools=[*general_tools, general_knowledge]).compile()
     
     # 组装主图
     workflow = StateGraph(AgentState)
@@ -62,7 +77,7 @@ def create_graph():
     workflow.add_node('injection_expert', injection_expert)
     workflow.add_node('data_asset_expert', data_asset_expert)
     workflow.add_node('infra_supply_expert', infra_supply_expert)
-    workflow.add_node('logic_security_expert', logic_security_expert)
+    workflow.add_node('logic_identity_expert', logic_identity_expert)
     workflow.add_node('general_expert', general_expert)
     workflow.add_node('aggregate', aggregate_and_check_node)
     workflow.add_node('get_comment', get_comment_node)
@@ -74,13 +89,13 @@ def create_graph():
         'dynamic_router', 
         distribute_issues_edge, 
         ['injection_expert', 'data_asset_expert', 'infra_supply_expert', 
-         'logic_security_expert', 'general_expert']
+         'logic_identity_expert', 'general_expert']
     )
 
     workflow.add_edge('injection_expert', 'aggregate')
     workflow.add_edge('data_asset_expert', 'aggregate')
     workflow.add_edge('infra_supply_expert', 'aggregate')
-    workflow.add_edge('logic_security_expert', 'aggregate')
+    workflow.add_edge('logic_identity_expert', 'aggregate')
     workflow.add_edge('general_expert', 'aggregate')
 
     workflow.add_conditional_edges(

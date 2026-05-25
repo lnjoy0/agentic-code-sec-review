@@ -9,6 +9,10 @@ from pydantic import ValidationError
 
 from core.data_models import AgentState, AuditResult, Rejection
 from core.config import LLMConfig
+from knowledge_base.sys_prompts import (
+    INJECTION_EXPERT_PROMPT, DATA_ASSET_EXPERT_PROMPT, INFRA_SUPPLY_EXPERT_PROMPT,
+    LOGIC_IDENTITY_EXPERT_PROMPT, GENERAL_EXPERT_PROMPT
+)
 
 
 logger = logging.getLogger(__name__)
@@ -100,11 +104,12 @@ class BaseExpertAgent():
         # 将 LLM 的回复（可能包含 tool_calls 或最终文字）加入状态
         return {"messages": state_update_messages}
 
-    def _tools_call_node(self, state: AgentState):
+    def _tools_call_node(self, state: AgentState, config: RunnableConfig):
         """动作执行节点：执行 LLM 要求的工具，并将结果返回"""
         tool_calls_message = state["messages"][-1] # 获取 LLM 的 tool_calls 消息
         remaining_turns = state.get('remaining_turns')
         tool_outputs = []
+        new_docs = [] # 用于接收新查询到的文档名称
 
         if remaining_turns <= -3:
             logger.error(f"[{self.expert_name}] 🚫 LLM 在行动轮数耗尽后仍然连续三轮没有调用 AuditResult 输出最终结果")
@@ -133,8 +138,13 @@ class BaseExpertAgent():
             # 找到对应的工具并执行
             if tool_name in self.tools_by_name:
                 tool_instance = self.tools_by_name[tool_name]
+
+                if tool_name == "knowledge_retrieval":
+                    tool_args['viewed_docs'] = state.get('viewed_docs', [])
+                    tool_args['new_docs'] = new_docs # 传递引用
+
                 try:
-                    result = tool_instance.invoke(tool_args)
+                    result = tool_instance.invoke(tool_args, config=config)
                 except Exception as e:
                     result = f"工具执行出错: {str(e)}"
             else:
@@ -146,7 +156,11 @@ class BaseExpertAgent():
                                     tool_call_id=tool_call_id
                                 ))
 
-        return {"messages": tool_outputs, "remaining_turns": remaining_turns - 1}
+        return {
+            "messages": tool_outputs, 
+            "remaining_turns": remaining_turns - 1,
+            "viewed_docs": new_docs
+        }
 
     def _format_output_node(self, state: AgentState):
         """格式化节点：提取 LLM 的最终研判结论并进行 Pydantic 强校验"""
@@ -170,7 +184,7 @@ class BaseExpertAgent():
                     }
 
                     logger.info(f"[{self.expert_name}] ✅ 结果校验通过，研判完成。")
-                    return {"audit_result": [audit_result]}
+                    return {"audit_results": [audit_result]}
                 
                 except ValidationError as e:
                     error_str = str(e)
@@ -312,28 +326,52 @@ class BaseExpertAgent():
 
 class InjectionExpert(BaseExpertAgent):
     """负责SQL注入、OS命令注入、代码注入、XSS、SSRF、路径遍历、反序列化等各种注入"""
-    def __init__(self):
+    def __init__(self, additional_tools: List = None):
+        tools = [AuditResult, Rejection] + (additional_tools or [])
         super().__init__(
             expert_name="Injection_Expert",
-            tools=[AuditResult, Rejection]
+            system_prompt=INJECTION_EXPERT_PROMPT,
+            tools=tools
         )
 
 
 class DataAssetExpert(BaseExpertAgent):
     """负责凭据泄露和密码学"""
-    pass
+    def __init__(self, additional_tools: List = None):
+        tools = [AuditResult, Rejection] + (additional_tools or [])
+        super().__init__(
+            expert_name="Data_Asset_Expert",
+            system_prompt=DATA_ASSET_EXPERT_PROMPT,
+            tools=tools
+        )
 
 
 class InfraSupplyExpert(BaseExpertAgent):
     """负责依赖项与基础设施配置"""
-    pass
+    def __init__(self, additional_tools: List = None):
+        tools = [AuditResult, Rejection] + (additional_tools or [])
+        super().__init__(
+            expert_name="Infra_Supply_Expert",
+            system_prompt=INFRA_SUPPLY_EXPERT_PROMPT,
+            tools=tools
+        )
 
-
-class LogicSecurityExpert(BaseExpertAgent):
+class LogicIdentityExpert(BaseExpertAgent):
     """负责访问控制和业务逻辑"""
-    pass
-
+    def __init__(self, additional_tools: List = None):
+        tools = [AuditResult, Rejection] + (additional_tools or [])
+        super().__init__(
+            expert_name="Logic_Identity_Expert",
+            system_prompt=LOGIC_IDENTITY_EXPERT_PROMPT,
+            tools=tools
+        )
 
 class GeneralExpert(BaseExpertAgent):
     """负责无法清晰划分给其他专家的通用漏洞"""
-    pass
+    def __init__(self, additional_tools: List = None):
+        tools = [AuditResult] + (additional_tools or [])
+        super().__init__(
+            expert_name="General_Expert",
+            system_prompt=GENERAL_EXPERT_PROMPT,
+            tools=tools
+        )

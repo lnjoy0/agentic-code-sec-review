@@ -45,13 +45,18 @@ class CodeSecReviewer:
 
             # 初始化工作流状态，并传入配置信息
             initial_state = {
-                'patched_files': patched_files
+                'patched_files': patched_files,
+                'scanner_reports': {},
+                'routing_decisions': [],
+                'rejection_history': {},
+                'audit_results': [],
+                'final_comment': []
             }
             workflow_config = {'configurable': {
                 'scanner_config': self.config.scanner,
                 'llm_config': self.config.llm,
                 'agent_config': self.config.agent,
-                'code_retriever_config': self.config.code_retriever
+                'context_config': self.config.context
             }}
 
             # 启动多智能体工作流，得到最终评论

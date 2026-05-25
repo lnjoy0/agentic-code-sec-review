@@ -1,13 +1,15 @@
-from typing import List, Dict, Any, Set
+from typing import List, Dict, Any, Set, Optional
 from unidiff import PatchedFile
+from pathlib import Path
 import logging
 import asyncio
 import json
 import subprocess
 
-from core.config import ScannerConfig, CodeRetrieverConfig
+from core.config import ScannerConfig, ContextConfig
 from core.data_models import ScannedIssue
-from core.code_retriever import get_snippet_and_context
+from tools.code_retriever import CodeRetriever
+from sec_reviewer.tools.project_analyzer import ProjectAnalyzer
 
 
 logger = logging.getLogger(__name__)
@@ -16,9 +18,9 @@ logger = logging.getLogger(__name__)
 class HeuristicScanner:
     """传统启发式工具扫描类"""
 
-    def __init__(self, scanner_config: ScannerConfig, code_retriever_config: CodeRetrieverConfig):
+    def __init__(self, scanner_config: ScannerConfig, context_config: ContextConfig):
         self.scanner_config = scanner_config
-        self.code_retriever_config = code_retriever_config
+        self.context_config = context_config
     
     async def get_report(self, patched_files: List[PatchedFile]) -> Dict[str, Any]:
         """获取传统工具的扫描报告"""
@@ -150,8 +152,9 @@ class HeuristicScanner:
             runs = data.get("runs", [])
             if runs and len(runs) > 0:
                 results = runs[0].get("results", [])
+                cve_list = runs[0].get("tool", {}).get("driver", {}).get("rules", [])
                 filtered_results = self._filter_results(results, patched_files)
-                return self._convert_to_scanned_issue(filtered_results, tool_name='trivy')
+                return self._convert_to_scanned_issue(filtered_results, tool_name='trivy', cve_list=cve_list)
             return []
         except json.JSONDecodeError as e:
             logger.error(f"json decoding failed: {str(e)}")
@@ -213,7 +216,12 @@ class HeuristicScanner:
         # 完全相等，或者长路径以 "/短路径" 结尾
         return po == pt or po.endswith("/" + pt) or po.endswith("/" + pt)
 
-    def _convert_to_scanned_issue(self, raw_results: List[Dict[str, Any]], tool_name: str) -> List[ScannedIssue]:
+    def _convert_to_scanned_issue(
+        self, 
+        raw_results: List[Dict[str, Any]], 
+        tool_name: str, 
+        cve_list: Optional[List] = None
+    ) -> List[ScannedIssue]:
         """将原始结果转换成 ScannedIssue 结构"""
         scan_results = []
         for raw_result in raw_results:
@@ -237,16 +245,33 @@ class HeuristicScanner:
                     "start_column": raw_result.get("locations", [{}])[0].get("physicalLocation", {}).get("region", {}).get("startColumn"),
                     "end_column": raw_result.get("locations", [{}])[0].get("physicalLocation", {}).get("region", {}).get("endColumn")
                 }
+            
+            if cve_list:
+                cve_details = ""
+                cve_id = raw_result.get("ruleId", "")
+                for cve in cve_list:
+                    if cve.get("id", "") == cve_id:
+                        cve_details = "CVE Details:\n" + cve.get('fullDescription', {}).get("text", "")
+                message = message + '\n' + cve_details
 
-            snippet_text, context = get_snippet_and_context(
-                file_path=path,
-                start_point=(snippet_region["start_line"], snippet_region["start_column"]),
-                end_point=(snippet_region["end_line"], snippet_region["end_column"]),
-                min_lines=self.code_retriever_config.context_min_lines,
-                max_lines=self.code_retriever_config.context_max_lines
-            )
-            if not snippet_text:
-                logger.warning(f"Failed to retrieve code snippet for {tool_name} result at {path}:{snippet_region['start_line']}")
+            try: 
+                if Path(path).suffix == '.py':
+                    retriever = CodeRetriever(self.scanner_config.workspace_dir)
+                    snippet_text, context = retriever.core_get_code_snippet_and_context(
+                        file_path=path,
+                        start_point=(snippet_region["start_line"], snippet_region["start_column"]),
+                        end_point=(snippet_region["end_line"], snippet_region["end_column"])
+                    )
+                else:
+                    analyzer = ProjectAnalyzer(self.scanner_config.workspace_dir)
+                    snippet_text = analyzer.core_get_file_snippet(
+                        file_path=path,
+                        start_point=(snippet_region["start_line"], snippet_region["start_column"]),
+                        end_point=(snippet_region["end_line"], snippet_region["end_column"])    
+                    )
+                    context = analyzer.core_get_file_context(file_path=path, target_line=snippet_region["start_line"])
+            except Exception as e:
+                logger.warning(f"Failed to retrieve code snippet for {tool_name} result at {path}:{snippet_region['start_line']}: {e}")
                 continue
 
             scan_results.append(ScannedIssue(

@@ -1,0 +1,55 @@
+---
+cwe_id: ["CWE-362"]
+name: "Race_Condition"
+domain: ["Logic_Identity_Expert", "General_Expert"]
+---
+
+#### 1. 漏洞机制
+多个并发请求或线程在缺乏有效并发控制（如数据库锁、分布式锁或原子操作）的情况下，同时执行“检查-修改-写入（Check-then-Act / TOCTOU）”逻辑，导致对共享状态（如库存、余额、状态标志）的修改互相覆盖或绕过业务限制。
+
+#### 2. 漏洞逻辑与上下文特征 (Vulnerability Logic & Context Patterns)
+
+##### 1. 业务入口与身份上下文 (Business Endpoint & Identity Context)
+漏洞多发于涉及额度扣减、状态唯一性跃迁的高并发业务入口，如：秒杀抢购、优惠券核销、资金提现、抽奖、以及 Celery/RabbitMQ 异步任务的并发消费节点。
+在此类上下文中，身份标识（如 `request.user` 或 JWT 提取的 `user_id`）通常是合法的且未被伪造，但**攻击者利用同一个有效身份（同一用户）在极短时间内发起大量重复请求**。由于后端对该身份关联的共享状态（如该用户的账户余额、该优惠券的使用状态）读取与更新存在时间差，导致上下文状态判定发生混淆（例如多个并发请求在入口处都读取到“优惠券未使用”的上下文状态）。
+
+##### 2. 关键业务操作与目标 (Critical Business Operation & Target)
+关键操作通常表现为**对共享资源的非原子化“读-算-写”链路（TOCTOU: Time-of-Check to Time-of-Use）**。
+在 Python 及其常见 Web 框架（如 Django、Flask/SQLAlchemy、FastAPI）中，典型目标操作包括：
+*   **资源配额与数值计算**：ORM 查询余额或库存（`obj = Model.query.get(id)`），在 Python 内存中进行条件判断（`if obj.balance >= amount:`）和计算（`obj.balance -= amount`），最后持久化写回（`db.session.commit()` 或 `obj.save()`）。
+*   **状态机跃迁与唯一性标记**：判断某项业务标志位（如 `if not order.is_paid:`），然后执行敏感动作（如发货、加积分），最后修改状态（`order.is_paid = True`）。
+*   **文件或外部资源读写**：并发检查文件是否存在并写入，或者并发写入同一全局变量/共享缓存（Redis 中未使用 Lua 脚本的多次 GET/SET 操作）。
+
+##### 3. 缺失的校验与逻辑约束 (Missing Validations & Logic Constraints)
+此类漏洞的核心在于缺失保障“读写一致性”的逻辑锁或门禁：
+*   **缺失数据库级悲观锁**：在开启事务（如 `transaction.atomic()`）的前提下，未对目标记录加排他锁。例如 Django ORM 缺少 `.select_for_update()`，或 SQLAlchemy 缺少 `.with_for_update()`。
+*   **缺失数据库级乐观锁/原子操作**：未利用数据库自带的原子特性。例如未使用基于版本号（version）的更新校验，或未使用数据库层的原生运算（如 Django 的 `F()` 表达式 `update(balance=F('balance') - amount)`）。
+*   **缺失分布式锁**：在分布式部署环境中，对于非数据库共享资源（或为了避免数据库死锁），未使用 Redis 分布式锁（如 `SETNX`、Redlock）将并发请求串行化。
+*   **锁的作用域或类型错误**：错误地使用了进程内锁（如 Python 原生的 `threading.Lock` 或 `asyncio.Lock`），而在 Gunicorn、uWSGI 等多进程 WSGI/ASGI 部署模式下，进程内锁无法跨进程生效，防不住实际的并发请求。
+
+#### 3. 典型误报样例
+
+*   **纯单实例/单线程隔离的本地脚本**：非 Web 服务的单线程 CLI 脚本中出现的“读-改-写”逻辑，不存在并发调用源，不构成并发漏洞。
+*   **无共享状态的纯局部变量操作**：操作的对象是每次 HTTP 请求中实例化的全新局部对象或临时内存变量，不涉及数据库、缓存或全局变量，无竞争条件。
+*   **无副作用的幂等操作**：例如并发将用户的 `last_login_time` 更新为当前时间，或者并发执行 `user.is_active = True`，即使发生竞争互相覆盖，最终业务结果也是一致的，不造成安全影响。
+*   **已通过队列串行化处理**：请求入口已将数据放入消息队列（如单 Worker、单 Concurrency 的 Celery 队列），后续由消费者严格串行处理，尽管代码中未加显式锁，但架构层面避免了竞争。
+
+#### 4. 证实标准
+
+若以下条件**全部满足**，则证实为漏洞（True Positive）：
+1.  **存在共享状态**：操作目标是持久化层（数据库、Redis）记录、文件或全局内存变量。
+2.  **存在 Check-then-Act 逻辑间隙**：代码执行了先读取（Check）、后基于读取结果判断、再进行状态修改（Act/Update）的流程。
+3.  **约束严重缺失**：
+    *   没有使用数据库排他锁（未见 `select_for_update` / `with_for_update`）。
+    *   没有使用原子更新或乐观锁（未见 `F()` 表达式递减、未带有状态/版本条件的 `update` 语句）。
+    *   没有有效的分布式锁包裹这段逻辑（未见 Redis 分布式锁等跨进程并发控制机制）。
+4.  **涉及敏感业务影响**：一旦并发导致条件被绕过，会引起明显的资产损失、状态错误或越权行为（如资金超发、一物多卖、重复抽奖）。
+
+#### 5. 证伪标准
+
+若满足以下**任意一条**，则应判定为误报（False Positive）：
+1.  **数据库悲观锁防御**：关键逻辑包含在显式事务控制中（如 `with transaction.atomic():`），且正确使用了 `select_for_update()` 锁定行记录。
+2.  **原子表达式更新**：数值计算交由数据库底层的原子操作完成。例如 Django 中使用了 `Model.objects.filter(id=x, balance__gte=cost).update(balance=F('balance') - cost)`。
+3.  **乐观锁机制生效**：更新语句中包含了前置状态校验或版本号比对，例如 `update(status="PAID")` 时加上了 `where status="UNPAID"` 或 `where version=X` 的条件，且有处理更新失败的回滚逻辑。
+4.  **分布式锁保护**：整个读取和更新链路被包裹在成熟的分布式锁（如 Redis 分布式锁、Zookeeper 锁）的上下文中。
+5.  **单进程锁（特定场景）**：虽然使用的是 `threading.Lock` 或是全局字典，但能够从项目上下文（如 ASGI 服务器配置、应用初始化脚本）明确证实该服务强制规定为严格的单进程运行模式。

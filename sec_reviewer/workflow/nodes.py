@@ -36,24 +36,24 @@ async def heuristic_scanner_node(state: AuditState, config: RunnableConfig) -> D
     logger.info("[Node] 运行启发式扫描器 (Semgrep, Gitleaks, Trivy)...")
 
     scanner_config = config['configurable'].get('scanner_config')
-    code_retriever_config = config['configurable'].get('code_retriever_config')
+    context_config = config['configurable'].get('context_config')
     patched_files = state['patched_files']
 
-    heuristic_scanner = HeuristicScanner(scanner_config, code_retriever_config)
+    heuristic_scanner = HeuristicScanner(scanner_config, context_config)
     heuristic_report = await heuristic_scanner.get_report(patched_files)
 
     return {'scanner_reports': heuristic_report}
 
 # 硬路由规则字典
 INJECTION_CWES = ["cwe-89", "cwe-78", "cwe-79"]
-LOGIC_SECURITY_CWES = ["cwe-284", "cwe-285", "cwe-306"]
+LOGIC_IDENTITY_CWES = ["cwe-284", "cwe-285", "cwe-306"]
 
 HARD_ROUTING_RULES = {
     "gitleaks": "Data_Asset_Expert",
     "trivy": "Infra_Supply_Expert",
     "semgrep": {
         **{key: "Injection_Expert" for key in INJECTION_CWES},
-        **{key: "Logic_Security_Expert" for key in LOGIC_SECURITY_CWES}
+        **{key: "Logic_Identity_Expert" for key in LOGIC_IDENTITY_CWES}
     }
 }
 
@@ -144,6 +144,10 @@ def dynamic_router_node(state: AuditState, config: RunnableConfig):
                 "agent_state_input": {
                     "issue": issue,
                     "remaining_turns": max_turns,
+                    "viewed_docs": [],
+                    "messages": [],
+                    "rejection_history": rejection_history,
+                    "audit_results": []
                 }
             })
             

@@ -9,8 +9,8 @@ from typing import List, Dict, Any, Optional
 from github import Github
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-from config import GitHubConfig
-from data_models import PRDetails, ReviewComment, PRDetails
+from core.config import GitHubConfig
+from core.data_models import PRDetails, ReviewComment, PRDetails
 
 
 logger = logging.getLogger(__name__)

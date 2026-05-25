@@ -3,8 +3,8 @@ Modified from [truongnh1992/gemini-ai-code-reviewer]
 """
 
 import logging
-from typing import List, Dict, Any, Optional
-from unidiff import PatchSet, PatchedFile, Hunk
+from typing import List
+from unidiff import PatchSet, PatchedFile
 
 logger = logging.getLogger(__name__)
 

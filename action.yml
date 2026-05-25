@@ -4,7 +4,7 @@ author: 'lnjoy'
 
 inputs:
   github_token:
-    description: '用于发表 PR 评论的 GITHUB_TOKEN'
+    description: '用于发表 PR 评论'
     required: true
 
 runs:
@@ -14,20 +14,20 @@ runs:
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
-      
+
     - name: Install python dependencies
       shell: bash
       run: |
-        echo "$(date +'%Y-%m-%d %H:%M:%S')"
+        echo "$(date)"
         pip install -r ${{ github.action_path }}/requirements.txt
-        echo "$(date +'%Y-%m-%d %H:%M:%S')"
+        echo "$(date)"
 
     - name: Install Trivy
       shell: bash
       run: |
         echo "Installing Trivy..."
         curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
-        echo "$(date +'%Y-%m-%d %H:%M:%S')"
+        echo "$(date)"
 
     - name: Install Gitleaks
       shell: bash
@@ -37,14 +37,20 @@ runs:
         wget https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz
         tar -zxvf gitleaks_${VERSION}_linux_x64.tar.gz
         sudo mv gitleaks /usr/local/bin/
-        echo "$(date +'%Y-%m-%d %H:%M:%S')"
+        echo "$(date)"
 
     - name: Install Semgrep
       shell: bash
       run: |
         echo "Installing Semgrep..."
         python3 -m pip install semgrep
-        echo "$(date +'%Y-%m-%d %H:%M:%S')"
+        echo "$(date)"
+
+    - name: Install ripgrep
+      shell: bash
+      run: |
+        sudo apt-get install -y ripgrep
+        echo "$(date)"
 
     - name: Get Date
       shell: bash
@@ -65,7 +71,7 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github_token }}
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        CODEQL_RESULTS_DIR: ${{ github.workspace }}/sarif-results
+        ACTION_DIR: ${{ github.action_path }}
       run: |
-        echo "$(date +'%Y-%m-%d %H:%M:%S')"
+        echo "$(date)"
         python ${{ github.action_path }}/main.py

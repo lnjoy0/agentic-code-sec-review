@@ -2,7 +2,6 @@
 Modified from [truongnh1992/gemini-ai-code-reviewer]
 """
 
-import operator
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, TypedDict, Annotated
 from unidiff import PatchedFile
@@ -174,7 +173,7 @@ class LLMRouteDecision(BaseModel):
         "Injection_Expert",
         "Data_Asset_Expert",
         "Infra_Supply_Expert",
-        "Logic_Security_Expert",
+        "Logic_Identity_Expert",
         "General_Expert"
     ] = Field(
         ..., 
@@ -268,6 +267,9 @@ class AuditResult(BaseModel):
 # 自定义的 Reducer
 def merge_rejection_history(old_hist: Dict, new_hist: Dict) -> Dict:
     """用于合并拒绝历史记录"""
+    if not old_hist:
+        return new_hist.copy() if new_hist else {}
+
     merged = old_hist.copy() 
 
     for issue_id, records in new_hist.items():
@@ -287,10 +289,10 @@ def merge_rejection_history(old_hist: Dict, new_hist: Dict) -> Dict:
 # 主图状态
 class AuditState(TypedDict):
     patched_files: List[PatchedFile]
-    scanner_reports: Annotated[Dict[str, List[Dict]], lambda x,y: {**x, **y}] # 合并不同扫描器的报告
+    scanner_reports: Annotated[Dict[str, List[Dict]], lambda x, y: {**(x or {}), **(y or {})}] # 合并不同扫描器的报告
     routing_decisions: List[RouteTask]
     rejection_history: Annotated[Dict[int, List[RejectionRecord]], merge_rejection_history] # 记录某个漏洞被哪些专家拒绝
-    audit_results: Annotated[List[Dict], operator.add]
+    audit_results: Annotated[List[Dict], lambda x, y: (x or []) + (y or [])]
     final_comment: List[ReviewComment]
 
 
@@ -299,5 +301,6 @@ class AgentState(TypedDict):
     issue: Dict[str, Any]
     messages: Annotated[list[BaseMessage], add_messages] # add_messages自动合并多轮对话
     remaining_turns: int
+    viewed_docs: Annotated[List[str], lambda x, y: list({*(x or []), *(y or [])})]
     rejection_history: Annotated[Dict[int, List[RejectionRecord]], merge_rejection_history]
-    audit_results: Annotated[List[Dict], operator.add]
+    audit_results: Annotated[List[Dict], lambda x, y: (x or []) + (y or [])]
