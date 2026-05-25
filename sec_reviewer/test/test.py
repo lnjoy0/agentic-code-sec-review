@@ -7,9 +7,6 @@ sys.path.insert(0, str(project_root))
 
 from tools.knowledge_retriever import VulnKnowledgeBase
 
-def main():
-    """该脚本用于将知识库文档预构建为向量数据库，并持久化保存"""
-    VulnKnowledgeBase.create_vector_db()
-
-if __name__ == "__main__":
-    main()
+vkb = VulnKnowledgeBase()
+tool = vkb.create_expert_tool('Injection_Expert')
+tool.invoke("Path_Traversal")

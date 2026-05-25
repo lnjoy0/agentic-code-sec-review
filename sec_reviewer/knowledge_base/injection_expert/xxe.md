@@ -46,19 +46,19 @@ domain: ["Injection_Expert", "General_Expert"]
 #### 3. 典型误报样例
 
 扫描器极易将以下安全模式误报为漏洞：
-##### 使用了安全的替代库 (`defusedxml`)
+**使用了安全的替代库 (`defusedxml`)**
     ```python
     import defusedxml.ElementTree as ET
     ET.fromstring(user_input) # 安全：defusedxml 默认防御XXE和Billion Laughs
     ```
-##### **lxml 解析器已显式禁用实体和网络
+**lxml 解析器已显式禁用实体和网络**
     ```python
     from lxml import etree
     # 安全：显式关闭了漏洞特性
     safe_parser = etree.XMLParser(resolve_entities=False, no_network=True)
     etree.fromstring(user_input, parser=safe_parser)
     ```
-##### **无外部污染源 (内部硬编码或受信数据)
+**无外部污染源 (内部硬编码或受信数据)**
     ```python
     # XML内容是硬编码的配置字典生成的，或者读取的是系统本地受绝对信任的配置文件
     internal_xml = "<config><theme>dark</theme></config>"

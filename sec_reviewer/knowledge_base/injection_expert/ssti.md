@@ -65,7 +65,7 @@ def greet():
 
 智能体在扫描时极易将安全的上下文变量传递误报为 SSTI 漏洞。
 
-##### 误报样例 1：作为上下文变量传入
+**误报样例 1：作为上下文变量传入**
 ```python
 @app.route('/safe_greet')
 def safe_greet():
@@ -73,7 +73,7 @@ def safe_greet():
     # 输入作为变量传入模板，引擎会自动对其进行转义和安全处理，这是标准且安全的用法
     return render_template_string("<h1>Hello, {{ user_name }}!</h1>", user_name=name)
 ```
-##### 误报样例 2：渲染静态文件
+**误报样例 2：渲染静态文件**
 ```python
 @app.route('/profile')
 def profile():
@@ -81,7 +81,7 @@ def profile():
     # render_template 渲染的是本地静态 .html 文件，输入仅作为变量传入
     return render_template('profile.html', user_name=name)
 ```
-##### 误报样例 3：输入被严格限制或类型转换
+**误报样例 3：输入被严格限制或类型转换**
 ```python
 @app.route('/user/<int:user_id>')
 def user_info(user_id):
