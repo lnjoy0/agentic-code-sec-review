@@ -62,8 +62,8 @@ HARD_ROUTING_RULES = {
     "trivy": "Infra_Supply_Expert",
     "semgrep": {
         **{key: "Injection_Expert" for key in INJECTION_CWES},
-        **{key: "Logic_Identity_Expert" for key in LOGIC_IDENTITY_CWES}
-        **{key: "Data_Asset_Expert" for key in DATA_ASSET_CWES}
+        **{key: "Logic_Identity_Expert" for key in LOGIC_IDENTITY_CWES},
+        **{key: "Data_Asset_Expert" for key in DATA_ASSET_CWES},
         **{key: "Infra_Supply_Expert" for key in INFRA_SUPPLY_CWES}
     }
 }
