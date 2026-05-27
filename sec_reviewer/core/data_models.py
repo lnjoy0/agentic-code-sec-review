@@ -2,10 +2,10 @@
 Modified from [truongnh1992/gemini-ai-code-reviewer]
 """
 
-from dataclasses import dataclass, field
+from uuid import uuid4
+from dataclasses import dataclass
 from typing import List, Dict, Any, Optional, TypedDict, Annotated
 from unidiff import PatchedFile
-from enum import Enum
 from langgraph.graph.message import BaseMessage, add_messages
 from pydantic import BaseModel, Field, model_validator
 from typing import Literal
@@ -26,143 +26,74 @@ class PRDetails:
         return f"{self.owner}/{self.repo}"
 
 
-@dataclass
-class FileInfo:
-    """Information about a file in a diff."""
-    path: str
-    old_path: Optional[str] = None
-    is_new_file: bool = False
-    is_renamed_file: bool = False
-    
-    @property
-    def is_binary(self) -> bool:
-        """Check if the file is likely binary based on extension."""
-        binary_extensions = {
-            '.png', '.jpg', '.jpeg', '.gif', '.pdf', '.zip', 
-            '.tar', '.gz', '.exe', '.dll', '.so', '.dylib'
-        }
-        return any(self.path.lower().endswith(ext) for ext in binary_extensions)
-    
-    @property
-    def file_extension(self) -> str:
-        """Get the file extension."""
-        return self.path.split('.')[-1].lower() if '.' in self.path else ''
-
-
-@dataclass
-class HunkInfo:
-    """Information about a hunk in a diff."""
-    source_start: int
-    source_length: int
-    target_start: int
-    target_length: int
-    content: str
-    header: str = ""
-    lines: List[str] = field(default_factory=list)
-
-
-@dataclass
-class DiffFile:
-    """Represents a file in a diff."""
-    file_info: FileInfo
-    hunks: List[HunkInfo] = field(default_factory=list)
-    
-    @property
-    def total_additions(self) -> int:
-        """Count total added lines."""
-        return sum(1 for hunk in self.hunks for line in hunk.lines if line.startswith('+'))
-    
-    @property
-    def total_deletions(self) -> int:
-        """Count total deleted lines."""
-        return sum(1 for hunk in self.hunks for line in hunk.lines if line.startswith('-'))
-
-
-class ReviewPriority(Enum):
-    """Priority levels for code review comments."""
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
-
-
-@dataclass
-class ReviewComment:
+class ReviewComment(BaseModel):
     """A code review comment."""
     body: str
     path: str
-    position: int
-    line_number: Optional[int] = None
-    category: Optional[str] = None
-    priority: Optional[ReviewPriority] = None
-    suggestion: Optional[str] = None
-    
-    def to_github_comment(self) -> Dict[str, Any]:
-        """Convert to GitHub API format."""
-        return {
-            "body": self.body,
-            "path": self.path,
-            "position": self.position
-        }
+    start_line: int = Field(ge=1)
+    end_line: int = Field(ge=1) # 指定在第几行写评论，这是文件中的绝对行号
+    severity: Literal["low", "medium", "high", "critical"]
 
 
-@dataclass
-class ReviewResult:
-    """Result of a code review."""
-    pr_details: PRDetails
-    comments: List[ReviewComment] = field(default_factory=list)
-    processed_files: int = 0
-    skipped_files: int = 0
-    errors: List[str] = field(default_factory=list)
-    processing_time: Optional[float] = None
-    
-    @property
-    def total_comments(self) -> int:
-        """Get total number of comments."""
-        return len(self.comments)
-    
-    @property
-    def comments_by_priority(self) -> Dict[ReviewPriority, int]:
-        """Get comment count by priority."""
-        counts = {priority: 0 for priority in ReviewPriority}
-        for comment in self.comments:
-            counts[comment.priority] += 1
-        return counts
-    
-    @property
-    def success(self) -> bool:
-        """Check if review was successful."""
-        return len(self.errors) == 0
+class LLMScannedIssue(BaseModel):
+    name: str = Field(
+        ...,
+        description="简短的漏洞名称，例如 'SQL Injection'、'Command Injection'、'Race Condition' 等"
+    )
+    severity: Literal["low", "medium", "high", "critical"] = Field(
+        ..., 
+        description=("预估的漏洞严重程度，可选值：Critical, High, Medium, Low")
+    )
+    start_line: int = Field(
+        ...,
+        ge=1,
+        description="该漏洞代码在文件中的起始行号"
+    )
+    end_line: int = Field(
+        ...,
+        ge=1,
+        description="该漏洞代码在文件中的终止行号"
+    )
+    vulnerable_code_snippet: str = Field(
+        ...,
+        description="触发该漏洞的核心代码片段（仅需一到两行即可），用于辅助精准定位"
+    )
+    confidence_score: int = Field(
+        ...,
+        ge=1, le=10,
+        description="你对该漏洞实际存在的置信度打分 (1-10分)，10分为极大概率存在"
+    )
+    information: str = Field(
+        ...,
+        description="详细描述该漏洞的信息：包括原理、缺陷、可能的利用方式等"
+    )
 
 
-@dataclass
-class AnalysisContext:
-    """Context information for code analysis."""
-    pr_details: PRDetails
-    file_info: FileInfo
-    related_files: List[str] = field(default_factory=list)
-    project_context: Optional[str] = None
-    language: Optional[str] = None
-    
-    @property
-    def is_test_file(self) -> bool:
-        """Check if this is a test file."""
-        test_patterns = ['test_', '_test.', 'spec_', '_spec.', '/test/', '/tests/']
-        return any(pattern in self.file_info.path.lower() for pattern in test_patterns)
+class LLMScanReport(BaseModel):
+    """【输出格式要求】Semantic Scanner 的输出结构"""
+    issues: List[LLMScannedIssue] = Field(
+        ...,
+        description="发现的潜在安全漏洞列表。如果没有发现问题，必须返回空列表 `[]`"
+    )
+
+
+class SnippetRegion(BaseModel):
+    start_line: int = Field(ge=1)
+    end_line: int = Field(ge=1)
+    start_column: Optional[int] = Field(ge=1, default=None)
+    end_column: Optional[int] = Field(ge=1, default=None)
 
 
 class ScannedIssue(BaseModel):
     """扫描器报告的漏洞结构"""
-    id: int
+    id: str = Field(default_factory=lambda: str(uuid4())[:8]) # 自动生成短 id
+    name: Optional[str] = None
     path: str
     message: str
     cwe: Optional[str] = None
-    snippet_region: Dict[str, int] = {
-        "start_line": int,
-        "end_line": int,
-        "start_column": int,
-        "end_column": int
-    }
+    severity: Optional[str] = None
+    confidence_score: Optional[int] = Field(ge=1, le=10, default=None)
+    snippet_region: SnippetRegion
     snippet_text: str
     context: str
 
@@ -204,14 +135,16 @@ class RejectionRecord(TypedDict):
     reason: str
 
 
-class AuditResult(BaseModel):
+class ExpertAuditResult(BaseModel):
     """【提交最终研判结果】当你完成漏洞研判后，必须调用此工具提交你的最终研判定论。"""
-    
     verdict: Literal["True Positive", "False Positive"] = Field(
         ..., 
         description="最终判定结果。必须是 'True Positive'（确认存在漏洞）或 'False Positive'（确认是误报）。"
     )
-    
+    name: str = Field(
+        ...,
+        description="简短的漏洞名称，例如 'SQL Injection'、'Command Injection'、'Race Condition' 等"
+    )
     severity: Literal["none", "low", "medium", "high", "critical"] = Field(
         ..., 
         description=(
@@ -223,14 +156,12 @@ class AuditResult(BaseModel):
             "- critical: 严重风险，可导致远程代码执行（RCE）、全库泄露或系统完全失控。"
         )
     )
-
     confidence: float = Field(
         ..., 
         ge=0.0, 
         le=1.0, 
         description="判定置信度。范围是 0.0 到 1.0。"
     )
-    
     analysis_reasoning: str = Field(
         ..., 
         min_length=50,
@@ -238,17 +169,16 @@ class AuditResult(BaseModel):
             "详细的研判逻辑推导过程。必须涵盖以下要点：\n"
             "1. 漏洞触发机理：简述该类漏洞成立的核心前提（如：特定的危险配置、不受信任的数据流、或不安全的函数调用）。\n"
             "2. 上下文核查：结合当前代码片段，分析是否确实满足上述触发条件（例如：是否存在防御配置、变量是否真正受控、依赖版本是否匹配）。\n"
-            "3. 如果判定为误报，必须说明排除逻辑（如：已有前置校验、仅用于测试环境等）；如果判定为真实漏洞，必须给出该漏洞的利用方法。" 
+            "3. 如果判定为误报，必须说明排除逻辑（如：已有前置校验、仅用于测试环境等）；如果判定为真实漏洞，必须给出该漏洞的可能利用方法。" 
         )
     )
-    
     remediation: str = Field(
         default="", 
         description="修复代码或配置建议。只有当 verdict 为 'True Positive' 时才提供；若为 'False Positive' 则保持为空字符串。"
     )
 
     @model_validator(mode='after')
-    def validate_logic(self) -> 'AuditResult':
+    def validate_logic(self) -> 'ExpertAuditResult':
         # 真实漏洞时必须有修复建议
         if self.verdict == "True Positive" and not self.remediation.strip():
             raise ValueError("校验失败：判定为 True Positive 时，必须提供具体的 remediation 修复建议代码。")
@@ -263,6 +193,14 @@ class AuditResult(BaseModel):
             
         return self
 
+class IssueAuditResult(BaseModel):
+    """每个漏洞的最终审计结果"""
+    id: str
+    expert: str
+    path: str
+    start_line: int
+    end_line: int
+    details: ExpertAuditResult
 
 # 自定义的 Reducer
 def merge_rejection_history(old_hist: Dict, new_hist: Dict) -> Dict:
@@ -289,18 +227,18 @@ def merge_rejection_history(old_hist: Dict, new_hist: Dict) -> Dict:
 # 主图状态
 class AuditState(TypedDict):
     patched_files: List[PatchedFile]
-    scanner_reports: Annotated[Dict[str, List[Dict]], lambda x, y: {**(x or {}), **(y or {})}] # 合并不同扫描器的报告
+    scanner_reports: Annotated[Dict[str, List[ScannedIssue]], lambda x, y: {**(x or {}), **(y or {})}] # 合并不同扫描器的报告
     routing_decisions: List[RouteTask]
     rejection_history: Annotated[Dict[int, List[RejectionRecord]], merge_rejection_history] # 记录某个漏洞被哪些专家拒绝
-    audit_results: Annotated[List[Dict], lambda x, y: (x or []) + (y or [])]
+    audit_results: Annotated[List[IssueAuditResult], lambda x, y: (x or []) + (y or [])]
     final_comment: List[ReviewComment]
 
 
 # 单个Agent的子图状态
 class AgentState(TypedDict):
-    issue: Dict[str, Any]
+    issue: ScannedIssue
     messages: Annotated[list[BaseMessage], add_messages] # add_messages自动合并多轮对话
     remaining_turns: int
     viewed_docs: Annotated[List[str], lambda x, y: list({*(x or []), *(y or [])})]
     rejection_history: Annotated[Dict[int, List[RejectionRecord]], merge_rejection_history]
-    audit_results: Annotated[List[Dict], lambda x, y: (x or []) + (y or [])]
+    audit_results: Annotated[List[IssueAuditResult], lambda x, y: (x or []) + (y or [])]

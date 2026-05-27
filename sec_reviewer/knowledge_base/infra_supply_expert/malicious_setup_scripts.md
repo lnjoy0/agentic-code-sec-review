@@ -1,5 +1,5 @@
 ---
-cwe_id: ["CWE-506", "CWE-94"]
+cwe_id: ["CWE-506"]
 name: "Malicious_Setup_Scripts"
 domain: ["Infra_Supply_Expert", "General_Expert"]
 ---

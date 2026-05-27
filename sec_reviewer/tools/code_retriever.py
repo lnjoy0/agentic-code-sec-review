@@ -1,6 +1,6 @@
-import subprocess
 import logging
 import collections
+import asyncio
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 import tree_sitter_python as tspython
@@ -8,20 +8,24 @@ from tree_sitter import Language, Parser, Node
 from langchain_core.tools import StructuredTool
 from langchain_core.runnables import RunnableConfig
 
+
 logger = logging.getLogger(__name__)
+
 
 class CodeRetriever:
     """使用 ripgrep 和 tree-sitter 实现的代码检索器"""
     
     def __init__(self, repo_path: str):
-        self.repo_path = Path(repo_path).resolve()
+        self.repo_path = Path(repo_path).resolve() # 工作区的绝对路径
         if not self.repo_path.exists():
             raise ValueError(f"仓库路径不存在: {self.repo_path}")
+        if not self.repo_path.is_dir():
+            raise ValueError(f"Error: 路径 {self.repo_path} 不是一个目录。")
             
         self.language = Language(tspython.language())
         self.parser = Parser(self.language)
 
-    def _rg_filter(self, params: List[str]) -> List[Path]:
+    async def _rg_filter(self, params: List[str]) -> List[Path]:
         """使用 ripgrep 过滤文件"""
         cmd = [
             "rg", "-l", 
@@ -30,55 +34,85 @@ class CodeRetriever:
             str(self.repo_path)
         ]
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            files = result.stdout.strip().split('\n')
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, _ = await process.communicate()
+            
+            stdout_bytes = stdout.decode('utf-8', errors='replace')
+            
+            if not stdout_bytes:
+                return []
+            
+            files = stdout_bytes.strip().split('\n')
             return [Path(f) for f in files if f]
-        except subprocess.CalledProcessError:
+        
+        except Exception as e:
+            logger.error(f"ripgrep 调用中出错: {e}")
             return []
 
-    def _find_definition_nodes(self, target_name: str) -> List[Dict[str, Any]]:
-        """查找包含目标定义的所有 AST 节点信息"""
+    async def _find_definition_files(self, target_name: str) -> List[Path]:
+        """查找包含目标定义的所有文件路径"""
         regexp = [
             "-e", f"def\\s+{target_name}\\b",
             "-e", f"class\\s+{target_name}\\b"
         ]
-        candidate_files = self.rg_filter(regexp)
-        nodes_info = []
+        files = self._rg_filter(regexp)
+        if not files:
+            logger.info(f"📄 未找到 `{target_name}` 的任何定义文件。")
+            return []
+        
+        return files
 
-        for file_path in candidate_files:
-            try:
-                with open(file_path, 'rb') as f:
-                    source_code = f.read()
-                
-                tree = self.parser.parse(source_code)
-                
-                def traverse(node: Node):
-                    if node.type in ('class_definition', 'function_definition'):
-                        node_name = node.child_by_field_name('name')
-                        if node_name and source_code[node_name.start_byte:node_name.end_byte].decode('utf-8') == target_name:
+    async def _find_definition_in_file(self, target_name:str, abs_file_path: Path) -> Dict[str, Any]:
+        """在特定文件中查找目标的定义节点"""
+        try:
+            def _read_file_safely():
+                if not abs_file_path.exists():
+                    return None
+                with open(abs_file_path, 'rb') as f:
+                    return f.read()
 
-                            # 捕获装饰器
-                            extract_node = node
-                            if node.parent and node.parent.type == 'decorated_definition':
-                                extract_node = node.parent
+            source_code = await asyncio.to_thread(_read_file_safely)
+            
+            rel_file_path = abs_file_path.relative_to(self.repo_path) # 相对路径
 
-                            nodes_info.append({
-                                "file_path": str(file_path.relative_to(self.repo_path)),
-                                "extract_node": extract_node, # 包含装饰器的节点
-                                "core_node": node,            # def 或 class 本身的节点
-                                "source_code": source_code,
-                                "type": "class" if node.type == "class_definition" else "function"
-                            })
-                    for child in node.children:
-                        traverse(child)
+            if source_code is None:
+                logger.error(f"目标文件不存在 `{rel_file_path}`")
+                return {}
+            
+            tree = await asyncio.to_thread(self.parser.parse, source_code)
 
-                traverse(tree.root_node)
-            except Exception as e:
-                logger.error(f"解析文件 {file_path} 失败: {e}")
-                
-        return nodes_info
+            def traverse(node: Node):
+                if node.type in ('class_definition', 'function_definition'):
+                    node_name = node.child_by_field_name('name')
+                    if node_name and source_code[node_name.start_byte:node_name.end_byte].decode('utf-8') == target_name:
 
-    def find_definition(
+                        # 捕获装饰器
+                        extract_node = node
+                        if node.parent and node.parent.type == 'decorated_definition':
+                            extract_node = node.parent
+
+                        return {
+                            "file_path": str(rel_file_path),
+                            "extract_node": extract_node, # 包含装饰器的节点
+                            "core_node": node,            # def 或 class 本身的节点
+                            "source_code": source_code,
+                            "type": "class" if node.type == "class_definition" else "function"
+                        }
+                for child in node.children:
+                    traverse(child)
+
+            traverse(tree.root_node)
+            logger.warning(f"在 {rel_file_path} 未找到 {target_name} 的定义节点")
+            return {}
+        except Exception as e:
+            logger.error(f"解析文件 {rel_file_path} 失败: {e}")
+            return {}
+
+    async def find_definition(
         self, 
         target_name: str, 
         max_lines: int = 200,
@@ -96,7 +130,14 @@ class CodeRetriever:
         Returns:
             str: 包含定义所在路径、行号与代码片段的 Markdown 文本。
         """
-        nodes_info = self._find_definition_nodes(target_name)
+        nodes_info = []
+
+        candidate_files = await self._find_definition_files(target_name)
+        for abs_file_path in candidate_files:
+            nd_info = await self._find_definition_in_file(target_name, abs_file_path)
+            if nd_info:
+                nodes_info.append(nd_info)
+
         if not nodes_info:
             return f"📄 未找到 `{target_name}` 的任何定义。"
 
@@ -157,7 +198,7 @@ class CodeRetriever:
 
         return "\n".join(output_lines)
 
-    def fetch_definition_chunk(
+    async def fetch_definition_chunk(
         self, 
         target_name: str, 
         file_path: str, 
@@ -180,29 +221,24 @@ class CodeRetriever:
             str: 指定行号后续的代码片段。
         """
         abs_path = self.repo_path / file_path
-        if not abs_path.exists():
+
+        def _read_file_safely():
+            if not abs_path.exists():
+                return None
+            with open(abs_path, 'r', encoding='utf-8') as f:
+                return f.read().split('\n')
+
+        all_lines = await asyncio.to_thread(_read_file_safely)
+        
+        if all_lines is None:
             return f"❌ 错误: 文件不存在 `{file_path}`"
-            
-        nodes_info = self._find_definition_nodes(target_name)
-
-        # 过滤出对应文件，并且请求的 start_line 落在此定义范围内的节点
-        target_info = None
-        for info in nodes_info:
-            if info['file_path'] == file_path:
-                def_start = info['extract_node'].start_point[0] + 1
-                def_end = info['extract_node'].end_point[0] + 1
-                if def_start <= start_line <= def_end:
-                    target_info = info
-                    break
-
+        
+        target_info = await self._find_definition_in_file(target_name, abs_path)
         if not target_info:
             return f"❌ 错误: 未能在 `{file_path}` 中找到覆盖行号 {start_line} 的 `{target_name}` 的定义。"
             
         def_end_line = target_info['extract_node'].end_point[0] + 1
-
-        with open(abs_path, 'r', encoding='utf-8') as f:
-            all_lines = f.read().split('\n')
-        
+       
         config_max_lines = config['configurable'].get('context_config').context_max_lines
         max_lines = max(0, min(max_lines, config_max_lines))
 
@@ -322,7 +358,7 @@ class CodeRetriever:
             
         return '\n'.join(truncated_lines)
 
-    def find_references(self, target_name: str) -> str:
+    async def find_references(self, target_name: str) -> str:
         """
         全局检索目标函数、类或变量的所有调用与引用记录（Cross-Reference）。
         
@@ -338,17 +374,29 @@ class CodeRetriever:
         regexp = [
             "-e", f"\\b{target_name}\\b"
         ]
-        candidate_files = self._rg_filter(regexp)
+        candidate_files = await self._rg_filter(regexp)
         if not candidate_files:
             return f"📄 未找到 `{target_name}` 的任何调用或引用记录。"
 
         results = []
-        for file_path in candidate_files:
+        for abs_file_path in candidate_files:
             try:
-                with open(file_path, 'rb') as f:
-                    source_code = f.read()
+
+                def _read_file_safely():
+                    if not abs_file_path.exists():
+                        return None
+                    with open(abs_file_path, 'rb') as f:
+                        return f.read()
+
+                source_code = await asyncio.to_thread(_read_file_safely)
                 
-                tree = self.parser.parse(source_code)
+                rel_file_path = abs_file_path.relative_to(self.repo_path) # 相对路径
+
+                if source_code is None:
+                    return f"❌ 错误: 文件不存在 `{rel_file_path}`"
+                
+                tree = await asyncio.to_thread(self.parser.parse, source_code)
+                
                 seen_snippet_starts = set() # 对同一行的查询结果去重
 
                 for node, current_scope, snippet_node in self._iter_identifier_usages(source_code, tree.root_node, target_name):
@@ -384,7 +432,7 @@ class CodeRetriever:
                         )
                         
                         results.append({
-                            "file_path": str(file_path.relative_to(self.repo_path)),
+                            "file_path": str(rel_file_path),
                             "line_number": node.start_point[0] + 1,
                             "scope_name": scope_name,
                             "signature": signature,
@@ -394,7 +442,7 @@ class CodeRetriever:
                         })
 
             except Exception as e:
-                logger.error(f"解析文件 {file_path} 失败: {e}")
+                logger.error(f"解析文件 {rel_file_path} 失败: {e}")
 
         if not results:
             return f"📄 未找到 `{target_name}` 的任何有效调用。"
@@ -414,8 +462,8 @@ class CodeRetriever:
             "---"
         ]
 
-        for file_path, refs in grouped_results.items(): # 分文件进行渲染
-            output_lines.append(f"\n#### 📄 `{file_path}`")
+        for rel_file_path, refs in grouped_results.items(): # 分文件进行渲染
+            output_lines.append(f"\n#### 📄 `{rel_file_path}`")
             for ref in refs:
                 # 标题标明行号和作用域
                 scope_display = f"def {ref['scope_name']}" if ref['scope_name'] != "<module_level>" else "Global Scope"
@@ -468,7 +516,7 @@ class CodeRetriever:
             
         return "Read (Usage)"
 
-    def track_variable_data_flow(
+    async def track_variable_data_flow(
         self, 
         target_variable: str, 
         file_path: str,
@@ -494,15 +542,21 @@ class CodeRetriever:
             ⚠️ 分页策略：为防上下文溢出，返回结果由前部的“详细片段”与后部的“单行摘要”组成。若详细区尚未展现变量的最终归宿（Sink），且摘要区暗示后续有重要操作，请严格按底部提示更新 `start_line` 继续拉取；若漏洞已被证实或证伪，请立即停止以节省 Token。
         """
         abs_path = self.repo_path / file_path
-        if not abs_path.exists():
+
+        def _read_file_safely():
+            if not abs_path.exists():
+                return None
+            with open(abs_path, 'rb') as f:
+                return f.read()
+
+        source_code = await asyncio.to_thread(_read_file_safely)
+        
+        if source_code is None:
             return f"❌ 错误: 文件不存在 `{file_path}`"
 
         all_records = []
-        try:
-            with open(abs_path, 'rb') as f:
-                source_code = f.read()
-            
-            tree = self.parser.parse(source_code)
+        try:            
+            tree = await asyncio.to_thread(self.parser.parse, source_code)
             seen_snippets = set()
 
             for node, current_scope, snippet_node in self._iter_identifier_usages(source_code, tree.root_node, target_variable):
@@ -604,13 +658,14 @@ class CodeRetriever:
         
         return (point_line, point_col)
 
-    def core_get_code_snippet_and_context(
+    async def core_get_code_snippet_and_context(
         self, 
-        file_path: str, 
+        file_path: str, # 文件相对路径
         start_point: Tuple[int, int], 
         end_point: Tuple[int, int],
         max_lines: int = 200,
-    ) -> Tuple[str, str]:
+        min_lines: int = 0
+    ) -> Tuple[str, str, Tuple]:
         """
         根据起止坐标提取代码片段及其上下文。
         如果上下文行数大于 max_lines，则将其截断。
@@ -621,12 +676,14 @@ class CodeRetriever:
             raise ValueError(f"不支持的文件类型后缀 {abs_path.suffix}，当前只支持 Python 文件分析")
 
         try:
-            with open(abs_path, "rb") as f:
-                source_bytes = f.read()
+            async def _read_file():
+                with open(abs_path, "rb") as f:
+                    return f.read()
+            source_bytes = await _read_file()
         except FileNotFoundError:
             raise FileNotFoundError(f"找不到文件 {file_path}")
-
-        tree = self.parser.parse(source_bytes)
+        
+        tree = await asyncio.to_thread(self.parser.parse, source_bytes) # 将 tree-sitter 解析放入线程池，否则会阻塞异步协程
         source_lines = source_bytes.decode('utf-8').splitlines()
 
         # 将编辑器坐标转成tree-sitter坐标（0-indexed），并进行坐标值检查
@@ -659,16 +716,18 @@ class CodeRetriever:
             if is_def and current_node.parent is not None and current_node.parent.type == 'decorated_definition':
                 extract_node = current_node.parent
                 
-            extract_start_row = extract_node.start_point[0]
-            extract_end_row = extract_node.end_point[0]
-            extract_line_count = extract_end_row - extract_start_row + 1
+            start_row = extract_node.start_point[0]
+            end_row = extract_node.end_point[0] + 1 # 右边界统一格式化为开区间坐标
+            extract_line_count = end_row - start_row
+
+            # 默认截断边界为整个节点的边界
+            bound_start_row = start_row
+            bound_end_row = end_row
 
             # 截断策略：如果行数超过 max_lines，触发滑动窗口截断
             if extract_line_count > max_lines:
-                # 默认截断边界为整个节点的边界
-                signature_start_row, signature_end_row = 0, 0
-                bound_start_row = extract_start_row
-                bound_end_row = extract_end_row + 1 # 右边界统一格式化为开区间坐标
+                signature_start_row = 0
+                signature_end_row = 0
 
                 # 如果是函数或类，提取包含装饰器的 signature，然后将截断边界设为 body_node 的边界
                 if is_def:
@@ -680,24 +739,27 @@ class CodeRetriever:
                         bound_end_row = body_node.end_point[0] + 1
 
                 # 计算滑动窗口的起止索引
-                # 计算理想状态下的起止索引，确保总长度严格等于 max_lines，签名不参与总长度计算
-                half_before = max_lines // 2
-                idx_start = snippet_node.start_point[0] - half_before
-                idx_end = idx_start + max_lines # 开区间坐标
+                # 拓展上下文行数到 max_lines，签名不参与总长度计算
+                target_lines = snippet_node.end_point[0] - snippet_node.start_point[0] + 1
+                remaining_lines = max(0, max_lines - target_lines)
+
+                half_before = remaining_lines // 2
+                start_row = snippet_node.start_point[0] - half_before
+                end_row = snippet_node.end_point[0] + 1 + (remaining_lines - half_before) # 开区间坐标
                 
                 # 触碰上边界时，窗口整体下移
-                if idx_start < bound_start_row:
-                    idx_end += (bound_start_row - idx_start)
-                    idx_start = bound_start_row
+                if start_row < bound_start_row:
+                    end_row += (bound_start_row - start_row)
+                    start_row = bound_start_row
                     
                 # 触碰下边界时，窗口整体上移
-                if idx_end > bound_end_row:
-                    idx_start -= (idx_end - bound_end_row)
-                    idx_end = bound_end_row
+                if end_row > bound_end_row:
+                    start_row -= (end_row - bound_end_row)
+                    end_row = bound_end_row
                     # 确保 start 不为负数
-                    idx_start = max(0, idx_start)
+                    start_row = max(0, start_row)
 
-                context_lines = source_lines[idx_start : idx_end]
+                context_lines = source_lines[start_row : end_row]
 
                 if signature_start_row and signature_end_row:
                     signature_lines = source_lines[signature_start_row : signature_end_row]
@@ -705,14 +767,14 @@ class CodeRetriever:
                 break
 
             # 未超长的情况：直接采用提取节点的完整文本
-            context_lines = source_lines[extract_start_row : extract_end_row + 1]
+            context_lines = source_lines[start_row : end_row]
             
             # 如果到达全局 module 层级，无论是否满足 min_lines 都必须停止
             if is_module_level:
                 break
                 
             # 如果满足最小行数要求，停止继续向上寻找
-            if extract_line_count >= self.min_lines:
+            if extract_line_count >= min_lines:
                 break 
 
             current_node = current_node.parent
@@ -720,7 +782,7 @@ class CodeRetriever:
         # 拼接排版
         output_lines = [
             f"### 🎯 上下文提取: `{file_path}` (Lines {start_point[0]}-{end_point[0]})",
-            f"> **文件总行数**: {len(source_lines)} 行 | **当前切片**: {idx_start + 1}-{idx_end} 行",
+            f"> **文件总行数**: {len(source_lines)} 行 | **当前切片**: {start_row + 1}-{end_row} 行",
             f"```python"
         ]
 
@@ -730,11 +792,11 @@ class CodeRetriever:
                 prefix = "  "
                 output_lines.append(f"{prefix} {current_line_num:4d} | {line}")
 
-        if idx_start > bound_start_row:
+        if start_row > bound_start_row:
             output_lines.append("# ... [上下文已截断]")
 
         for i, line in enumerate(context_lines):
-            current_line_num = idx_start + 1 + i
+            current_line_num = start_row + 1 + i
         
             if current_line_num in range(start_point[0], end_point[0] + 1):
                 prefix = "=>" # 给目标行打上 `=>` 箭头标记
@@ -743,14 +805,14 @@ class CodeRetriever:
 
             output_lines.append(f"{prefix} {current_line_num:4d} | {line}")
 
-        if idx_end < bound_end_row:
+        if end_row < bound_end_row:
             output_lines.append("# ... [上下文已截断]")
 
         output_lines.append("```")
 
-        return snippet, '\n'.join(output_lines)
+        return snippet, '\n'.join(output_lines), (start_row + 1, end_row)
 
-    def get_code_context(
+    async def get_code_context(
         self,
         file_path: str,
         target_line: int,
@@ -774,18 +836,18 @@ class CodeRetriever:
         max_lines = max(0, min(max_lines, config_max_lines))
 
         try:
-            context = self.core_get_code_snippet_and_context(
+            context, _, _ = await self.core_get_code_snippet_and_context(
                 file_path, 
                 (target_line, 1), 
                 (target_line, 1), 
                 max_lines
-            )[1]
+            )
         except Exception as e:
             return f"❌ 提取上下文失败：{e}"
         
         return context
 
-    def get_file_imports(self, file_path: str) -> str:
+    async def get_file_imports(self, file_path: str) -> str:
         """
         基于 AST 解析并提取目标 Python 文件的所有导入依赖 (Imports)，支持区分全局导入与局部 (函数内) 导入。
         
@@ -801,17 +863,22 @@ class CodeRetriever:
             str: 按作用域（全局 `<module_level>` 与局部 `def scope_name`）分组聚合的 import 语句 Markdown 列表。
         """
         abs_path = self.repo_path / file_path
-        if not abs_path.exists():
+
+        def _read_file_safely() -> Optional[bytes]:
+            if not abs_path.exists():
+                return None
+            with open(abs_path, 'rb') as f:
+                return f.read()
+        source_code = await asyncio.to_thread(_read_file_safely)
+
+        if source_code is None:
             return f"❌ 错误: 文件不存在 `{file_path}`"
 
         # 按照 scope_name 聚合 raw_code
         grouped_imports = collections.defaultdict(list)
 
         try:
-            with open(abs_path, 'rb') as f:
-                source_code = f.read()
-            
-            tree = self.parser.parse(source_code)
+            tree = await asyncio.to_thread(self.parser.parse, source_code)
 
             def traverse(node: Node, current_scope: str):
                 # 记录作用域

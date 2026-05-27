@@ -4,7 +4,6 @@ from pathlib import Path
 import logging
 import asyncio
 import json
-import subprocess
 
 from core.config import ScannerConfig, ContextConfig
 from core.data_models import ScannedIssue
@@ -16,13 +15,13 @@ logger = logging.getLogger(__name__)
 
 
 class HeuristicScanner:
-    """传统启发式工具扫描类"""
+    """传统启发式工具扫描器"""
 
     def __init__(self, scanner_config: ScannerConfig, context_config: ContextConfig):
         self.scanner_config = scanner_config
         self.context_config = context_config
     
-    async def get_report(self, patched_files: List[PatchedFile]) -> Dict[str, Any]:
+    async def get_report(self, patched_files: List[PatchedFile]) -> Dict[str, List[ScannedIssue]]:
         """获取传统工具的扫描报告"""
         
         # 调用 Semgrep 扫描
@@ -30,11 +29,11 @@ class HeuristicScanner:
         logger.info(f"Semgrep scanned for {len(semgrep_results)} results")
 
         # 调用 gitleaks 扫描
-        gitleaks_results = self._run_gitleaks()
+        gitleaks_results = await self._run_gitleaks()
         logger.info(f"Gitleaks scanned for {len(gitleaks_results)} results")
 
         # 调用 trivy 扫描
-        trivy_results = self._run_trivy(patched_files)
+        trivy_results = await self._run_trivy(patched_files)
         logger.info(f"Trivy scanned for {len(trivy_results)} results")
 
         return {
@@ -43,7 +42,7 @@ class HeuristicScanner:
             "trivy": trivy_results
         }
 
-    async def _run_semgrep_sync(self, patched_files: List[PatchedFile], batch_size: int = 200) -> List[Dict[str, Any]]:
+    async def _run_semgrep_sync(self, patched_files: List[PatchedFile], batch_size: int = 200) -> List[ScannedIssue]:
         """
         semgrep利用Tree-sitter将源代码解析成AST，并使用预定义的规则集进行模式匹配
         semgrep免费版只支持对单个文件的分析，因此这里只传入变更文件，做增量扫描
@@ -96,7 +95,7 @@ class HeuristicScanner:
         
         return self._convert_to_scanned_issue(filtered_results, tool_name='semgrep')
 
-    def _run_gitleaks(self) -> List[Dict[str, Any]]:
+    async def _run_gitleaks(self) -> List[ScannedIssue]:
         """
         gitleaks用于扫描敏感信息泄露，如 API 密钥、密码、证书等
         其使用正则匹配与香农熵分析等技术，对字符串做检测
@@ -112,23 +111,39 @@ class HeuristicScanner:
         ]
         
         logger.info(f"run: {cmd}")
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            
+            # 异步等待执行完成，并获取输出
+            stdout_bytes, stderr_bytes = await process.communicate()
+            
+            stdout_str = stdout_bytes.decode('utf-8', errors='replace')
+            stderr_str = stderr_bytes.decode('utf-8', errors='replace')
+            
+        except Exception as e:
+            logger.error(f"Gitleaks 进程启动失败: {str(e)}")
+            return []
 
-        if result.stderr.strip():
-            logger.warning(f"Gitleaks Log/Error: {result.stderr.strip()}")
+        if stderr_str.strip():
+            logger.warning(f"Gitleaks Log/Error: {stderr_str.strip()}")
 
         try:
-            data = json.loads(result.stdout)
+            data = json.loads(stdout_str)
             runs = data.get("runs", [])
             if runs and len(runs) > 0:
                 results = runs[0].get("results", [])
-                return self._convert_to_scanned_issue(results, tool_name='gitleaks')
+                return await self._convert_to_scanned_issue(results, tool_name='gitleaks')
             return []
+        
         except json.JSONDecodeError as e:
             logger.error(f"json decoding failed: {str(e)}")
             return []
 
-    def _run_trivy(self, patched_files: List[PatchedFile]) -> List[Dict[str, Any]]:
+    async def _run_trivy(self, patched_files: List[PatchedFile]) -> List[ScannedIssue]:
         """
         Trivy用于进行第三方依赖扫描(SCA)，可以检查requirements.txt等依赖文件，其使用的漏洞库整合了包括GitHub Advisory、OSV等多种数据源
         此外，其会使用内置的规则集检查配置文件的安全性(IaC 扫描)，关注Dockerfile等文件
@@ -142,19 +157,31 @@ class HeuristicScanner:
         ]
         
         logger.info(f"run: {cmd}")
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout_bytes, stderr_bytes = await process.communicate()
 
-        if result.stderr.strip():
-            logger.warning(f"Trivy Scanner Log/Error: {result.stderr.strip()}")
+            stdout_str = stdout_bytes.decode('utf-8', errors='replace')
+            stderr_str = stderr_bytes.decode('utf-8', errors='replace')
+        except Exception as e:
+            logger.error(f"Trivy 进程启动失败: {str(e)}")
+            return []
+
+        if stderr_str.strip():
+            logger.warning(f"Trivy Scanner Log/Error: {stderr_str.strip()}")
 
         try:
-            data = json.loads(result.stdout)
+            data = json.loads(stdout_str)
             runs = data.get("runs", [])
             if runs and len(runs) > 0:
                 results = runs[0].get("results", [])
                 cve_list = runs[0].get("tool", {}).get("driver", {}).get("rules", [])
                 filtered_results = self._filter_results(results, patched_files)
-                return self._convert_to_scanned_issue(filtered_results, tool_name='trivy', cve_list=cve_list)
+                return await self._convert_to_scanned_issue(filtered_results, tool_name='trivy', cve_list=cve_list)
             return []
         except json.JSONDecodeError as e:
             logger.error(f"json decoding failed: {str(e)}")
@@ -216,7 +243,7 @@ class HeuristicScanner:
         # 完全相等，或者长路径以 "/短路径" 结尾
         return po == pt or po.endswith("/" + pt) or po.endswith("/" + pt)
 
-    def _convert_to_scanned_issue(
+    async def _convert_to_scanned_issue(
         self, 
         raw_results: List[Dict[str, Any]], 
         tool_name: str, 
@@ -257,19 +284,23 @@ class HeuristicScanner:
             try: 
                 if Path(path).suffix == '.py':
                     retriever = CodeRetriever(self.scanner_config.workspace_dir)
-                    snippet_text, context = retriever.core_get_code_snippet_and_context(
+                    snippet_text, context, _ = await retriever.core_get_code_snippet_and_context(
                         file_path=path,
                         start_point=(snippet_region["start_line"], snippet_region["start_column"]),
                         end_point=(snippet_region["end_line"], snippet_region["end_column"])
                     )
                 else:
                     analyzer = ProjectAnalyzer(self.scanner_config.workspace_dir)
-                    snippet_text = analyzer.core_get_file_snippet(
+                    snippet_text = await analyzer.core_get_file_snippet(
                         file_path=path,
                         start_point=(snippet_region["start_line"], snippet_region["start_column"]),
                         end_point=(snippet_region["end_line"], snippet_region["end_column"])    
                     )
-                    context = analyzer.core_get_file_context(file_path=path, target_line=snippet_region["start_line"])
+                    context, _ = await analyzer.core_get_file_context(
+                        file_path=path, 
+                        start_line=snippet_region["start_line"],
+                        end_line=snippet_region["end_line"]
+                    )
             except Exception as e:
                 logger.warning(f"Failed to retrieve code snippet for {tool_name} result at {path}:{snippet_region['start_line']}: {e}")
                 continue

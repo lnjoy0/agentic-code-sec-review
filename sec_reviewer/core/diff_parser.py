@@ -6,6 +6,7 @@ import logging
 from typing import List
 from unidiff import PatchSet, PatchedFile
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,9 +29,9 @@ class DiffParser:
         logger.info(f"Parsing diff content (length: {len(diff_content)} characters)")
         
         try:
-            diff_files = self._parse_with_unidiff(diff_content)
-            logger.info(f"Successfully parsed {len(diff_files)} files using unidiff")
-            return diff_files
+            patched_files = self._parse_with_unidiff(diff_content)
+            logger.info(f"Successfully parsed {len(patched_files)} files using unidiff")
+            return patched_files
         except Exception as e:
             logger.warning(f"Unidiff parsing failed: {str(e)}")
             logger.debug(f"Diff content preview: {diff_content[:500]}...")
@@ -61,7 +62,7 @@ class DiffParser:
                 
                 if patched_file.is_binary_file: # 跳过二进制文件
                     logger.debug(f"⚠️ Skipping binary file: {patched_file.path}")
-                    return None
+                    continue
                 
                 patched_files.append(patched_file)
                 logger.debug(f"✅ Successfully parsed file: {patched_file.path}")

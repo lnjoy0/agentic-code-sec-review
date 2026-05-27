@@ -2,7 +2,7 @@ import logging
 from typing import List
 
 from core.config import Config
-from core.data_models import ReviewResult, ReviewComment
+from core.data_models import ReviewComment
 from core.github_client import GitHubClient
 from core.diff_parser import DiffParser
 from workflow.graph import app
@@ -27,7 +27,7 @@ class CodeSecReviewer:
         self.github_client = GitHubClient(config.github)
         self.diff_parser = DiffParser()
 
-    async def run(self) -> ReviewResult:
+    async def run(self):
         """Main entry point for reviewing a pull request."""
         logger.info("Starting PR review process...")
         all_comments: List[ReviewComment] = []
@@ -60,18 +60,14 @@ class CodeSecReviewer:
             }}
 
             # 启动多智能体工作流，得到最终评论
-            all_comments = await app.invoke(initial_state, config=workflow_config)
+            final_state = await app.ainvoke(initial_state, config=workflow_config)
+            comments = final_state.get("final_comment", [])
 
             # 将评论提交到 GitHub
             if all_comments:
-                success = self.github_client.create_review(pr_details, all_comments)
+                success = self.github_client.create_review(pr_details, comments)
                 if not success:
                     logger.error("Failed to post review comments to GitHub.")
-
-            return ReviewResult(
-                pr_details=pr_details,
-                comments=all_comments,
-            )
 
         except Exception as e:
             logger.error(f"Error during PR review: {e}")

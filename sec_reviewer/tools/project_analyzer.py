@@ -1,20 +1,26 @@
 import logging
 import collections
-import subprocess
+import asyncio
 from pathlib import Path
 from typing import List, Optional, Tuple
 from langchain_core.tools import StructuredTool
 from langchain_core.runnables import RunnableConfig
 
+
 logger = logging.getLogger(__name__)
+
 
 class ProjectAnalyzer:
     """提供项目与文件分析工具"""
     
     def __init__(self, repo_path: str):
-        self.repo_path  = repo_path
+        self.repo_path = Path(repo_path).resolve()
+        if not self.repo_path.exists():
+            raise ValueError(f"仓库路径不存在: {self.repo_path}")
+        if not self.repo_path.is_dir():
+            raise ValueError(f"Error: 路径 {self.repo_path} 不是一个目录。")
 
-    def get_project_structure(
+    async def get_project_structure(
         self, 
         max_depth: int = 3, 
         ignore_dirs: Optional[List[str]] = None
@@ -31,13 +37,7 @@ class ProjectAnalyzer:
         Returns:
             str: 项目目录结构的树状字符串。
         """
-        path = Path(self.repo_path)
-        if not path.exists():
-            return f"Error: 路径 {self.repo_path} 不存在。"
-        if not path.is_dir():
-            return f"Error: 路径 {self.repo_path} 不是一个目录。"
-
-        # 默认忽略的目录，主要为了节省 Token 和过滤无关安全审计的构建产物
+        # 忽略的目录，用于节省 Token 和过滤无关安全审计的构建产物
         ignore_set = {
             '.git', '__pycache__', 'venv', '.venv', 'env', 
             '.idea', '.vscode', 'node_modules', 'dist', 'build'
@@ -45,41 +45,45 @@ class ProjectAnalyzer:
         if ignore_dirs:
             ignore_set.update(ignore_dirs)
 
-        def generate_tree(dir_path: Path, prefix: str = '', current_depth: int = 1) -> str:
-            if current_depth > max_depth:
-                return prefix + "└── ... (达到最大深度)\n"
+        def _build_tree_sync() -> str:
+            def generate_tree(dir_path: Path, prefix: str = '', current_depth: int = 1) -> str:
+                if current_depth > max_depth:
+                    return prefix + "└── ... (达到最大深度)\n"
 
-            try:
-                # 获取目录内容并按文件夹在前、文件在后排序
-                contents = list(dir_path.iterdir())
-                contents = [c for c in contents if c.name not in ignore_set]
-                contents.sort(key=lambda x: (x.is_file(), x.name.lower()))
-            except PermissionError:
-                return prefix + "└── ... (无权限访问)\n"
+                try:
+                    contents = list(dir_path.iterdir())
+                    contents = [c for c in contents if c.name not in ignore_set]
+                    contents.sort(key=lambda x: (x.is_file(), x.name.lower()))
+                except PermissionError:
+                    return prefix + "└── ... (无权限访问)\n"
 
-            tree_str = ""
-            pointers = ['├── '] * (len(contents) - 1) + ['└── '] if contents else []
+                tree_str = ""
+                pointers = ['├── '] * (len(contents) - 1) + ['└── '] if contents else []
 
-            for pointer, content in zip(pointers, contents):
-                is_dir = content.is_dir()
-                suffix = '/' if is_dir else ''
-                tree_str += prefix + pointer + content.name + suffix + '\n'
-                
-                if is_dir:
-                    extension = '│   ' if pointer == '├── ' else '    '
-                    tree_str += generate_tree(content, prefix + extension, current_depth + 1)
+                for pointer, content in zip(pointers, contents):
+                    is_dir_flag = content.is_dir()
+                    suffix = '/' if is_dir_flag else ''
+                    tree_str += prefix + pointer + content.name + suffix + '\n'
                     
-            return tree_str
+                    if is_dir_flag:
+                        extension = '│   ' if pointer == '├── ' else '    '
+                        tree_str += generate_tree(content, prefix + extension, current_depth + 1)
+                        
+                return tree_str
+
+            return generate_tree(self.repo_path)
+
+        tree_content = await asyncio.to_thread(_build_tree_sync) # 放入线程池，避免读写阻塞
 
         # 拼接排版
         output_lines = [
             f"### 📦 代码仓库目录树:",
-            f"{path.name}/",
-            generate_tree(path)
+            f"{self.repo_path.name}/",
+            tree_content
         ]
         return '\n'.join(output_lines)
 
-    def global_search(
+    async def global_search(
         self, 
         pattern: str, 
         file_pattern: Optional[str] = None, 
@@ -100,9 +104,6 @@ class ProjectAnalyzer:
         Returns:
             str: 包含匹配文件路径、行号及对应代码片段的 Markdown 文本。
         """
-        if not self.repo_path.exists():
-            return f"❌ 错误: 仓库路径不存在 `{self.repo_path}`"
-
         # -n: 显示行号
         # --no-heading: 确保每行格式为 filepath:line:content
         cmd = ["rg", "-n", "--color=never", "--no-heading"]
@@ -116,15 +117,30 @@ class ProjectAnalyzer:
         cmd.extend(["-e", pattern, str(self.repo_path)])
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            raw_output = result.stdout
-        except subprocess.CalledProcessError as e:
-            if e.returncode == 1:
-                filter_msg = f" (在 `{file_pattern}` 中)" if file_pattern else ""
-                return f"📄 未找到匹配 `{pattern}` 的搜索结果{filter_msg}。"
-            else:
-                logger.error(f"ripgrep 执行出错: {e.stderr}")
-                return f"❌ 搜索失败: `{e.stderr.strip()}`"
+            # 创建异步子进程
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await process.communicate()
+            
+            # 解码输出 (由于 ripgrep 默认输出 utf-8)
+            raw_output = stdout.decode('utf-8', errors='replace')
+            error_output = stderr.decode('utf-8', errors='replace')
+
+            # 处理返回码
+            if process.returncode != 0:
+                if process.returncode == 1: # ripgrep 返回 1 通常表示没有找到匹配项
+                    filter_msg = f" (在 `{file_pattern}` 中)" if file_pattern else ""
+                    return f"📄 未找到匹配 `{pattern}` 的搜索结果{filter_msg}。"
+                else:
+                    logger.error(f"ripgrep 执行出错: {error_output}")
+                    return f"❌ 搜索失败: `{error_output.strip()}`"
+
+        except Exception as e:
+            logger.error(f"启动 ripgrep 进程异常: {str(e)}")
+            return f"❌ 启动搜索进程失败: `{str(e)}`"
 
         # 按文件分组
         matches_by_file = collections.defaultdict(list)
@@ -137,14 +153,14 @@ class ProjectAnalyzer:
             # 解析格式: filepath:line_number:content
             parts = line.split(":", 2)
             if len(parts) >= 3:
-                file_path, line_num, content = parts[0], parts[1], parts[2]
+                abs_file_path, line_num, content = parts[0], parts[1], parts[2]
                 
-                # 尝试转为相对路径，使输出更简短
+                # 转为相对路径，使输出更简短
                 try:
                     from pathlib import Path
-                    rel_path = str(Path(file_path).relative_to(self.repo_path))
+                    rel_path = str(Path(abs_file_path).relative_to(self.repo_path))
                 except ValueError:
-                    rel_path = file_path
+                    rel_path = abs_file_path
                     
                 matches_by_file[rel_path].append((line_num, content))
                 total_matches += 1
@@ -161,12 +177,12 @@ class ProjectAnalyzer:
         displayed_matches = 0
         is_truncated = False
 
-        for file_path, lines in matches_by_file.items():
+        for rel_path, lines in matches_by_file.items():
             if displayed_matches >= max_results:
                 is_truncated = True
                 break
                 
-            output_lines.append(f"\n#### 📄 `{file_path}`")
+            output_lines.append(f"\n#### 📄 `{rel_path}`")
             output_lines.append("```python") # 泛用高亮
             for line_num, content in lines:
                 if displayed_matches >= max_results:
@@ -200,48 +216,48 @@ class ProjectAnalyzer:
 
         return "\n".join(output_lines)
 
-    def _check_file(self, file_path: str) -> Tuple[int, str]:
+    async def _check_file(self, rel_file_path: str) -> Tuple[int, str]:
         """
         检查文件，限制读取行数，以及读取文件信息
         """
         # 防止路径穿越
         try:
-            abs_path = (self.repo_path / file_path).resolve()
+            abs_path = (self.repo_path / rel_file_path).resolve()
             if not str(abs_path).startswith(str(self.repo_path)):
-                raise PermissionError(f"❌ 安全拦截: 拒绝访问仓库目录之外的文件 `{file_path}`")
+                raise PermissionError(f"❌ 安全拦截: 拒绝访问仓库目录之外的文件 `{rel_file_path}`")
         except OSError as e:
             raise OSError(f"❌ 路径解析错误: `{str(e)}`")
 
         if not abs_path.exists():
-            raise FileNotFoundError(f"❌ 错误: 文件不存在 `{file_path}`")
+            raise FileNotFoundError(f"❌ 错误: 文件不存在 `{rel_file_path}`")
         if not abs_path.is_file():
-            raise IsADirectoryError(f"❌ 错误: `{file_path}` 不是一个合法的文件（可能是目录）。")
+            raise IsADirectoryError(f"❌ 错误: `{rel_file_path}` 不是一个合法的文件（可能是目录）。")
 
         # 读取文件内容
         try:
-            with open(abs_path, 'r', encoding='utf-8', errors='replace') as f:
-                all_lines = f.read().splitlines()
+            content = await asyncio.to_thread(Path(abs_path).read_text, encoding='utf-8', errors='replace')
+            all_lines = content.splitlines()
         except Exception as e:
             raise RuntimeError(f"❌ 读取文件失败: `{str(e)}`")
 
         total_lines = len(all_lines)
         if total_lines == 0:
-            raise ValueError(f"📄 `{file_path}` 是一个空文件。")
+            raise ValueError(f"📄 `{rel_file_path}` 是一个空文件。")
 
         # 推断 Markdown 语法高亮标签
-        ext = abs_path.suffix.lower().lstrip('.')
-        if not ext:
+        label = abs_path.suffix.lower().lstrip('.')
+        if not label:
             name = abs_path.name.lower()
             if name in ('dockerfile', 'makefile'):
-                ext = name
+                label = name
             elif name.startswith('.'): # 如 .env, .gitignore
-                ext = 'bash'
+                label = 'bash'
             else:
-                ext = 'text'
+                label = 'text'
         
-        return all_lines, total_lines, ext
+        return all_lines, total_lines, label
 
-    def read_file_content(
+    async def read_file_content(
         self, 
         file_path: str, 
         start_line: int = 1,
@@ -262,7 +278,7 @@ class ProjectAnalyzer:
             str: 附带行号的 Markdown 格式文件内容片段。
         """
         try:
-            all_lines, total_lines, ext = self._check_file(file_path)
+            all_lines, total_lines, label = await self._check_file(file_path)
         except Exception as e:
             return str(e)
 
@@ -282,7 +298,7 @@ class ProjectAnalyzer:
         output_lines = [
             f"### 📄 文件内容: `{file_path}`",
             f"> **总计行数**: {total_lines} 行 | **当前展示**: {start_line}-{idx_end} 行",
-            f"```{ext}"
+            f"```{label}"
         ]
         
         for i, line in enumerate(chunk_lines):
@@ -304,7 +320,7 @@ class ProjectAnalyzer:
 
         return "\n".join(output_lines)
 
-    def core_get_file_snippet(
+    async def core_get_file_snippet(
         self, 
         file_path: str, 
         start_point: tuple,
@@ -319,7 +335,7 @@ class ProjectAnalyzer:
         :return: 供 LLM 直接阅读的 Markdown 格式化字符串
         """
         # 这里不捕获异常，直接向上抛出
-        all_lines, total_lines, _ = self._check_file(file_path)
+        all_lines, total_lines, _ = await self._check_file(file_path)
 
         # 边界值安全校验
         start_line = max(1, min(start_point[0], total_lines))
@@ -353,25 +369,32 @@ class ProjectAnalyzer:
 
         return "\n".join(extracted_lines)
 
-    def core_get_file_context(
+    async def core_get_file_context(
         self, 
-        file_path: str, 
-        target_line: int, 
+        file_path: str, # 文件的相对路径
+        start_line: int,
+        end_line: int,
         context_lines: int = 20
-    ) -> str:
+    ) -> Tuple[str, Tuple]:
+        """提取非代码文件的目标行号上下文"""
         # 这里不捕获异常，直接向上抛出
-        all_lines, total_lines, ext = self._check_file(file_path)
+        all_lines, total_lines, label = await self._check_file(file_path)
         
-        if target_line < 1 or target_line > total_lines:
-            raise ValueError(f"❌ 错误: 目标行号 ({target_line}) 超出文件有效范围 (1 - {total_lines})。")
+        # 校验范围合法性
+        if start_line > end_line:
+            raise ValueError(f"❌ 错误: 起始行号 ({start_line}) 不能大于结束行号 ({end_line})。")
+        
+        # 统一转为 0-indexed，并防止越界
+        start_line_0 = max(0, min(total_lines, start_line - 1))
+        end_line_0 = max(0, min(total_lines, end_line - 1))
 
-        # 计算滑动窗口的起止索引
-        idx_target = target_line - 1
+        # 将上下文行数扩展到 context_lines
+        target_lines = end_line_0 - start_line_0 + 1
+        remaining_lines = max(0, context_lines - target_lines)
 
-        # 计算理想状态下的起止索引，确保总长度严格等于 context_lines
-        half_before = context_lines // 2
-        idx_start = idx_target - half_before
-        idx_end = idx_start + context_lines
+        half_before = remaining_lines // 2
+        idx_start = start_line_0 - half_before
+        idx_end = end_line_0 + 1 + (remaining_lines - half_before)
         
         # 触碰上边界（文件头部）时，窗口整体下移
         if idx_start < 0:
@@ -389,16 +412,16 @@ class ProjectAnalyzer:
 
         # 拼接排版
         output_lines = [
-            f"### 🎯 上下文提取: `{file_path}` (Line {target_line})",
+            f"### 🎯 上下文提取: `{file_path}` (Lines {start_line}-{end_line})",
             f"> **文件总行数**: {total_lines} 行 | **当前切片**: {idx_start + 1}-{idx_end} 行",
-            f"```{ext}"
+            f"```{label}"
         ]
         
         for i, line in enumerate(chunk_lines):
             current_line_num = idx_start + 1 + i
             
             # 给目标行打上 `=>` 箭头标记
-            if current_line_num == target_line:
+            if start_line <= current_line_num <= end_line:
                 prefix = "=>"
             else:
                 prefix = "  "
@@ -408,9 +431,9 @@ class ProjectAnalyzer:
         output_lines.append("```")
 
         # ... 后续拼接逻辑保持不变 ...
-        return "\n".join(output_lines)
+        return "\n".join(output_lines), (idx_start + 1, idx_end)
 
-    def get_file_context(
+    async def get_file_context(
         self, 
         file_path: str, 
         target_line: int, 
@@ -434,7 +457,7 @@ class ProjectAnalyzer:
         context_lines = max(0, min(context_lines, config_max_lines))
 
         try:
-            context = self.core_get_file_context(file_path, target_line, context_lines)
+            context, _ = await self.core_get_file_context(file_path, target_line, context_lines)
 
             # 底部操作指引
             output_lines = [context]

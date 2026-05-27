@@ -2,13 +2,14 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.types import Send
 from typing import Literal
 import logging
+import os
 
 from core.data_models import AgentState, AuditState
 from tools.code_retriever import CodeRetriever
 from tools.project_analyzer import ProjectAnalyzer
 from tools.knowledge_retriever import VulnKnowledgeBase
-from nodes import (heuristic_scanner_node, aggregate_and_check_node, dynamic_router_node,
-                   get_comment_node)
+from nodes import (heuristic_scanner_node, semantic_scanner_node,
+                   aggregate_and_check_node, dynamic_router_node, get_comment_node)
 from core.expert_agents import (InjectionExpert, DataAssetExpert, InfraSupplyExpert,
                                   LogicIdentityExpert, GeneralExpert)
 
@@ -49,10 +50,11 @@ def check_rejection_edge(state: AuditState) -> Literal["dynamic_router", "__end_
 
 def create_graph():
     """代码安全审计工作流主图"""
+    repo_path = os.getenv("GITHUB_WORKSPACE", ".")
 
     # 实例化工具类
-    code_retriever = CodeRetriever(repo_path="/my/code/repo")
-    analyzer = ProjectAnalyzer(repo_path="/my/code/repo")
+    code_retriever = CodeRetriever(repo_path)
+    analyzer = ProjectAnalyzer(repo_path)
     knowledge_base = VulnKnowledgeBase()
     
     general_tools = [*code_retriever.as_tools(), *analyzer.as_tools()]
@@ -73,6 +75,7 @@ def create_graph():
     workflow = StateGraph(AgentState)
 
     workflow.add_node('heuristic_scanner', heuristic_scanner_node)
+    workflow.add_node('semantic_scanner', semantic_scanner_node)
     workflow.add_node('dynamic_router', dynamic_router_node)
     workflow.add_node('injection_expert', injection_expert)
     workflow.add_node('data_asset_expert', data_asset_expert)
@@ -83,7 +86,9 @@ def create_graph():
     workflow.add_node('get_comment', get_comment_node)
 
     workflow.add_edge(START, 'heuristic_scanner')
+    workflow.add_edge(START, 'semantic_scanner')
     workflow.add_edge('heuristic_scanner', 'dynamic_router')
+    workflow.add_edge('semantic_scanner', 'dynamic_router')
 
     workflow.add_conditional_edges(
         'dynamic_router', 

@@ -1,5 +1,5 @@
 ---
-cwe_id: ["CWE-250", "CWE-269", "CWE-1188"]
+cwe_id: ["CWE-250", "CWE-1188"]
 name: "Dockerfile_Security_Baseline_Violations"
 domain: ["Infra_Supply_Expert", "General_Expert"]
 ---

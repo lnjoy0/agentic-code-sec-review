@@ -3,33 +3,33 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from typing import Dict, Any, List
-import json
 
-from scanners import HeuristicScanner
+from scanners.heuristic_scanner import HeuristicScanner
+from scanners.semantic_scanner import LLMSemanticScanner
 from core.data_models import AuditState, ReviewComment
 from core.config import LLMConfig
 from core.data_models import LLMRouteDecision, RouteTask
 from knowledge_base.sys_prompts import ROUTER_PROMPT
+from knowledge_base.cwe_category import (
+    INJECTION_CWES, LOGIC_IDENTITY_CWES,
+    DATA_ASSET_CWES, INFRA_SUPPLY_CWES
+)
 
 
 logger = logging.getLogger(__name__)
 
 
-class ModelProvider:
-
-    @staticmethod
-    def get_model(config: LLMConfig, role_name: str):
-        model = ChatOpenAI(
-            model=config.model_name,
-            openai_api_base=config.base_url,
-            openai_api_key=config.api_key,
-            temperature=config.Role[role_name].temperature,
-            top_p=config.Role[role_name].top_p,
-            max_retries=3,
-            seed=42
-        )
-        return model
-
+def get_model(config: LLMConfig, role_name: str):
+    model = ChatOpenAI(
+        model=config.model_name,
+        openai_api_base=config.base_url,
+        openai_api_key=config.api_key,
+        temperature=config.Role[role_name].temperature,
+        top_p=config.Role[role_name].top_p,
+        max_retries=3,
+        seed=42
+    )
+    return model
 
 async def heuristic_scanner_node(state: AuditState, config: RunnableConfig) -> Dict[str, Any]:
     """启发式工具扫描器节点"""
@@ -44,16 +44,29 @@ async def heuristic_scanner_node(state: AuditState, config: RunnableConfig) -> D
 
     return {'scanner_reports': heuristic_report}
 
-# 硬路由规则字典
-INJECTION_CWES = ["cwe-89", "cwe-78", "cwe-79"]
-LOGIC_IDENTITY_CWES = ["cwe-284", "cwe-285", "cwe-306"]
+async def semantic_scanner_node(state: AuditState, config: RunnableConfig) -> Dict[str, Any]:
+    """基于LLM的语义扫描器节点"""
+    logger.info("[Node] 运行基于LLM的语义扫描器...")
 
+    scanner_config = config['configurable'].get('scanner_config')
+    llm_config = config['configurable'].get('llm_config')
+    patched_files = state['patched_files']
+
+    scanner_llm = get_model(llm_config, role_name="Scanner")
+    semantic_scanner = LLMSemanticScanner(scanner_config, scanner_llm)
+    semantic_report = await semantic_scanner.get_report(patched_files)
+
+    return {'scanner_reports': semantic_report}
+
+# 硬路由规则字典
 HARD_ROUTING_RULES = {
     "gitleaks": "Data_Asset_Expert",
     "trivy": "Infra_Supply_Expert",
     "semgrep": {
         **{key: "Injection_Expert" for key in INJECTION_CWES},
         **{key: "Logic_Identity_Expert" for key in LOGIC_IDENTITY_CWES}
+        **{key: "Data_Asset_Expert" for key in DATA_ASSET_CWES}
+        **{key: "Infra_Supply_Expert" for key in INFRA_SUPPLY_CWES}
     }
 }
 
@@ -64,12 +77,12 @@ def dynamic_router_node(state: AuditState, config: RunnableConfig):
     max_turns = config['configurable'].get('agent_config').max_turns
     llm_config = config['configurable'].get('llm_config')
 
-    router_llm = ModelProvider.get_model(llm_config, role_name="Router")
+    router_llm = get_model(llm_config, role_name="Router")
     structured_router = router_llm.with_structured_output(LLMRouteDecision)
     
     prompt = ChatPromptTemplate.from_messages([
         ("system", ROUTER_PROMPT),
-        ("human", "漏洞报告: {issue}\nrejected_by: {rejected_by}\nrejection_reason: {rejection_reason}\n请分析并返回合适的专家名称。")
+        ("human", "漏洞报告:\n {issue}\nrejected_by: {rejected_by}\nrejection_reason: {rejection_reason}\n请分析并返回合适的专家名称。")
     ])
 
     scanner_reports = state.get("scanner_reports", {})
@@ -82,28 +95,26 @@ def dynamic_router_node(state: AuditState, config: RunnableConfig):
     
     routing_decisions: List[RouteTask] = []
     
-    index = 0
     for scanner_name, issues in scanner_reports.items():
         for issue in issues:
             expert_name = None
-            cwe = issue.get("cwe", "").lower().split(':')[0]
+            cwe = issue.id.lower().split(':')[0]
+            name = issue.name
+            id = issue.id
 
-            index += 1
-            issue['id'] = index # 给每个 issue 分配一个唯一 ID，从 1 开始递增
-
-            if index in processed_issue_ids:
+            if id in processed_issue_ids:
                 continue # 已经处理过的漏洞不再路由
 
             rejected_by = []
             rejection_reason = ""
-            if index in rejection_history:
+            if id in rejection_history:
                 rejection_reason = "\n该漏洞已被以下专家退回，请参考其退回理由进行重新路由：\n"
-                for record in rejection_history[index]:
+                for record in rejection_history[id]:
                     rejected_by.append(record['expert'])
                     rejection_reason += f"- 专家 [{record['expert']}]: {record['reason']}\n"
-            
+
             # 优先进行硬路由，按照字典规则直接映射到专家节点
-            rule = HARD_ROUTING_RULES[scanner_name]
+            rule = HARD_ROUTING_RULES.get(scanner_name, None)
             if isinstance(rule, str):
                 expert_name = rule
             elif isinstance(rule, dict):
@@ -113,17 +124,17 @@ def dynamic_router_node(state: AuditState, config: RunnableConfig):
                         break
 
             if expert_name in rejected_by:
-                logger.info(f"  [Hard Route] 漏洞 issue[{index}] ({cwe}) 被规则路由到 {expert_name}，但它在历史退回记录中，已被退回过。")
+                logger.info(f"  [Hard Route] 漏洞 issue[{id}] ({name or cwe}) 被规则路由到 {expert_name}，但它在历史退回记录中，已被退回过。")
                 expert_name = None # 进入软路由
 
             # 进行软路由，使用 LLM 分析漏洞特征，判断最适合的专家，用于处理没有明确规则覆盖的情况
             if not expert_name:
-                logger.info(f"  [Soft Route] 触发大模型路由分析: issue[{index}] ({cwe})")
+                logger.info(f"  [Soft Route] 触发大模型路由分析: issue[{id}] ({name or cwe})")
                 chain = prompt | structured_router
                 try:
                     decision = chain.invoke({
-                        "issue": issue, 
-                        "rejected_by": rejected_by,
+                        "issue": issue.model_dump_json(indent=2), # 将 pydantic 对象转为json字符串
+                        "rejected_by": ", ".join(rejected_by),
                         "rejection_reason": rejection_reason
                     })
 
@@ -137,7 +148,7 @@ def dynamic_router_node(state: AuditState, config: RunnableConfig):
                     logger.error(f"    -> LLM 路由失败，降级为通用专家。错误: {e}")
                     expert_name = "General_Expert"
             else:
-                logger.info(f"  [Hard Route] 命中字典映射: issue[{index}] -> {expert_name}")
+                logger.info(f"  [Hard Route] 命中字典映射: issue[{id}] -> {expert_name}")
 
             routing_decisions.append({
                 "expert_name": expert_name,
@@ -162,16 +173,39 @@ def get_comment_node(state: AuditState, config: RunnableConfig) -> List[ReviewCo
     """生成评论内容节点"""
     logger.info("=== 所有专家研判完毕，汇总结果 ===")
 
-    results = state['refined_results']
-    patched_files = state['patched_files']
+    audit_results = state['audit_results']
 
     comments = []
-    for tool, tool_results in results.items():                        
-        comment = ReviewComment(
-            body=json.dumps(tool_results[:100], indent=4),
-            path=patched_files[0].path,
-            position=1
-        )
-        comments.append(comment)
+    for result in audit_results:
+        if result.details.verdict == "True Positive":
+            name = result.details.name
+            severity = result.details.severity
+            confidence = result.details.confidence
+            reason = result.details.analysis_reasoning
+            remediation = result.details.remediation
+
+            emoji = {"critical": "🚨", "high": "⚠️", "medium": "💡", "low": "ℹ️"}
+            markdown_body = f"""### 🤖 安全漏洞审查: {name}
+
+| 属性 | 详情 |
+| :--- | :--- |
+| **严重程度** | {emoji[severity]} `{severity.upper()}` |
+| **置信度** | 🎯 `{confidence * 100:.1f}%` |
+
+#### 🔍 研判分析
+{reason}
+
+#### 🛠️ 修复建议
+{remediation}
+"""
+
+            comment = ReviewComment(
+                body=markdown_body,
+                path=result.path,
+                start_line=result.start_line,
+                end_line=result.end_line,
+                severity=result.details.severity
+            )
+            comments.append(comment)
     
     return {'final_comment': comments}

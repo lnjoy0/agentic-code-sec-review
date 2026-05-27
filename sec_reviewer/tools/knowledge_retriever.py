@@ -5,9 +5,11 @@ from typing import Annotated
 from langchain_core.tools import StructuredTool
 from langchain_core.tools.base import InjectedToolArg
 
+
 logger = logging.getLogger(__name__)
 
 KNOWLEDGE_ROOT_PATH = Path(__file__).parent.parent.resolve() / 'knowledge_base'
+
 
 class VulnKnowledgeBase:
     """基于精确匹配的安全知识库"""

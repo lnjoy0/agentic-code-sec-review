@@ -7,7 +7,7 @@ import functools
 import logging
 from pydantic import ValidationError
 
-from core.data_models import AgentState, AuditResult, Rejection
+from core.data_models import AgentState, ExpertAuditResult, Rejection, IssueAuditResult
 from core.config import LLMConfig
 from knowledge_base.sys_prompts import (
     INJECTION_EXPERT_PROMPT, DATA_ASSET_EXPERT_PROMPT, INFRA_SUPPLY_EXPERT_PROMPT,
@@ -23,13 +23,19 @@ class AgentError(Exception):
     pass
 
 
-class ModelProvider:
-    """带缓存的模型提供器，用来在接收RunnableConfig参数的同时，避免在节点中重复创建实例"""
-
+class BaseExpertAgent():
+    """专家智能体基类"""
+    
+    def __init__(self, expert_name: str, system_prompt: str, tools: List):
+        self.expert_name = expert_name
+        self.system_prompt = system_prompt
+        self.tools = tools or []
+        self.tools_by_name = {tool.name: tool for tool in self.tools 
+                              if tool not in (ExpertAuditResult, Rejection)}
+        
     @functools.lru_cache(maxsize=10) # 将该函数的执行结果缓存，保存最多10组不同参数的执行结果
-    @staticmethod
-    def get_model_bound_tools(config: LLMConfig, tools: List, expert_name: str):
-        # 相同的参数会返回缓存中的同一个对象
+    def _get_model_bound_tools(self, config: LLMConfig, tools: List, expert_name: str):
+        """带缓存的模型提供器，用来在接收RunnableConfig参数的同时，避免在节点中重复创建实例"""
         model = ChatOpenAI(
             model=config.model_name,
             openai_api_base=config.base_url,
@@ -41,43 +47,33 @@ class ModelProvider:
         )
         return model.bind_tools(tools)
 
-
-class BaseExpertAgent():
-    """专家智能体基类"""
-    
-    def __init__(self, expert_name: str, system_prompt: str, tools: List):
-        self.expert_name = expert_name
-        self.system_prompt = system_prompt
-        self.tools = tools or []
-        self.tools_by_name = {tool.name: tool for tool in self.tools 
-                              if tool not in (AuditResult, Rejection)}
-        
     def _reasoning_node(self, state: AgentState, config: RunnableConfig):
         """核心推理节点：LLM 观察当前状态并决定下一步动作"""
         messages = state.get("messages", [])
         remaining_turns = state.get('remaining_turns')
         rejection_history = state.get('rejection_history', {})
-        issue_id = state["issue"].get("id")
+        issue = state["issue"]
         state_update_messages = []
 
         # 记录剩余行动轮数
         if remaining_turns > 0:
-            tool_sys_prompt = f"【系统提示】你还可以行动 {remaining_turns} 轮。请合理规划，如果已有足够信心，可以直接调用 AuditResult 工具，填入最终的漏洞研判结果。"
+            tool_sys_prompt = f"【系统提示】你还可以行动 {remaining_turns} 轮。请合理规划，如果已有足够信心，可以直接调用 ExpertAuditResult 工具，填入最终的漏洞研判结果。"
         else:
             logger.warning(f"[{self.expert_name}] ⚠️ 行动轮数耗尽，强制要求大模型输出结论。")
-            tool_sys_prompt = f"【系统提示】警告：你的行动轮数已全部用尽！无法再调用除了 AuditResult 以外的其他工具。请立刻基于上述对话历史中的已知信息，调用 AuditResult 给出最终研判结果。"
+            tool_sys_prompt = f"【系统提示】警告：你的行动轮数已全部用尽！无法再调用除了 ExpertAuditResult 以外的其他工具。请立刻基于上述对话历史中的已知信息，调用 ExpertAuditResult 给出最终研判结果。"
 
         # 如果是第一轮，初始化 System Prompt 和初始输入
         if not messages:
-            logger.info(f"[{self.expert_name}] 🚀 开始全新漏洞研判: {state['issue'].get('id')}...")
+            logger.info(f"[{self.expert_name}] 🚀 开始全新漏洞研判: {issue.id}...")
             sys_msg = SystemMessage(
                 content=self.system_prompt+"\n\n"+tool_sys_prompt
             )
 
-            human_content = f"请对以下漏洞报告进行深度研判，你可以多轮调用工具获取信息。\n【扫描报告】：\n{state['issue']}"
-            if issue_id in rejection_history:
+            issue_json = issue.model_dump_json(indent=2)
+            human_content = f"请对以下漏洞报告进行深度研判，你可以多轮调用工具获取信息。\n【扫描报告】：\n{issue_json}"
+            if issue.id in rejection_history:
                 rejection_reason = "\n【退回历史】该漏洞之前已被以下专家退回过，可以参考其退回原因，从中获取你需要的信息："
-                for record in rejection_history[issue_id]:
+                for record in rejection_history[issue.id]:
                     rejection_reason += f"\n- 专家 [{record['expert']}]: {record['reason']}"
                 human_content += rejection_reason
             human_msg = HumanMessage(content=human_content)
@@ -91,7 +87,7 @@ class BaseExpertAgent():
 
         # 获取绑定了工具的 LLM 实例
         llm_config = config['configurable'].get('llm_config')
-        model_with_tools = ModelProvider.get_model_bound_tools(
+        model_with_tools = self._get_model_bound_tools(
             config=llm_config,
             tools=self.tools,
             expert_name=self.expert_name
@@ -112,12 +108,12 @@ class BaseExpertAgent():
         new_docs = [] # 用于接收新查询到的文档名称
 
         if remaining_turns <= -3:
-            logger.error(f"[{self.expert_name}] 🚫 LLM 在行动轮数耗尽后仍然连续三轮没有调用 AuditResult 输出最终结果")
+            logger.error(f"[{self.expert_name}] 🚫 LLM 在行动轮数耗尽后仍然连续三轮没有调用 ExpertAuditResult 输出最终结果")
             raise AgentError(f"{self.expert_name}故障，行动轮数耗尽，且 LLM 仍然连续三轮没有输出结果")
         elif remaining_turns <= 0:
             logger.warning(f"[{self.expert_name}] 🚫 拦截工具调用：行动轮数已耗尽。")
             for tool_call in tool_calls_message.tool_calls:
-                refusal_msg = "工具调用失败: 行动轮数已全部用尽，你当前只能调用 AuditResult 工具"
+                refusal_msg = "工具调用失败: 行动轮数已全部用尽，你当前只能调用 ExpertAuditResult 工具"
                 tool_outputs.append(
                     ToolMessage(
                         content=refusal_msg, 
@@ -166,33 +162,37 @@ class BaseExpertAgent():
         """格式化节点：提取 LLM 的最终研判结论并进行 Pydantic 强校验"""
         logger.info(f"[{self.expert_name}] ⚖️ 准备校验并格式化输出结果...")
         last_message = state["messages"][-1]
+        issue = state['issue']
         
         for tool_call in last_message.tool_calls:
-            if tool_call["name"] == "AuditResult":
-                raw_args = tool_call["args"] # 获取 AuditResult 的参数
+            if tool_call["name"] == "ExpertAuditResult":
+                raw_args = tool_call["args"] # 获取 ExpertAuditResult 的参数
                 
                 try:
                     # 实例化 Pydantic 模型，如果数据校验不通过会抛出异常
-                    audit_obj = AuditResult(**raw_args) 
-                    
+                    audit_obj = ExpertAuditResult(**raw_args) 
+
                     audit_data = audit_obj.model_dump() 
-                    
-                    audit_result = {
-                        "id": state['issue'].get('id'),
-                        "expert": self.expert_name,
-                        "details": audit_data
-                    }
+
+                    audit_result = IssueAuditResult(
+                        id=issue.id,
+                        expert=self.expert_name,
+                        path=issue.path,
+                        start_line=issue.snippet_region.start_line,
+                        end_line=issue.snippet_region.end_line,
+                        details=audit_data
+                    )
 
                     logger.info(f"[{self.expert_name}] ✅ 结果校验通过，研判完成。")
                     return {"audit_results": [audit_result]}
-                
+
                 except ValidationError as e:
                     error_str = str(e)
-                    logger.warning(f"[{self.expert_name}] ❌ AuditResult 数据校验失败，打回重做: \n{error_str}")
-                    
+                    logger.warning(f"[{self.expert_name}] ❌ ExpertAuditResult 数据校验失败，打回重做: \n{error_str}")
+
                     # 构造一个 ToolMessage，将报错扔回给大模型
                     error_msg = ToolMessage(
-                        content=f"【提交失败】你提交的最终结论未通过逻辑校验，请根据以下报错修正后重新调用 AuditResult:\n{error_str}",
+                        content=f"【提交失败】你提交的最终结论未通过逻辑校验，请根据以下报错修正后重新调用 ExpertAuditResult:\n{error_str}",
                         name=tool_call["name"],
                         tool_call_id=tool_call["id"]
                     )
@@ -205,17 +205,17 @@ class BaseExpertAgent():
         remaining_turns = state.get('remaining_turns')
 
         if remaining_turns <= -3:
-            logger.error(f"[{self.expert_name}] ⚠️ LLM 在行动轮数耗尽后仍然连续三轮没有调用 AuditResult 输出最终结果")
+            logger.error(f"[{self.expert_name}] ⚠️ LLM 在行动轮数耗尽后仍然连续三轮没有调用 ExpertAuditResult 输出最终结果")
             raise AgentError(f"{self.expert_name}故障，行动轮数耗尽，且 LLM 仍然连续三轮没有输出结果")
         elif remaining_turns <= 0:
             logger.warning(f"[{self.expert_name}] ⚠️ 行动轮数已耗尽。")
-            warning_content = "行动轮数已全部用尽，你当前只能调用 AuditResult 工具"
+            warning_content = "行动轮数已全部用尽，你当前只能调用 ExpertAuditResult 工具"
         else:
             logger.warning(f"[{self.expert_name}] ⚠️ 检测到LLM仅输出了纯文本内容，进行警告")
             # 构造一条警告消息
             warning_content = (
                 "【系统拦截】你只能进行工具调用，禁止输出纯文本内容。\n"
-                "请调用 `AuditResult` 工具来提交最终的研判结果，或者调用其他工具来辅助研判分析。"
+                "请调用 `ExpertAuditResult` 工具来提交最终的研判结果，或者调用其他工具来辅助研判分析。"
             )
         
         warning_msg = HumanMessage(content=warning_content)
@@ -227,7 +227,7 @@ class BaseExpertAgent():
         logger.warning(f"[{self.expert_name}] ↩️ 拒绝处理该漏洞，将其退回给Router。")
 
         last_message = state["messages"][-1]
-        issue_id = state["issue"].get("id")
+        issue_id = state["issue"].id
         
         for tool_call in last_message.tool_calls:
             if tool_call["name"] == "Rejection":
@@ -264,7 +264,7 @@ class BaseExpertAgent():
             
         tool_name = last_message.tool_calls[0]["name"]
         
-        if tool_name == "AuditResult":
+        if tool_name == "ExpertAuditResult":
             return "format_output"
         elif tool_name == "Rejection":
             return "reject"
@@ -327,7 +327,7 @@ class BaseExpertAgent():
 class InjectionExpert(BaseExpertAgent):
     """负责SQL注入、OS命令注入、代码注入、XSS、SSRF、路径遍历、反序列化等各种注入"""
     def __init__(self, additional_tools: List = None):
-        tools = [AuditResult, Rejection] + (additional_tools or [])
+        tools = [ExpertAuditResult, Rejection] + (additional_tools or [])
         super().__init__(
             expert_name="Injection_Expert",
             system_prompt=INJECTION_EXPERT_PROMPT,
@@ -338,7 +338,7 @@ class InjectionExpert(BaseExpertAgent):
 class DataAssetExpert(BaseExpertAgent):
     """负责凭据泄露和密码学"""
     def __init__(self, additional_tools: List = None):
-        tools = [AuditResult, Rejection] + (additional_tools or [])
+        tools = [ExpertAuditResult, Rejection] + (additional_tools or [])
         super().__init__(
             expert_name="Data_Asset_Expert",
             system_prompt=DATA_ASSET_EXPERT_PROMPT,
@@ -349,7 +349,7 @@ class DataAssetExpert(BaseExpertAgent):
 class InfraSupplyExpert(BaseExpertAgent):
     """负责依赖项与基础设施配置"""
     def __init__(self, additional_tools: List = None):
-        tools = [AuditResult, Rejection] + (additional_tools or [])
+        tools = [ExpertAuditResult, Rejection] + (additional_tools or [])
         super().__init__(
             expert_name="Infra_Supply_Expert",
             system_prompt=INFRA_SUPPLY_EXPERT_PROMPT,
@@ -359,7 +359,7 @@ class InfraSupplyExpert(BaseExpertAgent):
 class LogicIdentityExpert(BaseExpertAgent):
     """负责访问控制和业务逻辑"""
     def __init__(self, additional_tools: List = None):
-        tools = [AuditResult, Rejection] + (additional_tools or [])
+        tools = [ExpertAuditResult, Rejection] + (additional_tools or [])
         super().__init__(
             expert_name="Logic_Identity_Expert",
             system_prompt=LOGIC_IDENTITY_EXPERT_PROMPT,
@@ -369,7 +369,7 @@ class LogicIdentityExpert(BaseExpertAgent):
 class GeneralExpert(BaseExpertAgent):
     """负责无法清晰划分给其他专家的通用漏洞"""
     def __init__(self, additional_tools: List = None):
-        tools = [AuditResult] + (additional_tools or [])
+        tools = [ExpertAuditResult] + (additional_tools or [])
         super().__init__(
             expert_name="General_Expert",
             system_prompt=GENERAL_EXPERT_PROMPT,

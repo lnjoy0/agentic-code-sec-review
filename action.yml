@@ -3,54 +3,152 @@ description: '该Agent首先使用codeql等工具对PR中的代码进行安全�
 author: 'lnjoy'
 
 inputs:
+  # === 基础与核心配置 ===
   github_token:
-    description: '用于发表 PR 评论'
+    description: '用于发表 PR 评论和获取代码 (Required)'
     required: true
+  log_level:
+    description: '日志级别 (DEBUG, INFO, WARNING, ERROR)'
+    required: false
+    default: 'INFO'
+  github_timeout:
+    description: 'GitHub API 请求超时时间'
+    required: false
+    default: '30'
+  github_max_retries:
+    description: 'GitHub API 请求最大重试次数'
+    required: false
+    default: '3'
+
+  # === 大模型基础配置 ===
+  llm_model_name:
+    description: '大语言模型名称'
+    required: false
+    default: 'Qwen3-Coder-30B-A3B-Instruct'
+  llm_base_url:
+    description: '大语言模型 API 基础路径'
+    required: false
+    default: 'http://i-2.gpushare.com:31263/v1'
+  llm_api_key:
+    description: '大语言模型 API Key'
+    required: false
+    default: 'token-is-not-needed'
+
+  # === Agent 与 Context 配置 ===
+  max_turns:
+    description: 'Agent 最大行动轮数'
+    required: false
+    default: '20'
+  context_max_lines:
+    description: '代码片段最大检索行数'
+    required: false
+    default: '200'
+
+  # === 各角色 Temperature & Top_p 参数 ===
+  scanner_temperature:
+    description: 'Scanner 角色的 temperature'
+    required: false
+    default: '0.33'
+  scanner_top_p:
+    description: 'Scanner 角色的 top_p'
+    required: false
+    default: '0.81'
+
+  router_temperature:
+    description: 'Router 角色的 temperature'
+    required: false
+    default: '0.1'
+  router_top_p:
+    description: 'Router 角色的 top_p'
+    required: false
+    default: '0.36'
+
+  injection_expert_temperature:
+    description: 'Injection_Expert 角色的 temperature'
+    required: false
+    default: '0.14'
+  injection_expert_top_p:
+    description: 'Injection_Expert 角色的 top_p'
+    required: false
+    default: '0.62'
+
+  data_asset_expert_temperature:
+    description: 'Data_Asset_Expert 角色的 temperature'
+    required: false
+    default: '0.14'
+  data_asset_expert_top_p:
+    description: 'Data_Asset_Expert 角色的 top_p'
+    required: false
+    default: '0.62'
+
+  infra_supply_expert_temperature:
+    description: 'Infra_Supply_Expert 角色的 temperature'
+    required: false
+    default: '0.14'
+  infra_supply_expert_top_p:
+    description: 'Infra_Supply_Expert 角色的 top_p'
+    required: false
+    default: '0.62'
+
+  logic_identity_expert_temperature:
+    description: 'Logic_Identity_Expert 角色的 temperature'
+    required: false
+    default: '0.2'
+  logic_identity_expert_top_p:
+    description: 'Logic_Identity_Expert 角色的 top_p'
+    required: false
+    default: '0.7'
+
+  general_expert_temperature:
+    description: 'General_Expert 角色的 temperature'
+    required: false
+    default: '0.4'
+  general_expert_top_p:
+    description: 'General_Expert 角色的 top_p'
+    required: false
+    default: '0.87'
 
 runs:
   using: 'composite'
   steps:
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.10'
+        cache: 'pip'
 
     - name: Install python dependencies
       shell: bash
       run: |
-        echo "$(date)"
+        echo "$(date) - Installing Python dependencies..."
         pip install -r ${{ github.action_path }}/requirements.txt
-        echo "$(date)"
 
     - name: Install Trivy
       shell: bash
       run: |
-        echo "Installing Trivy..."
+        echo "$(date) - Installing Trivy..."
         curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
-        echo "$(date)"
 
     - name: Install Gitleaks
       shell: bash
       run: |
-        echo "Installing Gitleaks..."
+        echo "$(date) - Installing Gitleaks..."
         VERSION=$(curl -s https://api.github.com/repos/gitleaks/gitleaks/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
-        wget https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz
-        tar -zxvf gitleaks_${VERSION}_linux_x64.tar.gz
+        wget -q https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz
+        tar -zxf gitleaks_${VERSION}_linux_x64.tar.gz
         sudo mv gitleaks /usr/local/bin/
-        echo "$(date)"
 
     - name: Install Semgrep
       shell: bash
       run: |
-        echo "Installing Semgrep..."
+        echo "$(date) - Installing Semgrep..."
         python3 -m pip install semgrep
-        echo "$(date)"
 
     - name: Install ripgrep
       shell: bash
       run: |
-        sudo apt-get install -y ripgrep
-        echo "$(date)"
+        echo "$(date) - Installing ripgrep..."
+        sudo apt-get update -qq && sudo apt-get install -y ripgrep
 
     - name: Get Date
       shell: bash
@@ -58,7 +156,7 @@ runs:
       run: echo "date=$(date -u +'%Y-%m-%d')" >> $GITHUB_OUTPUT
 
     - name: Cache Trivy DB
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: /home/runner/.cache/trivy
         key: ${{ runner.os }}-trivy-db-${{ steps.get-date.outputs.date }}
@@ -68,10 +166,41 @@ runs:
     - name: Run code review
       shell: bash
       env:
-        GITHUB_TOKEN: ${{ inputs.github_token }}
+        # GitHub 默认上下文
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        ACTION_DIR: ${{ github.action_path }}
+        GITHUB_WORKSPACE: ${{ github.workspace }}
+        GITHUB_EVENT_PATH: ${{ github.event_path }}
+        
+        # Action Inputs 映射
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        GITHUB_TIMEOUT: ${{ inputs.github_timeout }}
+        GITHUB_MAX_RETRIES: ${{ inputs.github_max_retries }}
+        LOG_LEVEL: ${{ inputs.log_level }}
+        
+        # 核心配置参数同步
+        LLM_MODEL_NAME: ${{ inputs.llm_model_name }}
+        LLM_BASE_URL: ${{ inputs.llm_base_url }}
+        LLM_API_KEY: ${{ inputs.llm_api_key }}
+        AGENT_MAX_TURNS: ${{ inputs.max_turns }}
+        CONTEXT_MAX_LINES: ${{ inputs.context_max_lines }}
+
+        # 各角色配置同步
+        ROLE_SCANNER_TEMP: ${{ inputs.scanner_temperature }}
+        ROLE_SCANNER_TOP_P: ${{ inputs.scanner_top_p }}
+        ROLE_ROUTER_TEMP: ${{ inputs.router_temperature }}
+        ROLE_ROUTER_TOP_P: ${{ inputs.router_top_p }}
+        ROLE_INJECTION_TEMP: ${{ inputs.injection_expert_temperature }}
+        ROLE_INJECTION_TOP_P: ${{ inputs.injection_expert_top_p }}
+        ROLE_DATA_ASSET_TEMP: ${{ inputs.data_asset_expert_temperature }}
+        ROLE_DATA_ASSET_TOP_P: ${{ inputs.data_asset_expert_top_p }}
+        ROLE_INFRA_SUPPLY_TEMP: ${{ inputs.infra_supply_expert_temperature }}
+        ROLE_INFRA_SUPPLY_TOP_P: ${{ inputs.infra_supply_expert_top_p }}
+        ROLE_LOGIC_IDENTITY_TEMP: ${{ inputs.logic_identity_expert_temperature }}
+        ROLE_LOGIC_IDENTITY_TOP_P: ${{ inputs.logic_identity_expert_top_p }}
+        ROLE_GENERAL_TEMP: ${{ inputs.general_expert_temperature }}
+        ROLE_GENERAL_TOP_P: ${{ inputs.general_expert_top_p }}
+        
       run: |
-        echo "$(date)"
+        echo "$(date) - Starting Agentic Code Sec Reviewer..."
         python ${{ github.action_path }}/main.py
