@@ -5,10 +5,10 @@ import logging
 import asyncio
 import json
 
-from core.config import ScannerConfig, ContextConfig
-from core.data_models import ScannedIssue
-from tools.code_retriever import CodeRetriever
-from tools.project_analyzer import ProjectAnalyzer
+from sec_reviewer.core.config import ScannerConfig, ContextConfig
+from sec_reviewer.core.data_models import ScannedIssue
+from sec_reviewer.tools.code_retriever import CodeRetriever
+from sec_reviewer.tools.project_analyzer import ProjectAnalyzer
 
 
 logger = logging.getLogger(__name__)

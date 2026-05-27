@@ -1,11 +1,11 @@
 import logging
 from typing import List
 
-from core.config import Config
-from core.data_models import ReviewComment
-from core.github_client import GitHubClient
-from core.diff_parser import DiffParser
-from workflow.graph import app
+from sec_reviewer.core.config import Config
+from sec_reviewer.core.data_models import ReviewComment
+from sec_reviewer.core.github_client import GitHubClient
+from sec_reviewer.core.diff_parser import DiffParser
+from sec_reviewer.workflow.graph import app
 
 
 logger = logging.getLogger(__name__)

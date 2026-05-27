@@ -8,11 +8,11 @@ import logging
 import asyncio
 import re
 
-from core.config import ScannerConfig
-from core.data_models import ScannedIssue, LLMScanReport, LLMScannedIssue, SnippetRegion
-from tools.code_retriever import CodeRetriever
-from tools.project_analyzer import ProjectAnalyzer
-from knowledge_base.sys_prompts import SCANNER_PROMPT
+from sec_reviewer.core.config import ScannerConfig
+from sec_reviewer.core.data_models import ScannedIssue, LLMScanReport, LLMScannedIssue, SnippetRegion
+from sec_reviewer.tools.code_retriever import CodeRetriever
+from sec_reviewer.tools.project_analyzer import ProjectAnalyzer
+from sec_reviewer.knowledge_base.sys_prompts import SCANNER_PROMPT
 
 
 logger = logging.getLogger(__name__)

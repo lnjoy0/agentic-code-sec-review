@@ -4,16 +4,14 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from typing import Dict, Any, List
 
-from scanners.heuristic_scanner import HeuristicScanner
-from scanners.semantic_scanner import LLMSemanticScanner
-from core.data_models import AuditState, ReviewComment
-from core.config import LLMConfig
-from core.data_models import LLMRouteDecision, RouteTask
-from knowledge_base.sys_prompts import ROUTER_PROMPT
-from knowledge_base.cwe_category import (
-    INJECTION_CWES, LOGIC_IDENTITY_CWES,
-    DATA_ASSET_CWES, INFRA_SUPPLY_CWES
-)
+from sec_reviewer.scanners.heuristic_scanner import HeuristicScanner
+from sec_reviewer.scanners.semantic_scanner import LLMSemanticScanner
+from sec_reviewer.core.data_models import AuditState, ReviewComment
+from sec_reviewer.core.config import LLMConfig
+from sec_reviewer.core.data_models import LLMRouteDecision, RouteTask
+from sec_reviewer.knowledge_base.sys_prompts import ROUTER_PROMPT
+from sec_reviewer.knowledge_base.cwe_category import (INJECTION_CWES, LOGIC_IDENTITY_CWES,
+                                                      DATA_ASSET_CWES, INFRA_SUPPLY_CWES)
 
 
 logger = logging.getLogger(__name__)
