@@ -3,7 +3,6 @@ Modified from [truongnh1992/gemini-ai-code-reviewer]
 """
 
 from uuid import uuid4
-from dataclasses import dataclass
 from typing import List, Dict, Any, Optional, TypedDict, Annotated
 from unidiff import PatchedFile
 from langgraph.graph.message import BaseMessage, add_messages
@@ -11,8 +10,7 @@ from pydantic import BaseModel, Field, model_validator
 from typing import Literal
 
 
-@dataclass
-class PRDetails:
+class PRDetails(BaseModel):
     """Details of a pull request."""
     owner: str
     repo: str
