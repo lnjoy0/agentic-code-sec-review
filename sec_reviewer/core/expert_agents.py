@@ -7,8 +7,8 @@ import functools
 import logging
 from pydantic import ValidationError
 
-from data_models import AgentState, ExpertAuditResult, Rejection, IssueAuditResult
-from config import LLMConfig
+from .data_models import AgentState, ExpertAuditResult, Rejection, IssueAuditResult
+from .config import LLMConfig
 from knowledge_base.sys_prompts import (
     INJECTION_EXPERT_PROMPT, DATA_ASSET_EXPERT_PROMPT, INFRA_SUPPLY_EXPERT_PROMPT,
     LOGIC_IDENTITY_EXPERT_PROMPT, GENERAL_EXPERT_PROMPT

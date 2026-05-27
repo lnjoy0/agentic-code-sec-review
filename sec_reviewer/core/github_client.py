@@ -11,8 +11,8 @@ from github.Repository import Repository
 from github.PullRequest import PullRequest
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-from core.config import GitHubConfig
-from core.data_models import PRDetails, ReviewComment
+from .config import GitHubConfig
+from .data_models import PRDetails, ReviewComment
 
 
 logger = logging.getLogger(__name__)
