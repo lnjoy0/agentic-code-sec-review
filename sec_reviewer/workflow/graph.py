@@ -72,7 +72,7 @@ def create_graph():
     general_expert = GeneralExpert(additional_tools=[*general_tools, general_knowledge]).compile()
     
     # 组装主图
-    workflow = StateGraph(AgentState)
+    workflow = StateGraph(AuditState)
 
     workflow.add_node('heuristic_scanner', heuristic_scanner_node)
     workflow.add_node('semantic_scanner', semantic_scanner_node)
