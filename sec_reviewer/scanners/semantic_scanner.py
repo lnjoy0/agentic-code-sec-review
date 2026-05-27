@@ -8,7 +8,7 @@ import logging
 import asyncio
 import re
 
-from core.config import ScannerConfig, ContextConfig
+from core.config import ScannerConfig
 from core.data_models import ScannedIssue, LLMScanReport, LLMScannedIssue, SnippetRegion
 from tools.code_retriever import CodeRetriever
 from tools.project_analyzer import ProjectAnalyzer
