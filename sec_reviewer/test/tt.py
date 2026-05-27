@@ -1,4 +1,0 @@
-print(
-    "aaa",
-    "bbb"
-)
