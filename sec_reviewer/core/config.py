@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass
-from pydantic import BaseModel, Field, HttpUrl, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 import logging
 
 
@@ -44,7 +44,7 @@ class RoleParams(BaseModel):
 class LLMConfig(BaseModel):
     """配置LLM参数"""
     model_name: str = 'Qwen3-Coder-30B-A3B-Instruct'
-    base_url: HttpUrl = 'http://i-2.gpushare.com:31263/v1'
+    base_url: str = 'http://i-2.gpushare.com:31263/v1'
     api_key: str = 'token-is-not-needed'
 
     Role: dict[str, RoleParams] = Field(default={
