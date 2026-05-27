@@ -70,6 +70,7 @@ class CodeSecReviewer:
                     logger.error("Failed to post review comments to GitHub.")
 
         except Exception as e:
+            logger.exception("Fatal Error during PR review process")
             logger.error(f"Error during PR review: {e}")
             raise ReviewerError(f"Review process failed: {e}")
                                 
