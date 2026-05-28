@@ -93,7 +93,7 @@ class HeuristicScanner:
         all_results = [item.get("results", []) for sublist in results for item in sublist]
         filtered_results = self._filter_results(all_results, patched_files)
         
-        return self._convert_to_scanned_issue(filtered_results, tool_name='semgrep')
+        return await self._convert_to_scanned_issue(filtered_results, tool_name='semgrep')
 
     async def _run_gitleaks(self) -> List[ScannedIssue]:
         """
