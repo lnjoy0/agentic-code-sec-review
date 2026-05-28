@@ -96,7 +96,7 @@ def dynamic_router_node(state: AuditState, config: RunnableConfig):
     for scanner_name, issues in scanner_reports.items():
         for issue in issues:
             expert_name = None
-            cwe = issue.id.lower().split(':')[0]
+            cwe = issue.cwe.lower().split(':')[0]
             name = issue.name
             id = issue.id
 
