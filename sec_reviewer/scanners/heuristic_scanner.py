@@ -90,7 +90,7 @@ class HeuristicScanner:
         tasks = [process_chunk(chunk) for chunk in chunks]
         results = await asyncio.gather(*tasks)
 
-        all_results = [item.get("results", []) for sublist in results for item in sublist]
+        all_results = [item for result in results for item in result.get("results", [])]
         filtered_results = self._filter_results(all_results, patched_files)
         
         return await self._convert_to_scanned_issue(filtered_results, tool_name='semgrep')
