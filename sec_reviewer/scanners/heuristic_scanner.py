@@ -306,7 +306,7 @@ class HeuristicScanner:
                 continue
 
             scan_results.append(ScannedIssue(
-                file_path=path,
+                path=path,
                 message=message,
                 cwe=cwe,
                 snippet_region=snippet_region,
