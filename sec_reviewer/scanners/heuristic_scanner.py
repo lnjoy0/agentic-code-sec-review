@@ -255,7 +255,7 @@ class HeuristicScanner:
             if tool_name == "semgrep": # semgrep 输出的是自己的 json 格式，trivy 和 gitleaks 输出的是 sarif 格式
                 path = raw_result.get("path", "")
                 message = raw_result.get("extra", {}).get("message", "")
-                cwe = raw_result.get("extra", {}).get("metadata", {}).get("cwe", "")
+                cwe = raw_result.get("extra", {}).get("metadata", {}).get("cwe")[0]
                 snippet_region={
                     "start_line": raw_result.get("start", {}).get("line"),
                     "end_line": raw_result.get("end", {}).get("line"),
@@ -263,14 +263,14 @@ class HeuristicScanner:
                     "end_column": raw_result.get("end", {}).get("col")
                 }
             else:
-                path = raw_result.get("locations", [{}])[0].get("physicalLocation", {}).get("artifactLocation", {}).get("uri", "")
+                path = raw_result.get("locations")[0].get("physicalLocation", {}).get("artifactLocation", {}).get("uri", "")
                 message = raw_result.get("message", {}).get("text", "")
                 cwe = 'Unknown (Trivy or Gitleaks)'
                 snippet_region = {
-                    "start_line": raw_result.get("locations", [{}])[0].get("physicalLocation", {}).get("region", {}).get("startLine"),
-                    "end_line": raw_result.get("locations", [{}])[0].get("physicalLocation", {}).get("region", {}).get("endLine"),
-                    "start_column": raw_result.get("locations", [{}])[0].get("physicalLocation", {}).get("region", {}).get("startColumn"),
-                    "end_column": raw_result.get("locations", [{}])[0].get("physicalLocation", {}).get("region", {}).get("endColumn")
+                    "start_line": raw_result.get("locations")[0].get("physicalLocation", {}).get("region", {}).get("startLine"),
+                    "end_line": raw_result.get("locations")[0].get("physicalLocation", {}).get("region", {}).get("endLine"),
+                    "start_column": raw_result.get("locations")[0].get("physicalLocation", {}).get("region", {}).get("startColumn"),
+                    "end_column": raw_result.get("locations")[0].get("physicalLocation", {}).get("region", {}).get("endColumn")
                 }
             
             if cve_list:
