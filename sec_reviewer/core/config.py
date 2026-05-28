@@ -45,8 +45,8 @@ class LLMConfig(BaseModel):
     """配置LLM参数"""
     model_config = ConfigDict(frozen=True)
 
-    model_name: str = 'Qwen3-Coder-30B-A3B-Instruct'
-    base_url: str = 'http://i-2.gpushare.com:31263/v1'
+    model_name: str = 'Qwen3-Coder-30B-A3B-Instruct-FP8'
+    base_url: str = 'http://i-1.gpushare.com:6250//v1'
     api_key: str = 'token-is-not-needed'
 
     Role: dict[str, RoleParams] = Field(default={
