@@ -46,7 +46,7 @@ class LLMConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     model_name: str = 'Qwen3-Coder-30B-A3B-Instruct-FP8'
-    base_url: str = 'http://i-1.gpushare.com:6250//v1'
+    base_url: str = 'http://i-1.gpushare.com:6250/v1'
     api_key: str = 'token-is-not-needed'
 
     Role: dict[str, RoleParams] = Field(default={
