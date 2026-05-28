@@ -255,8 +255,11 @@ class HeuristicScanner:
             if tool_name == "semgrep": # semgrep 输出的是自己的 json 格式，trivy 和 gitleaks 输出的是 sarif 格式
                 path = raw_result.get("path", "")
                 message = raw_result.get("extra", {}).get("message", "")
-                cwe = raw_result.get("extra", {}).get("metadata", {}).get("cwe")[0]
-                logger.info(raw_result.get("extra", {}).get("metadata", {}).get("cwe")[0])
+
+                report_cwe = raw_result.get("extra", {}).get("metadata", {}).get("cwe")
+                cwe = report_cwe[0] if isinstance(report_cwe, list) else cwe
+                logger.info(f"Semgrep 报告漏洞：{cwe}")
+
                 snippet_region={
                     "start_line": raw_result.get("start", {}).get("line"),
                     "end_line": raw_result.get("end", {}).get("line"),
@@ -267,6 +270,8 @@ class HeuristicScanner:
                 path = raw_result.get("locations")[0].get("physicalLocation", {}).get("artifactLocation", {}).get("uri", "")
                 message = raw_result.get("message", {}).get("text", "")
                 cwe = 'Unknown (Trivy or Gitleaks)'
+                logger.info(f"Trivy or Gitleaks 报告漏洞：{cwe}")
+
                 snippet_region = {
                     "start_line": raw_result.get("locations")[0].get("physicalLocation", {}).get("region", {}).get("startLine"),
                     "end_line": raw_result.get("locations")[0].get("physicalLocation", {}).get("region", {}).get("endLine"),
@@ -274,6 +279,7 @@ class HeuristicScanner:
                     "end_column": raw_result.get("locations")[0].get("physicalLocation", {}).get("region", {}).get("endColumn")
                 }
             
+            # 为 trivy 的漏洞报告添加依赖相关的 CVE 详情 
             if cve_list:
                 cve_details = ""
                 cve_id = raw_result.get("ruleId", "")
