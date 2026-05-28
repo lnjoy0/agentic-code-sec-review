@@ -256,6 +256,7 @@ class HeuristicScanner:
                 path = raw_result.get("path", "")
                 message = raw_result.get("extra", {}).get("message", "")
                 cwe = raw_result.get("extra", {}).get("metadata", {}).get("cwe")[0]
+                logger.info(raw_result.get("extra", {}).get("metadata", {}).get("cwe")[0])
                 snippet_region={
                     "start_line": raw_result.get("start", {}).get("line"),
                     "end_line": raw_result.get("end", {}).get("line"),
