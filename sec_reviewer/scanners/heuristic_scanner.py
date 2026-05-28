@@ -64,7 +64,7 @@ class HeuristicScanner:
                 cmd_args = ["scan"] + file_chunk + [
                     "--config=p/default", "--config=p/security-audit", "--config=p/secrets", 
                     "--config=p/r2c-security-audit", "--config=p/insecure-transport",
-                    "--config=p/python", "--config=p/django", "--config=p/flask", "--config=p/sql-injection" # python相关规则集
+                    "--config=p/python", "--config=p/django", "--config=p/flask", "--config=p/sql-injection", # python相关规则集
                     "--json", "--severity=ERROR", 
                     ]
                 
@@ -265,7 +265,7 @@ class HeuristicScanner:
             else:
                 path = raw_result.get("locations", [{}])[0].get("physicalLocation", {}).get("artifactLocation", {}).get("uri", "")
                 message = raw_result.get("message", {}).get("text", "")
-                cwe = None
+                cwe = 'Unknown (Trivy or Gitleaks)'
                 snippet_region = {
                     "start_line": raw_result.get("locations", [{}])[0].get("physicalLocation", {}).get("region", {}).get("startLine"),
                     "end_line": raw_result.get("locations", [{}])[0].get("physicalLocation", {}).get("region", {}).get("endLine"),

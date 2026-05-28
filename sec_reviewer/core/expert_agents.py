@@ -34,9 +34,7 @@ class BaseExpertAgent():
         self.tools_by_name = {tool.name: tool for tool in self.tools 
                               if tool not in (ExpertAuditResult, Rejection)}
         
-    @functools.lru_cache(maxsize=10) # 将该函数的执行结果缓存，保存最多10组不同参数的执行结果
     def _get_model_bound_tools(self, config: LLMConfig, tools: List, expert_name: str):
-        """带缓存的模型提供器，用来在接收RunnableConfig参数的同时，避免在节点中重复创建实例"""
         model = ChatOpenAI(
             model=config.model_name,
             openai_api_base=config.base_url,
