@@ -701,13 +701,19 @@ class CodeRetriever:
         signature_lines = []
         context_lines = []
 
+        start_row = snippet_node.start_point[0]
+        end_row = snippet_node.end_point[0] + 1
+        bound_start_row = start_row
+        bound_end_row = end_row
+
         current_node = snippet_node
         while current_node is not None:
-            is_def = current_node.type in ('class_definition', 'function_definition')
-            is_module_level = current_node.parent is not None and current_node.parent.type == 'module'
+            is_def = current_node.type in ('class_definition', 'function_definition') # 类或函数的定义节点
+            is_top_level = current_node.parent is not None and current_node.parent.type == 'module' # 全局位置的节点
+            is_root = current_node.parent is None # 当前节点就是根节点
 
             # 如果不是我们关心的节点层级，继续向上寻找
-            if not (is_def or is_module_level):
+            if not (is_def or is_top_level or is_root):
                 current_node = current_node.parent
                 continue
 
@@ -769,8 +775,8 @@ class CodeRetriever:
             # 未超长的情况：直接采用提取节点的完整文本
             context_lines = source_lines[start_row : end_row]
             
-            # 如果到达全局 module 层级，无论是否满足 min_lines 都必须停止
-            if is_module_level:
+            # 如果到达顶层，无论是否满足 min_lines 都必须停止
+            if is_top_level or is_root:
                 break
                 
             # 如果满足最小行数要求，停止继续向上寻找
