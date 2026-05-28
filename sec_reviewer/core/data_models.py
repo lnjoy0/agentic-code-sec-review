@@ -40,7 +40,7 @@ class LLMScannedIssue(BaseModel):
     )
     severity: Literal["low", "medium", "high", "critical"] = Field(
         ..., 
-        description=("预估的漏洞严重程度，可选值：Critical, High, Medium, Low")
+        description=("预估的漏洞严重程度，可选值：critical, high, medium, low")
     )
     start_line: int = Field(
         ...,

@@ -79,15 +79,9 @@ class LLMSemanticScanner:
         results = await asyncio.gather(*tasks)
 
         # 转为 ScannedIssue 对象
-        scanned_issues = []
-        for report, hunk_context in results:
-            if not report or not report.issues:
-                continue
-            
-            for issue in report.issues:
-                valid_issue = self._convert_to_scanned_issues(issue, file_path, patched_file, hunk_context)
-                if valid_issue:
-                    scanned_issues.append(valid_issue)
+        scanned_issues = self._convert_to_scanned_issues(
+            results, file_path, patched_file, hunk_context
+        )
 
         if not scanned_issues:
             logger.info(f"文件 {file_path} 中未发现漏洞")
@@ -96,40 +90,46 @@ class LLMSemanticScanner:
 
     def _convert_to_scanned_issues(
         self, 
-        issue: LLMScannedIssue, 
+        results: list[tuple[LLMScanReport | None, str]], 
         file_path: str, 
         patched_file: PatchedFile,
         hunk_context: str
-    ) -> List[ScannedIssue]:
+    ) -> list[ScannedIssue]:
         """
         验证行号，并且将 LLMScannedIssue 转换为 ScannedIssue 对象，添加文件路径和上下文
         """
         scanned_issues = []
         added_lines = self._get_added_lines(patched_file)
         
-        issue_lines = set(range(issue.start_line, issue.end_line + 1))
-        
-        if issue_lines.intersection(added_lines): # 校验报告的漏洞行号是否与新增行号有交集
-            # 将上下文中的指针改到LLM返回的漏洞范围
-            context = self.modify_context_pointers(hunk_context, issue.start_line, issue.end_line)
-            scanned_issues.append(ScannedIssue(
-                name=issue.name,
-                path=file_path,
-                message=issue.information,
-                severity=issue.severity,
-                confidence_score=issue.confidence_score,
-                snippet_region=SnippetRegion(
-                    start_line=issue.start_line,
-                    end_line=issue.end_line
-                ),
-                snippet_text=issue.vulnerable_code_snippet,
-                context=context
-            ))
-        else:
-            logger.debug(
-                f"过滤掉文件 {file_path} 中的漏洞: {issue.name}。"
-                f"其行号 {issue.start_line}-{issue.end_line} 不在 PR 增量范围内。"
-            )
+        for report, hunk_context in results:
+            if not report or not report.issues:
+                continue
+
+            for issue in report.issues:
+                issue_lines = set(range(issue.start_line, issue.end_line + 1))
+
+                if issue_lines.intersection(added_lines): # 校验报告的漏洞行号是否与新增行号有交集
+                    # 将上下文中的指针改到LLM返回的漏洞范围
+                    context = self.modify_context_pointers(hunk_context, issue.start_line, issue.end_line)
+                    
+                    scanned_issues.append(ScannedIssue(
+                        name=issue.name,
+                        path=file_path,
+                        message=issue.information,
+                        severity=issue.severity,
+                        confidence_score=issue.confidence_score,
+                        snippet_region=SnippetRegion(
+                            start_line=issue.start_line,
+                            end_line=issue.end_line
+                        ),
+                        snippet_text=issue.vulnerable_code_snippet,
+                        context=context
+                    ))
+                else:
+                    logger.debug(
+                        f"过滤掉文件 {file_path} 中的漏洞: {issue.name}。"
+                        f"其行号 {issue.start_line}-{issue.end_line} 不在 PR 增量范围内。"
+                    )
 
         return scanned_issues
 
