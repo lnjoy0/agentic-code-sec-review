@@ -65,7 +65,7 @@ class BaseExpertAgent():
 
         # 如果是第一轮，初始化 System Prompt 和初始输入
         if not messages:
-            logger.info(f"[{self.expert_name}] 🚀 开始全新漏洞研判: {issue.id}...")
+            logger.info(f"[{self.expert_name}] 🚀 开始全新漏洞研判: {issue.id} ({issue.name or issue.cwe})...")
             sys_msg = SystemMessage(
                 content=self.system_prompt+"\n\n"+tool_sys_prompt
             )

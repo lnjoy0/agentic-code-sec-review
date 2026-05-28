@@ -146,7 +146,7 @@ class LLMSemanticScanner:
                 report = await chain.ainvoke({"full_context": hunk_context})
                 return report, hunk_context
             except Exception as e:
-                logger.error(f"Hunk 分析或 Pydantic 结构校验失败：{e}\n文件：{file_path}")
+                logger.error(f"文件 {file_path} 的 Hunk 分析或 Pydantic 结构校验失败：{e}")
                 return None, hunk_context
 
     def _get_added_lines(self, patched_file: PatchedFile) -> Set[int]:

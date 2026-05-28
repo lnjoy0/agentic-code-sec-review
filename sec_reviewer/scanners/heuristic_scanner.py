@@ -83,7 +83,7 @@ class HeuristicScanner:
                 try:
                     return json.loads(stdout.decode('utf-8'))
                 except json.JSONDecodeError as e:
-                    logger.error(f"json decoding failed: {str(e)}")
+                    logger.error(f"json decoding failed: {str(e)}\n字符串: {stdout.decode('utf-8')}")
                     return []
 
         # 并行执行所有批次

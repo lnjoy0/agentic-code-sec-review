@@ -146,7 +146,7 @@ def dynamic_router_node(state: AuditState, config: RunnableConfig):
                     logger.error(f"    -> LLM 路由失败，降级为通用专家。错误: {e}")
                     expert_name = "General_Expert"
             else:
-                logger.info(f"  [Hard Route] 命中字典映射: issue[{id}] -> {expert_name}")
+                logger.info(f"  [Hard Route] 命中字典映射: issue[{id}] ({name or cwe}) -> {expert_name}")
 
             routing_decisions.append({
                 "expert_name": expert_name,
