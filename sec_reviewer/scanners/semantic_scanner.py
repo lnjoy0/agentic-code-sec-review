@@ -127,7 +127,7 @@ class LLMSemanticScanner:
             ))
         else:
             logger.debug(
-                f"过滤掉文件 {file_path} 中的漏洞: {issue.vulnerability_name}。"
+                f"过滤掉文件 {file_path} 中的漏洞: {issue.name}。"
                 f"其行号 {issue.start_line}-{issue.end_line} 不在 PR 增量范围内。"
             )
 
