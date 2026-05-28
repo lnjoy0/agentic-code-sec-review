@@ -115,9 +115,9 @@ class Config:
         try:
             # LLM configuration
             llm_config = LLMConfig(
-                model_name=os.environ.get("LLM_MODEL_NAME", 'Qwen3-Coder-30B-A3B-Instruct-FP8'),
-                base_url=os.environ.get("LLM_BASE_URL", 'http://i-1.gpushare.com:6250/v1'),
-                api_key=os.environ.get("LLM_API_KEY", 'token-is-not-needed'),
+                model_name=os.environ.get("LLM_MODEL_NAME"),
+                base_url=os.environ.get("LLM_BASE_URL"),
+                api_key=os.environ.get("LLM_API_KEY"),
 
                 Role={
                     'Scanner': RoleParams(

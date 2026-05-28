@@ -24,12 +24,15 @@ inputs:
   llm_model_name:
     description: '大语言模型名称'
     required: false
+    default: 'Qwen3-Coder-30B-A3B-Instruct-FP8'
   llm_base_url:
     description: '大语言模型 API 基础路径'
     required: false
+    default: 'http://i-1.gpushare.com:6250/v1'
   llm_api_key:
     description: '大语言模型 API Key'
     required: false
+    default: 'token-is-not-needed'
 
   # === Agent 与 Context 配置 ===
   max_turns:
