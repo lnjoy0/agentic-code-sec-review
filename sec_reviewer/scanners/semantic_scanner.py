@@ -73,11 +73,12 @@ class LLMSemanticScanner:
             return []
 
         tasks = [
-            self._analyze_hunk(hunk_context, file_path, patched_file, self.chain, semaphore) 
+            self._analyze_hunk(hunk_context, file_path, self.chain, semaphore) 
             for hunk_context in contexts
         ]
         results = await asyncio.gather(*tasks)
 
+        # 转为 ScannedIssue 对象
         scanned_issues = []
         for report, hunk_context in results:
             if not report or not report.issues:
