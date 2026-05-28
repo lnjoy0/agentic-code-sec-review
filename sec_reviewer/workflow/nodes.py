@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 def get_model(config: LLMConfig, role_name: str):
     model = ChatOpenAI(
         model=config.model_name,
-        openai_api_base=config.base_url,
-        openai_api_key=config.api_key,
+        base_url=config.base_url,
+        api_key=config.api_key,
         temperature=config.Role[role_name].temperature,
         top_p=config.Role[role_name].top_p,
         max_retries=3,
