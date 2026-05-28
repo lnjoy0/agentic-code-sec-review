@@ -45,9 +45,9 @@ class LLMConfig(BaseModel):
     """配置LLM参数"""
     model_config = ConfigDict(frozen=True)
 
-    model_name: str = 'Qwen3-Coder-30B-A3B-Instruct-FP8'
-    base_url: str = 'http://i-1.gpushare.com:6250/v1'
-    api_key: str = 'token-is-not-needed'
+    model_name: str
+    base_url: str
+    api_key: str
 
     Role: dict[str, RoleParams] = Field(default={
         'Scanner': RoleParams(temperature=0.33, top_p=0.81),
@@ -115,9 +115,9 @@ class Config:
         try:
             # LLM configuration
             llm_config = LLMConfig(
-                model_name=os.environ.get("LLM_MODEL_NAME", "Qwen3-Coder-30B-A3B-Instruct"),
-                base_url=os.environ.get("LLM_BASE_URL", "http://i-2.gpushare.com:31263/v1"),
-                api_key=os.environ.get("LLM_API_KEY", "token-is-not-needed"),
+                model_name=os.environ.get("LLM_MODEL_NAME", 'Qwen3-Coder-30B-A3B-Instruct-FP8'),
+                base_url=os.environ.get("LLM_BASE_URL", 'http://i-1.gpushare.com:6250/v1'),
+                api_key=os.environ.get("LLM_API_KEY", 'token-is-not-needed'),
 
                 Role={
                     'Scanner': RoleParams(
