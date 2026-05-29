@@ -137,12 +137,13 @@ def dynamic_router_node(state: AuditState, config: RunnableConfig):
 
                     expert_name = decision.expert_name
                     if expert_name in rejected_by:
-                        logger.error(f"    -> LLM 决策失败，专家 {expert_name} 已在退回记录中，降级为通用专家。")
+                        logger.error(f"  [Soft Route] LLM 决策失败，专家 {expert_name} 已在退回记录中，降级为通用专家。")
                         expert_name = "General_Expert"
 
-                    logger.info(f"    -> LLM 决策: {expert_name} (原因: {decision.reason})")
+                    logger.info(f"  [Soft Route] LLM 决策: issue[{id}] ({issue.name or issue.cwe}) -> {expert_name} (原因: {decision.reason})")
                 except Exception as e:
-                    logger.error(f"    -> LLM 路由失败，降级为通用专家。错误: {e}")
+                    logger.error(f"  [Soft Route] LLM 路由失败，issue[{id}] ({issue.name or issue.cwe}) 被分配给通用专家。错误: {e}\n")
+                    logger.error(issue)
                     expert_name = "General_Expert"
             else:
                 logger.info(f"  [Hard Route] 命中字典映射: issue[{id}] ({issue.name or issue.cwe}) -> {expert_name}")

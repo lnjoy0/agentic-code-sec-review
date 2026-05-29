@@ -85,6 +85,8 @@ class LLMSemanticScanner:
 
         if not scanned_issues:
             logger.info(f"文件 {file_path} 中未发现漏洞")
+        else:
+            logger.info(f"文件 {file_path} 中发现 {len(scanned_issues)} 个漏洞：{str([issue.name for issue in scanned_issues])}")
 
         return scanned_issues
 
