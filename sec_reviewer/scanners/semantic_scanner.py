@@ -80,7 +80,7 @@ class LLMSemanticScanner:
 
         # 转为 ScannedIssue 对象
         scanned_issues = self._convert_to_scanned_issues(
-            results, file_path, patched_file, hunk_context
+            results, file_path, patched_file
         )
 
         if not scanned_issues:
@@ -95,7 +95,6 @@ class LLMSemanticScanner:
         results: list[tuple[LLMScanReport | None, str]], 
         file_path: str, 
         patched_file: PatchedFile,
-        hunk_context: str
     ) -> list[ScannedIssue]:
         """
         验证行号，并且将 LLMScannedIssue 转换为 ScannedIssue 对象，添加文件路径和上下文
@@ -127,6 +126,10 @@ class LLMSemanticScanner:
                         snippet_text=issue.vulnerable_code_snippet,
                         context=context
                     ))
+                    logger.debug(
+                        f"成功添加文件 {file_path} 中的漏洞: {issue.name}。"
+                        f"代码上下文 {hunk_context} -> 漏洞 {scanned_issues[-1]}"
+                    )
                 else:
                     logger.debug(
                         f"过滤掉文件 {file_path} 中的漏洞: {issue.name}。"

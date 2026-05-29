@@ -10,7 +10,7 @@ inputs:
   log_level:
     description: '日志级别 (DEBUG, INFO, WARNING, ERROR)'
     required: false
-    default: 'INFO'
+    default: 'DEBUG'
   github_timeout:
     description: 'GitHub API 请求超时时间'
     required: false
