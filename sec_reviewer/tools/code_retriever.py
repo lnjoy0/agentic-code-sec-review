@@ -855,7 +855,7 @@ class CodeRetriever:
         max_lines = max(0, min(max_lines, config_max_lines))
 
         try:
-            context, _, _ = await self.core_get_code_snippet_and_context(
+            context, _, = await self.core_get_code_context(
                 file_path, 
                 (target_line, 1), 
                 (target_line, 1), 

@@ -175,7 +175,7 @@ class LLMSemanticScanner:
 
             if suffix == '.py':
                 retriever = CodeRetriever(self.scanner_config.workspace_dir)
-                _, context, scope = await retriever.core_get_code_snippet_and_context(
+                context, scope = await retriever.core_get_code_context(
                     file_path=file_path,
                     start_point=(start_line, 1),
                     end_point=(end_line, 1),
