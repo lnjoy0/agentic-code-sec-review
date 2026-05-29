@@ -642,15 +642,20 @@ class CodeRetriever:
 
         return "\n".join(output_lines)
         
-    def _point_check(self, source_lines: List[str], point: Tuple[int, int]) -> Tuple[int, int]:
+    def _point_check(
+        self, 
+        source_lines: List[str], 
+        point: Tuple[int, int] # 0-indexed
+    ) -> Tuple[int, int]:
         """坐标值检查"""
         total_lines = len(source_lines)
-        line_text = source_lines[point[0]] # point是0-indexed
-        line_text_cols = len(line_text)
 
         # 边界检查
-        point_line = max(0, min(total_lines, point[0]))
-        point_col = max(0, min(line_text_cols, point[1]))
+        point_line = max(0, min(total_lines - 1, point[0]))
+
+        line_text = source_lines[point_line]
+        line_text_cols = len(line_text)
+        point_col = max(0, min(line_text_cols, point[1])) # tree-sitter中，列的最大边界是开区间坐标
         
         # 如果列号位于前导空格中，将其修改为第一个非空字符的索引
         lspaces = line_text_cols - len(line_text.lstrip()) # 该行左侧的空白符个数
@@ -658,19 +663,19 @@ class CodeRetriever:
         
         return (point_line, point_col)
 
-    async def core_get_code_snippet_and_context(
+    async def core_get_code_context(
         self, 
         file_path: str, # 文件相对路径
-        start_point: Tuple[int, int], 
+        start_point: Tuple[int, int], # 1-indexed
         end_point: Tuple[int, int],
         max_lines: int = 200,
         min_lines: int = 0
-    ) -> Tuple[str, str, Tuple]:
+    ) -> Tuple[str, Tuple]:
         """
-        根据起止坐标提取代码片段及其上下文。
+        根据起止坐标提取目标代码片段的上下文。
         如果上下文行数大于 max_lines，则将其截断。
         如果上下文行数小于 min_lines，则进入上一级节点（类或函数）中提取上下文。
-        """        
+        """
         abs_path = self.repo_path / file_path
         if abs_path.suffix != '.py':
             raise ValueError(f"不支持的文件类型后缀 {abs_path.suffix}，当前只支持 Python 文件分析")
@@ -690,23 +695,23 @@ class CodeRetriever:
         start_point_ts = self._point_check(source_lines, (start_point[0] - 1, start_point[1] - 1))
         end_point_ts = self._point_check(source_lines, (end_point[0] - 1, end_point[1] - 1))
 
-        # 获取完全包含起止点的最小子节点
-        snippet_node = tree.root_node.descendant_for_point_range(start_point_ts, end_point_ts)
-        if snippet_node is None:
-            raise RuntimeError(f"在文件 {file_path} 中未找到有效节点")
-
-        snippet = snippet_node.text.decode('utf-8')
-        source_lines = source_bytes.decode('utf-8').splitlines()
-
         signature_lines = []
         context_lines = []
 
-        start_row = snippet_node.start_point[0]
-        end_row = snippet_node.end_point[0] + 1
+        # 获取目标代码片段所在的最小节点，作为锚点
+        anchor_node = tree.root_node.descendant_for_point_range(start_point_ts, end_point_ts)
+        if anchor_node is None:
+            raise RuntimeError(f"在文件 {file_path} 中未找到有效节点")
+
+        start_row = anchor_node.start_point[0]
+        end_row = anchor_node.end_point[0] + 1
         bound_start_row = start_row
         bound_end_row = end_row
 
-        current_node = snippet_node
+        anchor_line_count = end_row - start_row
+
+        # 从锚点开始向上层寻找函数/类定义节点、全局节点或根节点
+        current_node = anchor_node
         while current_node is not None:
             is_def = current_node.type in ('class_definition', 'function_definition') # 类或函数的定义节点
             is_top_level = current_node.parent is not None and current_node.parent.type == 'module' # 全局位置的节点
@@ -717,23 +722,22 @@ class CodeRetriever:
                 current_node = current_node.parent
                 continue
 
-            # 确定完整的提取节点（处理包含装饰器的情况）
+            # 确定完整的提取节点
             extract_node = current_node
             if is_def and current_node.parent is not None and current_node.parent.type == 'decorated_definition':
-                extract_node = current_node.parent
-                
+                extract_node = current_node.parent # 将装饰器加入要提取的上下文中
+
             start_row = extract_node.start_point[0]
             end_row = extract_node.end_point[0] + 1 # 右边界统一格式化为开区间坐标
-            extract_line_count = end_row - start_row
-
-            # 默认截断边界为整个节点的边界
-            bound_start_row = start_row
+            bound_start_row = start_row # 更新截断边界
             bound_end_row = end_row
 
-            # 截断策略：如果行数超过 max_lines，触发滑动窗口截断
+            extract_line_count = end_row - start_row
+
+            # 如果提取节点的行数超过 max_lines，触发滑动窗口截断
             if extract_line_count > max_lines:
-                signature_start_row = 0
-                signature_end_row = 0
+                signature_start_row = None
+                signature_end_row = None
 
                 # 如果是函数或类，提取包含装饰器的 signature，然后将截断边界设为 body_node 的边界
                 if is_def:
@@ -744,15 +748,23 @@ class CodeRetriever:
                         bound_start_row = body_node.start_point[0]
                         bound_end_row = body_node.end_point[0] + 1
 
-                # 计算滑动窗口的起止索引
-                # 拓展上下文行数到 max_lines，签名不参与总长度计算
-                target_lines = snippet_node.end_point[0] - snippet_node.start_point[0] + 1
-                remaining_lines = max(0, max_lines - target_lines)
+                # 计算滑动窗口的起止索引，签名不参与总长度计算
+                if max_lines > anchor_line_count:
+                    remaining_line_count = max_lines - anchor_line_count
+                    half_before = remaining_line_count // 2
 
-                half_before = remaining_lines // 2
-                start_row = snippet_node.start_point[0] - half_before
-                end_row = snippet_node.end_point[0] + 1 + (remaining_lines - half_before) # 开区间坐标
-                
+                    # 从锚点开始拓展上下文行数到 max_lines
+                    start_row = anchor_node.start_point[0] - half_before
+                    end_row = anchor_node.end_point[0] + 1 + (remaining_line_count - half_before) # 开区间坐标
+                else:
+                    target_line_count = end_point_ts[0] - start_point_ts[0] + 1
+                    remaining_line_count = max(0, max_lines - target_line_count)
+                    half_before = remaining_line_count // 2
+
+                    # 从目标代码片段开始拓展上下文行数到 max_lines
+                    start_row = start_point_ts[0] - half_before
+                    end_row = end_point_ts[0] + 1 + (remaining_line_count - half_before)
+
                 # 触碰上边界时，窗口整体下移
                 if start_row < bound_start_row:
                     end_row += (bound_start_row - start_row)
@@ -763,11 +775,11 @@ class CodeRetriever:
                     start_row -= (end_row - bound_end_row)
                     end_row = bound_end_row
                     # 确保 start 不为负数
-                    start_row = max(0, start_row)
+                    start_row = max(0, start_row)                    
 
                 context_lines = source_lines[start_row : end_row]
 
-                if signature_start_row and signature_end_row:
+                if signature_start_row is not None and signature_end_row is not None:
                     signature_lines = source_lines[signature_start_row : signature_end_row]
                 
                 break
@@ -778,7 +790,7 @@ class CodeRetriever:
             # 如果到达顶层，无论是否满足 min_lines 都必须停止
             if is_top_level or is_root:
                 break
-                
+
             # 如果满足最小行数要求，停止继续向上寻找
             if extract_line_count >= min_lines:
                 break 
@@ -787,7 +799,8 @@ class CodeRetriever:
 
         # 拼接排版
         output_lines = [
-            f"### 🎯 上下文提取: `{file_path}` (Lines {start_point[0]}-{end_point[0]})",
+            f"### 🎯 上下文提取: `{file_path}`",
+            f"> **目标行**: {start_point[0]}-{end_point[0]} 行",
             f"> **文件总行数**: {len(source_lines)} 行 | **当前切片**: {start_row + 1}-{end_row} 行",
             f"```python"
         ]
@@ -816,7 +829,7 @@ class CodeRetriever:
 
         output_lines.append("```")
 
-        return snippet, '\n'.join(output_lines), (start_row + 1, end_row)
+        return '\n'.join(output_lines), (start_row + 1, end_row)
 
     async def get_code_context(
         self,

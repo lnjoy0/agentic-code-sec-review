@@ -216,10 +216,10 @@ class LLMSemanticScanner:
         lines = context_str.split("\n")
         updated_lines = []
         
-        # 匹配头部标题: "### 🎯 上下文提取: `...` (Line X-Y)"
-        header_pattern = re.compile(r'(\(Line )\d+-\d+(\))')
+        # 匹配头部目标行，组1 (> **目标行**: )，组2 ( 行)
+        header_pattern = re.compile(r'(> \*\*目标行\*\*: )\d+-\d+( 行)')
         
-        # 匹配代码行: 匹配前缀（"=>" 或 "  "），加一个空格，加行号(4位数字)，加 " | " 和代码内容
+        # 匹配代码行: 组1 (=>或  )，组2 (4位的行号)，组3 ( | )，组4 (该行代码)
         line_pattern = re.compile(r'^(=>|  ) (\s*\d+)( \| )(.*)$')
 
         for line in lines:

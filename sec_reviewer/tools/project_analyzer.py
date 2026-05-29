@@ -323,7 +323,7 @@ class ProjectAnalyzer:
     async def core_get_file_snippet(
         self, 
         file_path: str, 
-        start_point: tuple,
+        start_point: tuple, # 1-indexed
         end_point: tuple
     ) -> str:
         """
@@ -348,8 +348,11 @@ class ProjectAnalyzer:
         extracted_lines = []
         
         if start_line == end_line: # 单行内提取
+            if start_point[1] > end_point[1]:
+                raise ValueError(f"❌ 错误: 同一行内，起始列 ({start_point[1]}) 不能大于结束列 ({end_point[1]})。")
+
             line_str = all_lines[start_line - 1]
-            start_column = max(0, min(start_point[1] - 1, len(line_str)))
+            start_column = max(0, min(start_point[1] - 1, len(line_str))) # 0-indexed
             end_column = max(0, min(end_point[1] - 1, len(line_str)))
             extracted_lines.append(line_str[start_column:end_column])
         else: # 跨行提取
@@ -412,7 +415,8 @@ class ProjectAnalyzer:
 
         # 拼接排版
         output_lines = [
-            f"### 🎯 上下文提取: `{file_path}` (Lines {start_line}-{end_line})",
+            f"### 🎯 上下文提取: `{file_path}`",
+            f"> **目标行**: {start_line}-{end_line} 行",
             f"> **文件总行数**: {total_lines} 行 | **当前切片**: {idx_start + 1}-{idx_end} 行",
             f"```{label}"
         ]

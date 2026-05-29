@@ -289,20 +289,21 @@ class HeuristicScanner:
                 message = message + '\n' + cve_details
 
             try: 
+                analyzer = ProjectAnalyzer(self.scanner_config.workspace_dir)
+                snippet_text = await analyzer.core_get_file_snippet(
+                        file_path=path,
+                        start_point=(snippet_region["start_line"], snippet_region["start_column"]),
+                        end_point=(snippet_region["end_line"], snippet_region["end_column"])    
+                    )
+                
                 if Path(path).suffix == '.py':
                     retriever = CodeRetriever(self.scanner_config.workspace_dir)
-                    snippet_text, context, _ = await retriever.core_get_code_snippet_and_context(
+                    context, _ = await retriever.core_get_code_context(
                         file_path=path,
                         start_point=(snippet_region["start_line"], snippet_region["start_column"]),
                         end_point=(snippet_region["end_line"], snippet_region["end_column"])
                     )
                 else:
-                    analyzer = ProjectAnalyzer(self.scanner_config.workspace_dir)
-                    snippet_text = await analyzer.core_get_file_snippet(
-                        file_path=path,
-                        start_point=(snippet_region["start_line"], snippet_region["start_column"]),
-                        end_point=(snippet_region["end_line"], snippet_region["end_column"])    
-                    )
                     context, _ = await analyzer.core_get_file_context(
                         file_path=path, 
                         start_line=snippet_region["start_line"],
