@@ -23,6 +23,8 @@ class LLMSemanticScanner:
 
     def __init__(self, scanner_config: ScannerConfig, llm_client: ChatOpenAI):
         self.scanner_config = scanner_config
+        self.retriever = CodeRetriever(self.scanner_config.workspace_dir)
+        self.analyzer = ProjectAnalyzer(self.scanner_config.workspace_dir)
 
         structured_llm = llm_client.with_structured_output(LLMScanReport)
         prompt = ChatPromptTemplate.from_messages([
@@ -59,11 +61,19 @@ class LLMSemanticScanner:
         
         seen_scope = set()
         contexts = []
-        # 遍历 diff 中的每一个变更代码块 (Hunk) 提取对应上下文
+        # 遍历 diff 中的每一个变更代码块 (Hunk)
         for hunk in patched_file:
-            start_line = hunk.target_start
-            end_line = max(start_line, start_line + hunk.target_length - 1) 
-            
+            # 取每个 Hunk 中的最小和最大新增行之间的区间，作为目标代码片段，提取其上下文
+            added_lines = [
+                line.target_line_no for line in hunk # 1-indexed
+                if getattr(line, 'is_added', False)
+            ]
+            if not added_lines: # 如果这个 hunk 没有新增行，则跳过
+                continue
+
+            start_line = min(added_lines)
+            end_line = max(added_lines)
+
             hunk_context, scope = await self._get_context(file_path, start_line, end_line)
             if hunk_context and scope not in seen_scope: # 去重
                 seen_scope.add(scope)
@@ -110,8 +120,8 @@ class LLMSemanticScanner:
                 issue_lines = set(range(issue.start_line, issue.end_line + 1))
 
                 if issue_lines.intersection(added_lines): # 校验报告的漏洞行号是否与新增行号有交集
-                    # 将上下文中的指针改到LLM返回的漏洞范围
-                    context = self.modify_context_pointers(hunk_context, issue.start_line, issue.end_line)
+                    # 获取漏洞行的上下文
+                    context, _ = self._get_context(file_path, issue.start_line, issue.end_line)
                     
                     scanned_issues.append(ScannedIssue(
                         name=issue.name,
@@ -170,15 +180,14 @@ class LLMSemanticScanner:
         end_line: int
     ) -> Tuple[str, Tuple]:
         """
-        根据文件类型提取代码变更周边的上下文。
+        根据文件类型提取目标行周边的上下文。
         结合基于 AST 的提取（Python）和基于滑动窗口的提取（非 Python）。
         """
         try:
             suffix = Path(file_path).suffix.lower()
 
             if suffix == '.py':
-                retriever = CodeRetriever(self.scanner_config.workspace_dir)
-                context, scope = await retriever.core_get_code_context(
+                context, scope = await self.retriever.core_get_code_context(
                     file_path=file_path,
                     start_point=(start_line, 1),
                     end_point=(end_line, 1),
@@ -186,8 +195,7 @@ class LLMSemanticScanner:
                 )
                 return context, scope
             else:
-                analyzer = ProjectAnalyzer(self.scanner_config.workspace_dir)
-                context, scope = await analyzer.core_get_file_context(
+                context, scope = await self.analyzer.core_get_file_context(
                     file_path=file_path,
                     start_line=start_line,
                     end_line=end_line
