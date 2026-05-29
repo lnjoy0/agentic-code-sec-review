@@ -96,8 +96,6 @@ def dynamic_router_node(state: AuditState, config: RunnableConfig):
     for scanner_name, issues in scanner_reports.items():
         for issue in issues:
             expert_name = None
-            cwe = issue.cwe.lower().split(':')[0]
-            name = issue.name
             id = issue.id
 
             if id in processed_issue_ids:
@@ -116,18 +114,19 @@ def dynamic_router_node(state: AuditState, config: RunnableConfig):
             if isinstance(rule, str):
                 expert_name = rule
             elif isinstance(rule, dict):
+                cwe = issue.cwe.lower().split(':')[0]
                 for rule_cwe, mapped_expert in rule.items():
                     if rule_cwe == cwe:
                         expert_name = mapped_expert
                         break
 
             if expert_name in rejected_by:
-                logger.info(f"  [Hard Route] 漏洞 issue[{id}] ({name or issue.cwe}) 被规则路由到 {expert_name}，但它在历史退回记录中，已被退回过。")
+                logger.info(f"  [Hard Route] 漏洞 issue[{id}] ({issue.name or issue.cwe}) 被规则路由到 {expert_name}，但它在历史退回记录中，已被退回过。")
                 expert_name = None # 进入软路由
 
             # 进行软路由，使用 LLM 分析漏洞特征，判断最适合的专家，用于处理没有明确规则覆盖的情况
             if not expert_name:
-                logger.info(f"  [Soft Route] 触发大模型路由分析: issue[{id}] ({name or issue.cwe})")
+                logger.info(f"  [Soft Route] 触发大模型路由分析: issue[{id}] ({issue.name or issue.cwe})")
                 chain = prompt | structured_router
                 try:
                     decision = chain.invoke({
@@ -146,7 +145,7 @@ def dynamic_router_node(state: AuditState, config: RunnableConfig):
                     logger.error(f"    -> LLM 路由失败，降级为通用专家。错误: {e}")
                     expert_name = "General_Expert"
             else:
-                logger.info(f"  [Hard Route] 命中字典映射: issue[{id}] ({name or issue.cwe}) -> {expert_name}")
+                logger.info(f"  [Hard Route] 命中字典映射: issue[{id}] ({issue.name or issue.cwe}) -> {expert_name}")
 
             routing_decisions.append({
                 "expert_name": expert_name,
