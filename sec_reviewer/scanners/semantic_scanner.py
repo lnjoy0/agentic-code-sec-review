@@ -102,7 +102,7 @@ class LLMSemanticScanner:
         results = await asyncio.gather(*tasks)
 
         # 转为 ScannedIssue 对象
-        scanned_issues = self._convert_to_scanned_issues(
+        scanned_issues = await self._convert_to_scanned_issues(
             results, file_path, patched_file
         )
 
@@ -167,7 +167,7 @@ class LLMSemanticScanner:
             for i in range(start_line, end_line + 1, max_lines)
         ]
 
-    def _convert_to_scanned_issues(
+    async def _convert_to_scanned_issues(
         self, 
         results: list[tuple[LLMScanReport | None, str]], 
         file_path: str, 
@@ -188,7 +188,7 @@ class LLMSemanticScanner:
 
                 if issue_lines.intersection(added_lines): # 校验报告的漏洞行号是否与新增行号有交集
                     # 获取漏洞行的上下文
-                    context, _ = self._get_context(file_path, issue.start_line, issue.end_line)
+                    context, _ = await self._get_context(file_path, issue.start_line, issue.end_line)
                     
                     scanned_issues.append(ScannedIssue(
                         name=issue.name,
@@ -203,12 +203,12 @@ class LLMSemanticScanner:
                         snippet_text=issue.vulnerable_code_snippet,
                         context=context
                     ))
-                    logger.debug(
+                    logger.info(
                         f"成功添加文件 {file_path} 中的漏洞: {issue.name}。"
                         f"代码上下文 {hunk_context} -> 漏洞 {scanned_issues[-1]}"
                     )
                 else:
-                    logger.debug(
+                    logger.info(
                         f"过滤掉文件 {file_path} 中的漏洞: {issue.name}。"
                         f"其行号 {issue.start_line}-{issue.end_line} 不在 PR 增量范围内。"
                     )
