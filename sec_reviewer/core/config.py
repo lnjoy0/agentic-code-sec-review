@@ -33,7 +33,7 @@ class ScannerConfig:
     base_sha: str
     head_sha: str
     workspace_dir: str = '.'
-    context_max_lines: int
+    context_max_lines: int = Field(default=500, ge=1)
 
 
 class RoleParams(BaseModel):
