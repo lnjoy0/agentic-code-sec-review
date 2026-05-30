@@ -23,7 +23,6 @@ class CodeSecReviewer:
         """Initialize the code reviewer with configuration."""
         self.config = config
         
-        # Initialize components
         self.github_client = GitHubClient(config.github)
         self.diff_parser = DiffParser()
 

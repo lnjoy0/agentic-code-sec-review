@@ -27,8 +27,7 @@ class LoggingConfig:
     backup_count: int = 3
 
 
-@dataclass
-class ScannerConfig:
+class ScannerConfig(BaseModel):
     """配置扫描器参数"""
     base_sha: str
     head_sha: str
