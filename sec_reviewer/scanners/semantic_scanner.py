@@ -22,9 +22,9 @@ class LLMSemanticScanner:
     """基于大语言模型的语义模式安全扫描器"""
 
     def __init__(self, scanner_config: ScannerConfig, llm_client: ChatOpenAI):
-        self.scanner_config = scanner_config
-        self.retriever = CodeRetriever(self.scanner_config.workspace_dir)
-        self.analyzer = ProjectAnalyzer(self.scanner_config.workspace_dir)
+        self.config = scanner_config
+        self.retriever = CodeRetriever(self.config.workspace_dir)
+        self.analyzer = ProjectAnalyzer(self.config.workspace_dir)
 
         structured_llm = llm_client.with_structured_output(LLMScanReport)
         prompt = ChatPromptTemplate.from_messages([
@@ -38,7 +38,7 @@ class LLMSemanticScanner:
         logger.info("LLM Semantic Scanner running...")
         logger.info(f"LLM target files count: {len(patched_files)}")
 
-        semaphore = asyncio.Semaphore(50) # 每个 hunk 的分析占用一个信号量
+        semaphore = asyncio.Semaphore(25)
         
         tasks = [self._analyze_file(f, semaphore) for f in patched_files]
         results = await asyncio.gather(*tasks)
@@ -58,9 +58,14 @@ class LLMSemanticScanner:
     ) -> List[ScannedIssue]:
         """调用 LLM 分析单个变更文件"""
         file_path = patched_file.path
-        
         seen_scope = set()
         contexts = []
+
+        # 设置 LLM 每次处理的代码上下文最大行数
+        context_max_lines = self.config.context_max_lines
+        # 设置上下文切分阈值，超过最大行数的 25% 才触发切分，保证不会有切分后的分块过于小
+        massive_hunk_threshold = int(context_max_lines * 1.25)
+
         # 遍历 diff 中的每一个变更代码块 (Hunk)
         for hunk in patched_file:
             # 取每个 Hunk 中的最小和最大新增行之间的区间，作为目标代码片段，提取其上下文
@@ -74,10 +79,18 @@ class LLMSemanticScanner:
             start_line = min(added_lines)
             end_line = max(added_lines)
 
-            hunk_context, scope = await self._get_context(file_path, start_line, end_line)
-            if hunk_context and scope not in seen_scope: # 去重
-                seen_scope.add(scope)
-                contexts.append(hunk_context)
+            # 如果目标区间太大，则执行切分
+            if (end_line - start_line) > massive_hunk_threshold:
+                sub_intervals = await self._split_massive_hunk(file_path, start_line, end_line, context_max_lines)
+            else:
+                sub_intervals = [(start_line, end_line)]
+            
+            # 遍历产生的所有分析区间
+            for sub_start, sub_end in sub_intervals:
+                hunk_context, scope = await self._get_context(file_path, sub_start, sub_end)
+                if hunk_context and scope not in seen_scope: # 去重
+                    seen_scope.add(scope)
+                    contexts.append(hunk_context)
 
         if not contexts:
             return []
@@ -99,6 +112,60 @@ class LLMSemanticScanner:
             logger.info(f"文件 {file_path} 中发现 {len(scanned_issues)} 个漏洞：{str([issue.name for issue in scanned_issues])}")
 
         return scanned_issues
+
+    async def _split_massive_hunk(
+        self, 
+        file_path: str, 
+        start_line: int, # 1-indexed
+        end_line: int, 
+        max_lines: int = 500
+    ) -> List[Tuple[int, int]]:
+        """
+        将超大的代码区间，按语义（类/函数）切分成合适大小的多个区间
+        """
+        # 获取与指定行数范围有交集的所有类/函数的起止行号
+        def_scopes = await self.retriever.get_def_scopes(file_path, start_line, end_line)
+        
+        # 如果没有拿到按定义拆分的起止行号，则按行数强行切分
+        if not def_scopes:
+            return self._fallback_line_split(start_line, end_line, max_lines)
+
+        chunks = []
+        current_chunk_start = None
+        current_chunk_end = None
+
+        for node in def_scopes:
+            node_start = node['start']
+            node_end = node['end']
+
+            if current_chunk_start is None:
+                # 开启新块
+                current_chunk_start = node_start
+                current_chunk_end = node_end
+            else:
+                # 判断加入当前节点之后，会不会超过最大行数
+                if (node_end - current_chunk_start) <= max_lines:
+                    # 不超过，融合进当前块，更新 end
+                    current_chunk_end = node_end
+                else:
+                    # 超过了，把旧块保存起来
+                    chunks.append((current_chunk_start, current_chunk_end))
+                    # 当前节点作为新块的开始
+                    current_chunk_start = node_start
+                    current_chunk_end = node_end
+
+        # 将最后一个块保存下来
+        if current_chunk_start is not None:
+            chunks.append((current_chunk_start, current_chunk_end))
+
+        return chunks
+
+    def _fallback_line_split(self, start_line: int, end_line: int, max_lines: int) -> List[Tuple[int, int]]:
+        """兜底方案：如果 AST 解析失败，直接按固定行数死板切分"""
+        return [
+            (i, min(i + max_lines - 1, end_line))
+            for i in range(start_line, end_line + 1, max_lines)
+        ]
 
     def _convert_to_scanned_issues(
         self, 

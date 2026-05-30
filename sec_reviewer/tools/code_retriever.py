@@ -141,7 +141,7 @@ class CodeRetriever:
         if not nodes_info:
             return f"📄 未找到 `{target_name}` 的任何定义。"
 
-        config_max_lines = config['configurable'].get('context_config').context_max_lines
+        config_max_lines = config['configurable'].get('code_retrieval_config').context_max_lines
         max_lines = max(0, min(max_lines, config_max_lines))
 
         # 计算动态行数限制
@@ -239,7 +239,7 @@ class CodeRetriever:
             
         def_end_line = target_info['extract_node'].end_point[0] + 1
        
-        config_max_lines = config['configurable'].get('context_config').context_max_lines
+        config_max_lines = config['configurable'].get('code_retrieval_config').context_max_lines
         max_lines = max(0, min(max_lines, config_max_lines))
 
         idx_start = start_line - 1
@@ -536,6 +536,8 @@ class CodeRetriever:
             target_variable (str): 需追踪的变量名（需精确匹配，勿带修饰符，如 "user_input"）。
             file_path (str): 目标代码文件的相对路径。
             start_line (int, optional): 起始追踪行号（默认 1）。用于遇到截断时继续拉取后续记录。
+            detail_limit (int, optional): 详细代码片段的显示上限（默认 20）。超过此限制的引用将仅显示单行摘要，以防上下文溢出。
+            unseen_limit (int, optional): 单行摘要的显示上限（默认 30）。超过此限制的摘要将被完全隐藏。
 
         Returns:
             str: 包含读写类型 `[Read]/[Write]`、所在作用域及代码片段的 Markdown 记录流。
@@ -851,7 +853,7 @@ class CodeRetriever:
         Returns:
             str: 带有行号标注的 Markdown 代码块。
         """
-        config_max_lines = config['configurable'].get('context_config').context_max_lines
+        config_max_lines = config['configurable'].get('code_retrieval_config').context_max_lines
         max_lines = max(0, min(max_lines, config_max_lines))
 
         try:
@@ -943,6 +945,84 @@ class CodeRetriever:
 
         return "\n".join(output_lines)
     
+    async def get_def_scopes(
+        self, 
+        file_path: str, 
+        start_line: int, # 1-indexed
+        end_line: int
+    ) -> List[Dict[str, Any]]:
+        """
+        获取与指定行数范围有交集的所有“独立代码块”的起止行号。
+        
+        Args:
+            file_path (str): 目标文件的相对路径
+            start_line (int): 起始行
+            end_line (int): 结束行
+            
+        Returns:
+            List[Dict]: 形如 [{"start": 10, "end": 50}, ...] 的列表
+        """
+        abs_path = self.repo_path / file_path
+        
+        def _read_file_safely() -> Optional[bytes]:
+            if not abs_path.exists() or not abs_path.is_file():
+                return None
+            with open(abs_path, 'rb') as f:
+                return f.read()
+                
+        source_code = await asyncio.to_thread(_read_file_safely)
+        if not source_code:
+            return []
+
+        start_line_ts = max(0, start_line - 1) # 0-indexed
+        end_line_ts = max(0, end_line - 1)
+
+        scopes_info = []
+
+        # 定义“独立代码块”的 AST 节点类型
+        BLOCK_TYPES = (
+            'class_definition', 
+            'function_definition', 
+            'decorated_definition',
+            'if_statement',
+            'try_statement',
+            'with_statement',
+            'for_statement',
+            'while_statement',
+            'expression_statement'
+        )
+
+        try:
+            tree = await asyncio.to_thread(self.parser.parse, source_code)
+
+            def traverse(node):
+                # 判断节点范围与起止范围是否有交集
+                # 只要不是（节点在区间左侧）也不是（节点在区间右侧），就是有交集
+                has_intersection = (node.end_point[0] >= start_line_ts and node.start_point[0] <= end_line_ts)
+
+                if has_intersection and node.type in BLOCK_TYPES:
+                    scopes_info.append({
+                        "start": node.start_point[0] + 1, # 1-indexed
+                        "end": node.end_point[0] + 1
+                    })
+                    
+                    return
+
+                # 递归遍历子节点
+                for child in node.children:
+                    traverse(child)
+
+            traverse(tree.root_node)
+
+            # 按照起始行号对结果进行升序排序，确保返回的块是顺序排列的
+            scopes_info.sort(key=lambda x: x['start'])
+
+        except Exception as e:
+            logger.error(f"提取指定范围内所有类/函数的起止行号失败 {file_path}: {e}")
+            return []
+
+        return scopes_info
+
     def as_tools(self) -> List:
         """将类方法包装为标准 LangChain 工具列表"""
         return [

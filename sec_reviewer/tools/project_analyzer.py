@@ -285,7 +285,7 @@ class ProjectAnalyzer:
         if start_line > total_lines:
             return f"❌ 错误: 请求的起始行号 ({start_line}) 已超出文件总行数 ({total_lines})。"
 
-        config_max_lines = config['configurable'].get('context_config').context_max_lines
+        config_max_lines = config['configurable'].get('code_retrieval_config').context_max_lines
         max_lines = max(0, min(max_lines, config_max_lines))
 
         # 计算切片边界
@@ -457,7 +457,7 @@ class ProjectAnalyzer:
         Returns:
             str: 附带行号及目标行指示符 (`=>`) 的 Markdown 代码块片段。
         """
-        config_max_lines = config['configurable'].get('context_config').context_max_lines
+        config_max_lines = config['configurable'].get('code_retrieval_config').context_max_lines
         context_lines = max(0, min(context_lines, config_max_lines))
 
         try:

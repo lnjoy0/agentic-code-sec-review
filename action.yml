@@ -39,8 +39,12 @@ inputs:
     description: 'Agent 最大行动轮数'
     required: false
     default: '20'
-  context_max_lines:
-    description: '代码片段最大检索行数'
+  scan_context_max_lines:
+    description: 'LLM 扫描器的单次扫描上下文最大行数'
+    required: false
+    default: '500'
+  retrieval_context_max_lines:
+    description: '代码检索器的检索上下文最大行数'
     required: false
     default: '200'
 
@@ -183,7 +187,8 @@ runs:
         LLM_BASE_URL: ${{ inputs.llm_base_url }}
         LLM_API_KEY: ${{ inputs.llm_api_key }}
         AGENT_MAX_TURNS: ${{ inputs.max_turns }}
-        CONTEXT_MAX_LINES: ${{ inputs.context_max_lines }}
+        SCAN_CONTEXT_MAX_LINES: ${{ inputs.scan_context_max_lines }}
+        RETRIEVAL_CONTEXT_MAX_LINES: ${{ inputs.retrieval_context_max_lines }}
 
         # 各角色配置同步
         ROLE_SCANNER_TEMP: ${{ inputs.scanner_temperature }}

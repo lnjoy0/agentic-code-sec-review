@@ -33,6 +33,7 @@ class ScannerConfig:
     base_sha: str
     head_sha: str
     workspace_dir: str = '.'
+    context_max_lines: int
 
 
 class RoleParams(BaseModel):
@@ -65,9 +66,9 @@ class AgentConfig(BaseModel):
     max_turns: int = Field(default=20, ge=0) # Agent的最大行动轮数
 
 
-class ContextConfig(BaseModel):
+class CodeRetrievalConfig(BaseModel):
     """配置代码检索参数"""
-    context_max_lines: int = Field(default=200, ge=1) # 最大上下文行数
+    context_max_lines: int = Field(default=200, ge=1) # 检索代码时的最大上下文行数
 
 
 @dataclass
@@ -78,7 +79,7 @@ class Config:
     scanner: ScannerConfig
     llm: LLMConfig
     agent: AgentConfig
-    context: ContextConfig
+    context: CodeRetrievalConfig
 
     @classmethod
     def from_environment(cls) -> 'Config':
@@ -109,7 +110,8 @@ class Config:
         scanner_config = ScannerConfig(
             base_sha=os.environ.get("BASE_SHA"),
             head_sha=os.environ.get("HEAD_SHA"),
-            workspace_dir = os.environ.get("GITHUB_WORKSPACE", ".")
+            workspace_dir=os.environ.get("GITHUB_WORKSPACE", "."),
+            context_max_lines=os.environ.get("SCAN_CONTEXT_MAX_LINES", "500")
         )
 
         try:
@@ -150,8 +152,8 @@ class Config:
             )
 
             # Code retriever configuration
-            context_config = ContextConfig(
-                context_max_lines=os.environ.get("CONTEXT_MAX_LINES", "200")
+            code_retrieval_config = CodeRetrievalConfig(
+                context_max_lines=os.environ.get("RETRIEVAL_CONTEXT_MAX_LINES", "200")
             )
         except ValidationError as e:
             logger.error(f"参数错误：{e}")
@@ -163,5 +165,5 @@ class Config:
             scanner = scanner_config,
             agent = agent_config,
             llm = llm_config,
-            context = context_config
+            context = code_retrieval_config
         )
