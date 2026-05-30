@@ -17,9 +17,8 @@ logger = logging.getLogger(__name__)
 class HeuristicScanner:
     """传统启发式工具扫描器"""
 
-    def __init__(self, scanner_config: ScannerConfig, code_retrieval_config: CodeRetrievalConfig):
+    def __init__(self, scanner_config: ScannerConfig, retrieval_config: CodeRetrievalConfig):
         self.scanner_config = scanner_config
-        self.code_retrieval_config = code_retrieval_config
     
     async def get_report(self, patched_files: List[PatchedFile]) -> Dict[str, List[ScannedIssue]]:
         """获取传统工具的扫描报告"""

@@ -141,7 +141,7 @@ class CodeRetriever:
         if not nodes_info:
             return f"📄 未找到 `{target_name}` 的任何定义。"
 
-        config_max_lines = config['configurable'].get('code_retrieval_config').context_max_lines
+        config_max_lines = config['configurable'].get('retrieval_config').context_max_lines
         max_lines = max(0, min(max_lines, config_max_lines))
 
         # 计算动态行数限制
@@ -229,17 +229,17 @@ class CodeRetriever:
                 return f.read().split('\n')
 
         all_lines = await asyncio.to_thread(_read_file_safely)
-        
+
         if all_lines is None:
             return f"❌ 错误: 文件不存在 `{file_path}`"
-        
+
         target_info = await self._find_definition_in_file(target_name, abs_path)
         if not target_info:
             return f"❌ 错误: 未能在 `{file_path}` 中找到覆盖行号 {start_line} 的 `{target_name}` 的定义。"
-            
+
         def_end_line = target_info['extract_node'].end_point[0] + 1
-       
-        config_max_lines = config['configurable'].get('code_retrieval_config').context_max_lines
+
+        config_max_lines = config['configurable'].get('retrieval_config').context_max_lines
         max_lines = max(0, min(max_lines, config_max_lines))
 
         idx_start = start_line - 1
@@ -853,7 +853,7 @@ class CodeRetriever:
         Returns:
             str: 带有行号标注的 Markdown 代码块。
         """
-        config_max_lines = config['configurable'].get('code_retrieval_config').context_max_lines
+        config_max_lines = config['configurable'].get('retrieval_config').context_max_lines
         max_lines = max(0, min(max_lines, config_max_lines))
 
         try:

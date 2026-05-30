@@ -79,7 +79,7 @@ class Config:
     scanner: ScannerConfig
     llm: LLMConfig
     agent: AgentConfig
-    context: CodeRetrievalConfig
+    retrieval: CodeRetrievalConfig
 
     @classmethod
     def from_environment(cls) -> 'Config':
@@ -165,5 +165,5 @@ class Config:
             scanner = scanner_config,
             agent = agent_config,
             llm = llm_config,
-            context = code_retrieval_config
+            retrieval = code_retrieval_config
         )

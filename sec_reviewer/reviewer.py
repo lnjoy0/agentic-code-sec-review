@@ -56,7 +56,7 @@ class CodeSecReviewer:
                 'scanner_config': self.config.scanner,
                 'llm_config': self.config.llm,
                 'agent_config': self.config.agent,
-                'code_retrieval_config': self.config.code_retrieval
+                'retrieval_config': self.config.retrieval
             }}
 
             # 启动多智能体工作流，得到最终评论

@@ -9,7 +9,7 @@ import asyncio
 import re
 
 from sec_reviewer.core.config import ScannerConfig
-from sec_reviewer.core.data_models import ScannedIssue, LLMScanReport, LLMScannedIssue, SnippetRegion
+from sec_reviewer.core.data_models import ScannedIssue, LLMScanReport, SnippetRegion
 from sec_reviewer.tools.code_retriever import CodeRetriever
 from sec_reviewer.tools.project_analyzer import ProjectAnalyzer
 from sec_reviewer.knowledge_base.sys_prompts import SCANNER_PROMPT
@@ -125,7 +125,7 @@ class LLMSemanticScanner:
         """
         # 获取与指定行数范围有交集的所有类/函数的起止行号
         def_scopes = await self.retriever.get_def_scopes(file_path, start_line, end_line)
-        
+
         # 如果没有拿到按定义拆分的起止行号，则按行数强行切分
         if not def_scopes:
             return self._fallback_line_split(start_line, end_line, max_lines)

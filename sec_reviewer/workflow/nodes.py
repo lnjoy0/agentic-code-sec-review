@@ -34,10 +34,10 @@ async def heuristic_scanner_node(state: AuditState, config: RunnableConfig) -> D
     logger.info("[Node] 运行启发式扫描器 (Semgrep, Gitleaks, Trivy)...")
 
     scanner_config = config['configurable'].get('scanner_config')
-    code_retrieval_config = config['configurable'].get('code_retrieval_config')
+    retrieval_config = config['configurable'].get('retrieval_config')
     patched_files = state['patched_files']
 
-    heuristic_scanner = HeuristicScanner(scanner_config, code_retrieval_config)
+    heuristic_scanner = HeuristicScanner(scanner_config, retrieval_config)
     heuristic_report = await heuristic_scanner.get_report(patched_files)
 
     return {'scanner_reports': heuristic_report}
