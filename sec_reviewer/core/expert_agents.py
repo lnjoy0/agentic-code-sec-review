@@ -93,13 +93,18 @@ class BaseExpertAgent():
         )
 
         # 调用大模型
-        response = model_with_tools.invoke(invocation_messages)
+        try:
+            response = model_with_tools.invoke(invocation_messages)
+        except Exception as e:
+            logger.error(f"LLM 调用出错：{e}。输入消息：{invocation_messages}")
+            raise
 
         # 拦截并手动解析 vLLM 没能识别的自定义 XML 格式
         if not response.tool_calls and response.content and "<tool_call>" in response.content:
             logger.info(f"[{self.expert_name}]-[issue({state['issue'].id})] 检测到未解析的 XML Tool Call，开始手动提取...")
             
             parsed_tool_calls = []
+            seen_calls = set() # 工具调用去重
 
             # 正则匹配 function name
             function_blocks = re.finditer(r"<function=([^>]+)>(.*?)</function>", response.content, re.DOTALL)
@@ -123,23 +128,31 @@ class BaseExpertAgent():
                             logger.debug(f"[{self.expert_name}]-[issue({state['issue'].id})] 工具 {param_name} 的参数 JSON 解析失败，保持普通字符串: {param_value}")
                     
                     args[param_name] = param_value
-                
+
+                # 过滤重复的工具调用请求
+                call_signature = f"{func_name}_{json.dumps(args, sort_keys=True)}"
+                if call_signature in seen_calls:
+                    logger.debug(f"[{self.expert_name}]-[issue({state['issue'].id})] 忽略同一轮次内重复的 Tool Call: {call_signature}")
+                    continue
+                seen_calls.add(call_signature)
+
                 parsed_tool_calls.append({
                     "name": func_name,
                     "args": args,
                     "id": f"call_{uuid.uuid4().hex[:8]}"
                 })
-                logger.info(f"[{self.expert_name}] 成功解析 Tool Call: {func_name}, 参数: {args}")
+                logger.info(f"[{self.expert_name}]-[issue({state['issue'].id})] 成功解析 Tool Call: {func_name}, 参数: {args}")
 
-            # 将解析到的工具列表注入回 response
+            # 将解析到的工具列表注入回 response，并替换掉 content 中的原始 XML 文本
             if parsed_tool_calls:
                 response.tool_calls = parsed_tool_calls
+                response.content = "I have invoked the necessary tools to continue my analysis."
             
         # 将 LLM 的回复加入状态
         state_update_messages.append(response)
         return {"messages": state_update_messages}
 
-    def _tools_call_node(self, state: AgentState, config: RunnableConfig):
+    async def _tools_call_node(self, state: AgentState, config: RunnableConfig):
         """动作执行节点：执行 LLM 要求的工具，并将结果返回"""
         tool_calls_message = state["messages"][-1] # 获取 LLM 的 tool_calls 消息
         remaining_turns = state.get('remaining_turns')
@@ -163,7 +176,7 @@ class BaseExpertAgent():
                         tool_call_id=tool_call["id"]
                     )
                 )
-            return {"messages": tool_outputs}
+            return {"messages": tool_outputs, "remaining_turns": remaining_turns - 1}
 
         # 遍历 LLM 发出的所有工具调用请求（可能同时调用多个）
         for tool_call in tool_calls_message.tool_calls:
@@ -182,7 +195,7 @@ class BaseExpertAgent():
                     tool_args['new_docs'] = new_docs # 传递引用
 
                 try:
-                    result = tool_instance.invoke(tool_args, config=config)
+                    result = await tool_instance.invoke(tool_args, config=config)
                 except Exception as e:
                     result = f"工具执行出错: {str(e)}"
             else:
@@ -266,8 +279,6 @@ class BaseExpertAgent():
 
     def _reject_node(self, state: AgentState):
         """当该专家认为分配的漏洞不在它的职能范围时，触发该节点进行退回"""
-        logger.warning(f"[{self.expert_name}] ↩️ 拒绝处理漏洞 {state['issue'].id}，将其退回给Router。")
-
         last_message = state["messages"][-1]
         issue_id = state["issue"].id
         
@@ -283,7 +294,8 @@ class BaseExpertAgent():
                         "expert": self.expert_name,
                         "reason": reject_reason
                     }
-                    
+
+                    logger.warning(f"[{self.expert_name}] ↩️ 拒绝处理漏洞 {state['issue'].id} ({state['issue'].name or state['issue'].cwe})，将其退回给Router。理由：{reject_reason}")
                     return {"rejection_history": [{issue_id: [record]}]}
                 
                 except ValidationError as e:

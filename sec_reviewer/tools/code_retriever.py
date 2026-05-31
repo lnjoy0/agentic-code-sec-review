@@ -801,9 +801,11 @@ class CodeRetriever:
 
         # 获取全局 imports 信息
         global_imports = ""
-        grouped_imports, _ = await self._core_get_file_imports(file_path)
+        grouped_imports, err = await self._core_get_file_imports(file_path)
         if "module_level" in grouped_imports:
-            global_imports = grouped_imports['module_level']
+            global_imports = "\n".join(grouped_imports["<module_level>"])
+        if err:
+            logger.error(f"文件 {file_path} 获取全局 imports 出错")
 
         # 拼接排版
         output_lines = [
