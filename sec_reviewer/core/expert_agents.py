@@ -58,7 +58,7 @@ class BaseExpertAgent():
         if remaining_turns > 0:
             tool_sys_prompt = f"【系统提示】你还可以行动 {remaining_turns} 轮。请合理规划，如果已有足够信心，可以直接调用 ExpertAuditResult 工具，填入最终的漏洞研判结果。"
         else:
-            logger.warning(f"[{self.expert_name}] ⚠️ 行动轮数耗尽，强制要求大模型输出结论。")
+            logger.warning(f"[{self.expert_name}]-[issue({state['issue'].id})] ⚠️ 行动轮数耗尽，强制要求大模型输出结论。")
             tool_sys_prompt = f"【系统提示】警告：你的行动轮数已全部用尽！无法再调用除了 ExpertAuditResult 以外的其他工具。请立刻基于上述对话历史中的已知信息，调用 ExpertAuditResult 给出最终研判结果。"
 
         # 如果是第一轮，初始化 System Prompt 和初始输入
@@ -80,7 +80,7 @@ class BaseExpertAgent():
             invocation_messages = [sys_msg, human_msg]
             state_update_messages = [human_msg]
         else:
-            logger.info(f"[{self.expert_name}] 🧠 接收工具反馈，继续综合推理...")
+            logger.info(f"[{self.expert_name}]-[issue({state['issue'].id})] 🧠 接收工具反馈，继续综合推理...")
             sys_msg = SystemMessage(content=tool_sys_prompt)
             invocation_messages = [sys_msg] + messages
 
@@ -107,10 +107,13 @@ class BaseExpertAgent():
         new_docs = [] # 用于接收新查询到的文档名称
 
         if remaining_turns <= -3:
-            logger.error(f"[{self.expert_name}] 🚫 LLM 在行动轮数耗尽后仍然连续三轮没有调用 ExpertAuditResult 输出最终结果")
+            logger.error(
+                f"[{self.expert_name}]-[issue({state['issue'].id})] 🚫 LLM 在行动轮数耗尽后仍然连续三轮没有调用 ExpertAuditResult 输出最终结果",
+                f"\nLLM 行动记录：{state['messages']}"
+            )
             raise AgentError(f"{self.expert_name}故障，行动轮数耗尽，且 LLM 仍然连续三轮没有输出结果")
         elif remaining_turns <= 0:
-            logger.warning(f"[{self.expert_name}] 🚫 拦截工具调用：行动轮数已耗尽。")
+            logger.warning(f"[{self.expert_name}]-[issue({state['issue'].id})] 🚫 拦截工具调用：行动轮数已耗尽。")
             for tool_call in tool_calls_message.tool_calls:
                 refusal_msg = "工具调用失败: 行动轮数已全部用尽，你当前只能调用 ExpertAuditResult 工具"
                 tool_outputs.append(
@@ -128,7 +131,7 @@ class BaseExpertAgent():
             tool_args = tool_call["args"]
             tool_call_id = tool_call["id"]
             
-            print(f"[{self.expert_name}] 🛠️ 正在执行工具: {tool_name}，参数: {tool_args}")
+            print(f"[{self.expert_name}]-[issue({state['issue'].id})] 🛠️ 正在执行工具: {tool_name}，参数: {tool_args}")
             
             # 找到对应的工具并执行
             if tool_name in self.tools_by_name:
@@ -159,7 +162,7 @@ class BaseExpertAgent():
 
     def _format_output_node(self, state: AgentState):
         """格式化节点：提取 LLM 的最终研判结论并进行 Pydantic 强校验"""
-        logger.info(f"[{self.expert_name}] ⚖️ 准备校验并格式化输出结果...")
+        logger.info(f"[{self.expert_name}]-[issue({state['issue'].id})] ⚖️ 准备校验并格式化输出结果...")
         last_message = state["messages"][-1]
         issue = state['issue']
         
@@ -182,12 +185,12 @@ class BaseExpertAgent():
                         details=audit_data
                     )
 
-                    logger.info(f"[{self.expert_name}] ✅ 结果校验通过，研判完成。")
+                    logger.info(f"[{self.expert_name}]-[issue({state['issue'].id})] ✅ 结果校验通过，研判完成。")
                     return {"audit_results": [audit_result]}
 
                 except ValidationError as e:
                     error_str = str(e)
-                    logger.warning(f"[{self.expert_name}] ❌ ExpertAuditResult 数据校验失败，打回重做: \n{error_str}")
+                    logger.warning(f"[{self.expert_name}]-[issue({state['issue'].id})] ❌ ExpertAuditResult 数据校验失败，打回重做: \n{error_str}")
 
                     # 构造一个 ToolMessage，将报错扔回给大模型
                     error_msg = ToolMessage(
@@ -204,13 +207,13 @@ class BaseExpertAgent():
         remaining_turns = state.get('remaining_turns')
 
         if remaining_turns <= -3:
-            logger.error(f"[{self.expert_name}] ⚠️ LLM 在行动轮数耗尽后仍然连续三轮没有调用 ExpertAuditResult 输出最终结果")
+            logger.error(f"[{self.expert_name}]-[issue({state['issue'].id})] ⚠️ LLM 在行动轮数耗尽后仍然连续三轮没有调用 ExpertAuditResult 输出最终结果")
             raise AgentError(f"{self.expert_name}故障，行动轮数耗尽，且 LLM 仍然连续三轮没有输出结果")
         elif remaining_turns <= 0:
-            logger.warning(f"[{self.expert_name}] ⚠️ 行动轮数已耗尽。")
+            logger.warning(f"[{self.expert_name}]-[issue({state['issue'].id})] ⚠️ 行动轮数已耗尽。")
             warning_content = "行动轮数已全部用尽，你当前只能调用 ExpertAuditResult 工具"
         else:
-            logger.warning(f"[{self.expert_name}] ⚠️ 检测到LLM仅输出了纯文本内容，进行警告")
+            logger.warning(f"[{self.expert_name}]-[issue({state['issue'].id})] ⚠️ 检测到 LLM 仅输出了纯文本内容，进行警告\nLLM 输出内容：{state["messages"][-1]}")
             # 构造一条警告消息
             warning_content = (
                 "【系统拦截】你只能进行工具调用，禁止输出纯文本内容。\n"
@@ -223,7 +226,7 @@ class BaseExpertAgent():
 
     def _reject_node(self, state: AgentState):
         """当该专家认为分配的漏洞不在它的职能范围时，触发该节点进行退回"""
-        logger.warning(f"[{self.expert_name}] ↩️ 拒绝处理该漏洞，将其退回给Router。")
+        logger.warning(f"[{self.expert_name}] ↩️ 拒绝处理漏洞 {state['issue'].id}，将其退回给Router。")
 
         last_message = state["messages"][-1]
         issue_id = state["issue"].id
@@ -244,7 +247,7 @@ class BaseExpertAgent():
                     return {"rejection_history": [{issue_id: [record]}]}
                 
                 except ValidationError as e:
-                    logger.warning(f"[{self.expert_name}] ❌ Rejection 数据校验失败，打回重做: \n{str(e)}")
+                    logger.warning(f"[{self.expert_name}]-[issue({state['issue'].id})] ❌ Rejection 数据校验失败，打回重做: \n{str(e)}")
                     
                     error_msg = ToolMessage(
                         content=f"【退回漏洞失败】必须填写拒绝原因。",

@@ -799,13 +799,29 @@ class CodeRetriever:
 
             current_node = current_node.parent
 
+        # 获取全局 imports 信息
+        global_imports = ""
+        grouped_imports, _ = await self._core_get_file_imports(file_path)
+        if "module_level" in grouped_imports:
+            global_imports = grouped_imports['module_level']
+
         # 拼接排版
         output_lines = [
             f"### 🎯 上下文提取: `{file_path}`",
+        ]
+
+        if global_imports:
+            output_lines.extend([
+                f"> **全局导入依赖**:",
+                f"```python",
+                global_imports,
+                f"```"
+            ])
+        output_lines.extend([
             f"> **目标行**: {start_point[0]}-{end_point[0]} 行",
             f"> **文件总行数**: {len(source_lines)} 行 | **当前切片**: {start_row + 1}-{end_row} 行",
             f"```python"
-        ]
+        ])
 
         if signature_lines:
             for i, line in enumerate(signature_lines):
@@ -868,22 +884,10 @@ class CodeRetriever:
         
         return context
 
-    async def get_file_imports(self, file_path: str) -> str:
-        """
-        基于 AST 解析并提取目标 Python 文件的所有导入依赖 (Imports)，支持区分全局导入与局部 (函数内) 导入。
-        
-        【何时使用】：当需要快速评估代码文件的“能力边界”与依赖关系，而无需拉取全量长代码时调用。常用于：
-        1. [基线与供应链] 验证扫描器告警的 CVE 漏洞组件、危险第三方包是否在该文件中被真实引入（判断漏洞可达性）。
-        2. [资产与密码学] 快速摸排文件顶部是否引入了弱密码学库（如 `Crypto.Cipher.DES`）、不安全的序列化库（如 `pickle`）或伪随机数模块（如 `random`）。
-        3. [逻辑与注入] 确认文件是否正确引入了必要的安全防御组件（如全局鉴权装饰器、防 SSRF 库 `advocate`、安全 XML 解析器 `defusedxml`）。
-        
-        Args:
-            file_path (str): 目标 Python 文件的相对路径。
-
-        Returns:
-            str: 按作用域（全局 `<module_level>` 与局部 `def scope_name`）分组聚合的 import 语句 Markdown 列表。
-        """
+    async def _core_get_file_imports(self, file_path: str) -> tuple[dict[Any, list], str]:
+        """基于 AST 解析并提取目标 Python 文件的所有导入依赖"""
         abs_path = self.repo_path / file_path
+        err = ""
 
         def _read_file_safely() -> Optional[bytes]:
             if not abs_path.exists():
@@ -893,7 +897,7 @@ class CodeRetriever:
         source_code = await asyncio.to_thread(_read_file_safely)
 
         if source_code is None:
-            return f"❌ 错误: 文件不存在 `{file_path}`"
+            err = f"❌ 错误: 文件不存在 `{file_path}`"
 
         # 按照 scope_name 聚合 raw_code
         grouped_imports = collections.defaultdict(list)
@@ -917,11 +921,32 @@ class CodeRetriever:
 
             # 从全局作用域开始遍历
             traverse(tree.root_node, "<module_level>")
-
+        
         except Exception as e:
             logger.error(f"解析文件 {file_path} 导入信息失败: {e}")
-            return f"❌ 解析失败: `{str(e)}`"
+            err = f"❌ 解析失败: `{str(e)}`"
+        
+        return grouped_imports, err
 
+    async def get_file_imports(self, file_path: str) -> str:
+        """
+        基于 AST 解析并提取目标 Python 文件的所有导入依赖 (Imports)，支持区分全局导入与局部 (函数内) 导入。
+        
+        【何时使用】：当需要快速评估代码文件的“能力边界”与依赖关系，而无需拉取全量长代码时调用。常用于：
+        1. [基线与供应链] 验证扫描器告警的 CVE 漏洞组件、危险第三方包是否在该文件中被真实引入（判断漏洞可达性）。
+        2. [资产与密码学] 快速摸排文件顶部是否引入了弱密码学库（如 `Crypto.Cipher.DES`）、不安全的序列化库（如 `pickle`）或伪随机数模块（如 `random`）。
+        3. [逻辑与注入] 确认文件是否正确引入了必要的安全防御组件（如全局鉴权装饰器、防 SSRF 库 `advocate`、安全 XML 解析器 `defusedxml`）。
+        
+        Args:
+            file_path (str): 目标 Python 文件的相对路径。
+
+        Returns:
+            str: 按作用域（全局 `<module_level>` 与局部 `def scope_name`）分组聚合的 import 语句 Markdown 列表。
+        """
+        grouped_imports, err = await self._core_get_file_imports(file_path)
+
+        if err:
+            return err
         if not grouped_imports:
             return f"📄 文件 `{file_path}` 中未发现任何 import 语句。"
 

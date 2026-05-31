@@ -205,7 +205,7 @@ class LLMSemanticScanner:
                     ))
                     logger.info(
                         f"成功添加文件 {file_path} 中的漏洞: {issue.name}。"
-                        f"代码上下文 {hunk_context} -> 漏洞 {scanned_issues[-1]}"
+                        f"\n代码上下文 {hunk_context} -> 漏洞 {scanned_issues[-1]}"
                     )
                 else:
                     logger.info(
@@ -247,8 +247,9 @@ class LLMSemanticScanner:
         end_line: int
     ) -> Tuple[str, Tuple]:
         """
-        根据文件类型提取目标行周边的上下文。
-        结合基于 AST 的提取（Python）和基于滑动窗口的提取（非 Python）。
+        提取目标行周边的上下文，以及代码文件的头部 import 部分
+        对于 python 文件，基于 tree-sitter 提取
+        对于其他文件，基于滑动窗口提取
         """
         try:
             suffix = Path(file_path).suffix.lower()
