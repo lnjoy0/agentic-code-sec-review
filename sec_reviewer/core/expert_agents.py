@@ -48,7 +48,7 @@ class BaseExpertAgent():
         )
         return model.bind_tools(tools)
 
-    def _reasoning_node(self, state: AgentState, config: RunnableConfig):
+    async def _reasoning_node(self, state: AgentState, config: RunnableConfig):
         """核心推理节点：LLM 观察当前状态并决定下一步动作"""
         messages = state.get("messages", [])
         remaining_turns = state.get('remaining_turns')
@@ -94,7 +94,7 @@ class BaseExpertAgent():
 
         # 调用大模型
         try:
-            response = model_with_tools.invoke(invocation_messages)
+            response = await model_with_tools.ainvoke(invocation_messages)
         except Exception as e:
             logger.error(f"LLM 调用出错：{e}。输入消息：{invocation_messages}")
             raise

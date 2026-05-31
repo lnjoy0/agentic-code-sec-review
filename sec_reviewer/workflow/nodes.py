@@ -68,7 +68,7 @@ HARD_ROUTING_RULES = {
     }
 }
 
-def dynamic_router_node(state: AuditState, config: RunnableConfig):
+async def dynamic_router_node(state: AuditState, config: RunnableConfig):
     """路由判定节点：执行硬/软路由，生成分发任务清单"""
     logger.info("\n[Router Node] 开始漏洞路由分析...")
 
@@ -129,7 +129,7 @@ def dynamic_router_node(state: AuditState, config: RunnableConfig):
                 logger.info(f"  [Soft Route] 触发大模型路由分析: issue[{id}] ({issue.name or issue.cwe})")
                 chain = prompt | structured_router
                 try:
-                    decision = chain.invoke({
+                    decision = await chain.ainvoke({
                         "issue": issue.model_dump_json(indent=2), # 将 pydantic 对象转为json字符串
                         "rejected_by": ", ".join(rejected_by),
                         "rejection_reason": rejection_reason
