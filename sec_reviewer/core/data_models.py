@@ -120,7 +120,7 @@ class RouteTask(TypedDict):
 
 
 class Rejection(BaseModel):
-    """【拒绝处理该漏洞】当你认为分配给你的漏洞不属于你的职能范围时，调用此工具将任务退回给 Router。"""
+    """【拒绝处理该漏洞】当你认为分配给你的漏洞不属于你的职能范围，应该由其他专家处理时，调用此工具将任务退回给 Router。"""
     reject_reason: str = Field(
         ..., 
         description="说明为什么拒绝处理该漏洞，指出它实际上属于什么类型的安全问题。"
@@ -134,7 +134,7 @@ class RejectionRecord(TypedDict):
 
 
 class ExpertAuditResult(BaseModel):
-    """【提交最终研判结果】当你完成漏洞研判后，必须调用此工具提交你的最终研判定论。"""
+    """【提交最终研判结果】当你完成漏洞研判后，【必须且只能】调用此工具提交你的最终研判定论。"""
     verdict: Literal["True Positive", "False Positive"] = Field(
         ..., 
         description="最终判定结果。必须是 'True Positive'（确认存在漏洞）或 'False Positive'（确认是误报）。"
