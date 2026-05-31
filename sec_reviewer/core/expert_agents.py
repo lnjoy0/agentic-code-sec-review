@@ -296,8 +296,8 @@ class BaseExpertAgent():
                     }
 
                     logger.warning(f"[{self.expert_name}] ↩️ 拒绝处理漏洞 {state['issue'].id} ({state['issue'].name or state['issue'].cwe})，将其退回给Router。理由：{reject_reason}")
-                    return {"rejection_history": [{issue_id: [record]}]}
-                
+                    return {"rejection_history": {issue_id: [record]}}
+
                 except ValidationError as e:
                     logger.warning(f"[{self.expert_name}]-[issue({state['issue'].id})] ❌ Rejection 数据校验失败，打回重做: \n{str(e)}")
                     

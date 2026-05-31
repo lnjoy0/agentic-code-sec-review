@@ -59,7 +59,7 @@ class CodeRetriever:
             "-e", f"def\\s+{target_name}\\b",
             "-e", f"class\\s+{target_name}\\b"
         ]
-        files = self._rg_filter(regexp)
+        files = await self._rg_filter(regexp)
         if not files:
             logger.info(f"📄 未找到 `{target_name}` 的任何定义文件。")
             return []
@@ -806,6 +806,7 @@ class CodeRetriever:
             global_imports = "\n".join(grouped_imports["<module_level>"])
         if err:
             logger.error(f"文件 {file_path} 获取全局 imports 出错")
+        logger.info(f"文件 {file_path} imports 信息：{grouped_imports}")
 
         # 拼接排版
         output_lines = [
