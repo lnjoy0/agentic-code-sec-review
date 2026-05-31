@@ -28,7 +28,7 @@ inputs:
   llm_base_url:
     description: '大语言模型 API 基础路径'
     required: false
-    default: 'http://i-1.gpushare.com:6250/v1'
+    default: 'http://i-1.gpushare.com:20714/v1'
   llm_api_key:
     description: '大语言模型 API Key'
     required: false
