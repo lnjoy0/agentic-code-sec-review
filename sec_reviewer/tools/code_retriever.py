@@ -802,11 +802,10 @@ class CodeRetriever:
         # 获取全局 imports 信息
         global_imports = ""
         grouped_imports, err = await self._core_get_file_imports(file_path)
-        if "module_level" in grouped_imports:
+        if "<module_level>" in grouped_imports:
             global_imports = "\n".join(grouped_imports["<module_level>"])
         if err:
             logger.error(f"文件 {file_path} 获取全局 imports 出错")
-        logger.info(f"文件 {file_path} imports 信息：{grouped_imports}")
 
         # 拼接排版
         output_lines = [
@@ -814,6 +813,7 @@ class CodeRetriever:
         ]
 
         if global_imports:
+            logger.info(f"文件 {file_path} imports 信息：{grouped_imports}")
             output_lines.extend([
                 f"> **全局导入依赖**:",
                 f"```python",
@@ -901,6 +901,7 @@ class CodeRetriever:
 
         if source_code is None:
             err = f"❌ 错误: 文件不存在 `{file_path}`"
+            return {}, err
 
         # 按照 scope_name 聚合 raw_code
         grouped_imports = collections.defaultdict(list)
@@ -925,11 +926,13 @@ class CodeRetriever:
             # 从全局作用域开始遍历
             traverse(tree.root_node, "<module_level>")
         
+            return grouped_imports, err
+        
         except Exception as e:
             logger.error(f"解析文件 {file_path} 导入信息失败: {e}")
             err = f"❌ 解析失败: `{str(e)}`"
+            return {}, err
         
-        return grouped_imports, err
 
     async def get_file_imports(self, file_path: str) -> str:
         """
