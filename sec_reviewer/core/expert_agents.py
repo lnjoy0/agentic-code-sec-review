@@ -213,7 +213,7 @@ class BaseExpertAgent():
             logger.warning(f"[{self.expert_name}]-[issue({state['issue'].id})] ⚠️ 行动轮数已耗尽。")
             warning_content = "行动轮数已全部用尽，你当前只能调用 ExpertAuditResult 工具"
         else:
-            logger.warning(f"[{self.expert_name}]-[issue({state['issue'].id})] ⚠️ 检测到 LLM 仅输出了纯文本内容，进行警告\nLLM 输出内容：{state["messages"][-1]}")
+            logger.warning(f"[{self.expert_name}]-[issue({state['issue'].id})] ⚠️ 检测到 LLM 仅输出了纯文本内容，进行警告\nLLM 输出内容：{state['messages'][-1]}")
             # 构造一条警告消息
             warning_content = (
                 "【系统拦截】你只能进行工具调用，禁止输出纯文本内容。\n"
