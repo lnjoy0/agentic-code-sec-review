@@ -89,7 +89,7 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
 
     # 子图运行过程中，主图是同步阻塞的，所以每次路由节点被触发时，之前已经处理完成的漏洞会被写入audit_results中
     # 而不在audit_results中的漏洞，说明其被退回
-    processed_issue_ids = [res.get("id") for res in audit_results]
+    processed_issue_ids = [res.id for res in audit_results]
     
     routing_decisions: List[RouteTask] = []
     

@@ -60,7 +60,10 @@ class BaseExpertAgent():
         if remaining_turns > 0:
             remaining_turns_prompt = f"【系统提示】你还可以行动 {remaining_turns} 轮。请合理规划，如果已有足够信心，可以直接调用 ExpertAuditResult 工具，填入最终的漏洞研判结果。"
         else:
-            logger.warning(f"[{self.expert_name}]-[issue({state['issue'].id})] ⚠️ 行动轮数耗尽，强制要求大模型输出结论。")
+            logger.warning(
+                f"[{self.expert_name}]-[issue({state['issue'].id})] ⚠️ 行动轮数耗尽，强制要求大模型输出结论。",
+                f"\nLLM 行动记录：{str(messages)}"                
+            )
             remaining_turns_prompt = f"【系统提示】警告：你的行动轮数已全部用尽！无法再调用除了 ExpertAuditResult 以外的其他工具。请立刻基于上述对话历史中的已知信息，调用 ExpertAuditResult 给出最终研判结果。"
 
         sys_msg = SystemMessage(content=self.system_prompt+"\n\n"+remaining_turns_prompt)
@@ -162,7 +165,7 @@ class BaseExpertAgent():
         if remaining_turns <= -3:
             logger.error(
                 f"[{self.expert_name}]-[issue({state['issue'].id})] 🚫 LLM 在行动轮数耗尽后仍然连续三轮没有调用 ExpertAuditResult 输出最终结果",
-                f"\nLLM 行动记录：{state['messages']}"
+                f"\nLLM 行动记录：{str(state['messages'])}"
             )
             raise AgentError(f"{self.expert_name}故障，行动轮数耗尽，且 LLM 仍然连续三轮没有输出结果")
         elif remaining_turns <= 0:

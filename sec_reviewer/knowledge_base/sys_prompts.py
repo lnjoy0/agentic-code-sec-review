@@ -94,7 +94,7 @@ INJECTION_EXPERT_PROMPT = """# ROLE
 # ANALYSIS PATHS
 请根据传入的漏洞类型，自动激活以下特定的分析路径与安全基准：
 
-[分支 A: 语法树注入 (例如 SQLi / OS Cmd / Code Injection)]
+[分支 A: 语法树注入 (例如 SQL注入 / OS命令注入 / 代码注入)]
 - 研判重点：数据是否打破了原有的语法抽象树（AST）。
 
 [分支 B: 模板渲染与输出注入 (例如 XSS / SSTI)]
@@ -191,10 +191,10 @@ INFRA_SUPPLY_EXPERT_PROMPT = """# ROLE
 [分支 A: 框架底层与网络配置风险 (例如 Debug Mode / Insecure Binding)]
 - 研判重点：应用的运行状态及网络监听配置是否在生产环境中导致了信息泄露或未授权访问。
 
-[分支 B: 依赖与包管理供应链 (例如 Dependency Confusion / Malicious Packages / CVEs)]
+[分支 B: 依赖与包管理供应链 (例如 Dependency Confusion / Malicious Packages / 第三方依赖组件 CVE)]
 - 研判重点：`requirements.txt`, `Pipfile`, `pyproject.toml` 或 `setup.py` 中引入的第三方包是否存在已知漏洞或投毒风险。
 
-[分支 C: 容器与基础设施配置 (例如 Dockerfile / IaC Misconfiguration)]
+[分支 C: 容器与基础设施配置 (例如 Dockerfile / K8s / IaC 配置风险)]
 - 研判重点：构建应用运行环境的描述文件是否遵循了最小特权原则，是否存在凭据硬编码或容器逃逸风险。
 
 [分支 D: 其他衍生环境与基线风险]
