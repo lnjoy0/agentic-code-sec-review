@@ -1,10 +1,12 @@
+import logging
+import re
+import uuid
+import json
 from typing import List, Literal
 from langgraph.graph import StateGraph, START, END
 from langchain_openai import ChatOpenAI
 from langchain_core.runnables import RunnableConfig
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
-import functools
-import logging
 from pydantic import ValidationError
 
 from sec_reviewer.knowledge_base.sys_prompts import (
@@ -56,18 +58,17 @@ class BaseExpertAgent():
 
         # 记录剩余行动轮数
         if remaining_turns > 0:
-            tool_sys_prompt = f"【系统提示】你还可以行动 {remaining_turns} 轮。请合理规划，如果已有足够信心，可以直接调用 ExpertAuditResult 工具，填入最终的漏洞研判结果。"
+            remaining_turns_prompt = f"【系统提示】你还可以行动 {remaining_turns} 轮。请合理规划，如果已有足够信心，可以直接调用 ExpertAuditResult 工具，填入最终的漏洞研判结果。"
         else:
             logger.warning(f"[{self.expert_name}]-[issue({state['issue'].id})] ⚠️ 行动轮数耗尽，强制要求大模型输出结论。")
-            tool_sys_prompt = f"【系统提示】警告：你的行动轮数已全部用尽！无法再调用除了 ExpertAuditResult 以外的其他工具。请立刻基于上述对话历史中的已知信息，调用 ExpertAuditResult 给出最终研判结果。"
+            remaining_turns_prompt = f"【系统提示】警告：你的行动轮数已全部用尽！无法再调用除了 ExpertAuditResult 以外的其他工具。请立刻基于上述对话历史中的已知信息，调用 ExpertAuditResult 给出最终研判结果。"
+
+        sys_msg = SystemMessage(content=self.system_prompt+"\n\n"+remaining_turns_prompt)
 
         # 如果是第一轮，初始化 System Prompt 和初始输入
         if not messages:
             logger.info(f"[{self.expert_name}] 🚀 开始全新漏洞研判: {issue.id} ({issue.name or issue.cwe})...")
-            sys_msg = SystemMessage(
-                content=self.system_prompt+"\n\n"+tool_sys_prompt
-            )
-
+            
             issue_json = issue.model_dump_json(indent=2)
             human_content = f"请对以下漏洞报告进行深度研判，你可以多轮调用工具获取信息。\n【扫描报告】：\n{issue_json}"
             if issue.id in rejection_history:
@@ -81,7 +82,6 @@ class BaseExpertAgent():
             state_update_messages = [human_msg]
         else:
             logger.info(f"[{self.expert_name}]-[issue({state['issue'].id})] 🧠 接收工具反馈，继续综合推理...")
-            sys_msg = SystemMessage(content=tool_sys_prompt)
             invocation_messages = [sys_msg] + messages
 
         # 获取绑定了工具的 LLM 实例
@@ -94,9 +94,49 @@ class BaseExpertAgent():
 
         # 调用大模型
         response = model_with_tools.invoke(invocation_messages)
+
+        # 拦截并手动解析 vLLM 没能识别的自定义 XML 格式
+        if not response.tool_calls and response.content and "<tool_call>" in response.content:
+            logger.info(f"[{self.expert_name}]-[issue({state['issue'].id})] 检测到未解析的 XML Tool Call，开始手动提取...")
+            
+            parsed_tool_calls = []
+
+            # 正则匹配 function name
+            function_blocks = re.finditer(r"<function=([^>]+)>(.*?)</function>", response.content, re.DOTALL)
+            for block in function_blocks:
+                func_name = block.group(1).strip()
+                func_body = block.group(2)
+                args = {}
+                
+                # 正则匹配 parameters
+                param_matches = re.finditer(r"<parameter=([^>]+)>(.*?)</parameter>", func_body, re.DOTALL)
+                for p in param_matches:
+                    param_name = p.group(1).strip()
+                    param_value = p.group(2).strip()
+                    
+                    # 将类似字典或列表的结构尝试 JSON 解析
+                    if (param_value.startswith('{') and param_value.endswith('}')) or \
+                       (param_value.startswith('[') and param_value.endswith(']')):
+                        try:
+                            param_value = json.loads(param_value)
+                        except json.JSONDecodeError:
+                            logger.debug(f"[{self.expert_name}]-[issue({state['issue'].id})] 工具 {param_name} 的参数 JSON 解析失败，保持普通字符串: {param_value}")
+                    
+                    args[param_name] = param_value
+                
+                parsed_tool_calls.append({
+                    "name": func_name,
+                    "args": args,
+                    "id": f"call_{uuid.uuid4().hex[:8]}"
+                })
+                logger.info(f"[{self.expert_name}] 成功解析 Tool Call: {func_name}, 参数: {args}")
+
+            # 将解析到的工具列表注入回 response
+            if parsed_tool_calls:
+                response.tool_calls = parsed_tool_calls
+            
+        # 将 LLM 的回复加入状态
         state_update_messages.append(response)
-        
-        # 将 LLM 的回复（可能包含 tool_calls 或最终文字）加入状态
         return {"messages": state_update_messages}
 
     def _tools_call_node(self, state: AgentState, config: RunnableConfig):
