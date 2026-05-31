@@ -813,7 +813,6 @@ class CodeRetriever:
         ]
 
         if global_imports:
-            logger.info(f"文件 {file_path} imports 信息：{grouped_imports}")
             output_lines.extend([
                 f"> **全局导入依赖**:",
                 f"```python",
