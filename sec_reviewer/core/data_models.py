@@ -172,6 +172,12 @@ class ExpertAuditResult(BaseModel):
             "3. 如果判定为误报，必须说明排除逻辑（如：已有前置校验、仅用于测试环境等）；如果判定为真实漏洞，必须给出该漏洞的可能利用方法。" 
         )
     )
+    attack_scenario: str = Field(
+        default="",
+        description=(
+            "漏洞的可能利用场景与攻击过程描述。只有当 verdict 为 'True Positive' 时才提供；若为 'False Positive' 则保持为空字符串。\n"
+            "- 请详细描述攻击者可能如何利用该漏洞进行攻击，包括攻击前提、攻击步骤、可能的攻击载荷，以及攻击成功后可能造成的影响等。")
+    )
     remediation: str = Field(
         default="", 
         description="修复代码或配置建议。只有当 verdict 为 'True Positive' 时才提供；若为 'False Positive' 则保持为空字符串。"

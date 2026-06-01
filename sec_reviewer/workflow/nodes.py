@@ -196,6 +196,7 @@ def get_comment_node(state: AuditState, config: RunnableConfig):
             severity = result.details.severity.upper()
             confidence = result.details.confidence
             reason = result.details.analysis_reasoning
+            attack_scenario = result.details.attack_scenario
             remediation = result.details.remediation
 
             emoji = {"CRITICAL": "🚨", "HIGH": "⚠️", "MEDIUM": "💡", "LOW": "ℹ️"}
@@ -208,6 +209,9 @@ def get_comment_node(state: AuditState, config: RunnableConfig):
 
 #### 🔍 研判分析
 {reason}
+
+#### 🚀 攻击场景
+{attack_scenario}
 
 #### 🛠️ 修复建议
 {remediation}
