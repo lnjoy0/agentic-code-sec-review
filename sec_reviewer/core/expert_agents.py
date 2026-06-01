@@ -144,6 +144,17 @@ class BaseExpertAgent():
             tool_args = tool_call["args"]
             tool_call_id = tool_call["id"]
             
+            # 尝试解析参数中的 JSON 字符串
+            for k, v in tool_args.items():
+                if isinstance(v, str):
+                    v_stripped = v.strip()
+                    if (v_stripped.startswith('[') and v_stripped.endswith(']')) or \
+                       (v_stripped.startswith('{') and v_stripped.endswith('}')):
+                        try:
+                            tool_args[k] = json.loads(v_stripped)
+                        except json.JSONDecodeError:
+                            tool_args[k] = v # 解析失败则退回，保持原样
+
             print(f"[{self.expert_name}]-[issue({state['issue'].id})] 🛠️ 正在执行工具: {tool_name}，参数: {tool_args}")
             
             # 找到对应的工具并执行

@@ -1,6 +1,7 @@
 import logging
 import collections
 import asyncio
+import json
 from pathlib import Path
 from typing import List, Optional, Tuple
 from langchain_core.tools import StructuredTool
@@ -33,7 +34,7 @@ class ProjectAnalyzer:
         
         Args:
             max_depth (int, optional): 遍历最大深度。默认3。警告：非必要勿轻易增大此值，以防返回过长导致上下文溢出。
-            ignore_dirs (List[str], optional): 需额外跳过的目录名列表（默认已忽略 .git, venv, __pycache__ 等构建目录）。
+            ignore_dirs (List[str], optional): 需额外跳过的目录名列表（默认已忽略 .git, venv, __pycache__ 等构建目录），必须是列表形式，请勿传字符串。
 
         Returns:
             str: 项目目录结构的树状字符串。
