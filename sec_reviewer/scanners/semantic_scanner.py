@@ -5,10 +5,9 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableSerializable
 import logging
 import asyncio
-import re
 
 from sec_reviewer.core.config import ScannerConfig
-from sec_reviewer.core.data_models import ScannedIssue, SnippetRegion
+from sec_reviewer.core.data_models import ScannedIssue, SnippetRegion, LLMScanReport
 from sec_reviewer.tools.code_retriever import CodeRetriever
 from sec_reviewer.tools.project_analyzer import ProjectAnalyzer
 from sec_reviewer.knowledge_base.sys_prompts import SCANNER_PROMPT
