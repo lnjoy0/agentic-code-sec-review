@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from langchain_core.runnables import RunnableConfig
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
@@ -17,7 +18,7 @@ from sec_reviewer.knowledge_base.cwe_category import (INJECTION_CWES, LOGIC_IDEN
 logger = logging.getLogger(__name__)
 
 
-def get_model(config: LLMConfig, role_name: str):
+def get_model(config: LLMConfig, role_name: str, max_tokens: int = None):
     model = ChatOpenAI(
         model=config.model_name,
         base_url=config.base_url,
@@ -25,6 +26,8 @@ def get_model(config: LLMConfig, role_name: str):
         temperature=config.Role[role_name].temperature,
         top_p=config.Role[role_name].top_p,
         max_retries=3,
+        max_tokens=max_tokens,
+        request_timeout=30.0,
         seed=42
     )
     return model
@@ -75,7 +78,7 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
     max_turns = config['configurable'].get('agent_config').max_turns
     llm_config = config['configurable'].get('llm_config')
 
-    router_llm = get_model(llm_config, role_name="Router")
+    router_llm = get_model(llm_config, role_name="Router", max_tokens=500) # router 正常输出只有专家名和简短原因，加上 max_tokens 以防止无限生成
     structured_router = router_llm.with_structured_output(LLMRouteDecision)
     
     prompt = ChatPromptTemplate.from_messages([
@@ -92,6 +95,7 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
     processed_issue_ids = [res.id for res in audit_results]
     
     routing_decisions: List[RouteTask] = []
+    soft_route_tasks = []
     
     for scanner_name, issues in scanner_reports.items():
         for issue in issues:
@@ -122,45 +126,65 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
 
             if expert_name in rejected_by:
                 logger.info(f"  [Hard Route] 漏洞 issue[{id}] ({issue.name or issue.cwe}) 被规则路由到 {expert_name}，但它在历史退回记录中，已被退回过。")
-                expert_name = None # 进入软路由
+                expert_name = None
 
-            # 进行软路由，使用 LLM 分析漏洞特征，判断最适合的专家，用于处理没有明确规则覆盖的情况
-            if not expert_name:
-                logger.info(f"  [Soft Route] 触发大模型路由分析: issue[{id}] ({issue.name or issue.cwe})")
+            if expert_name:
+                logger.info(f"  [Hard Route] 命中字典映射: issue[{id}] ({issue.name or issue.cwe}) -> {expert_name}")
+                routing_decisions.append(_build_task(expert_name, issue, max_turns, rejection_history))
+            else:
+                # 软路由，先将协程任务收集起来，稍后并发执行
+                logger.info(f"  [Soft Route] 准备发起大模型路由分析: issue[{id}]")
                 chain = prompt | structured_router
-                try:
-                    decision = await chain.ainvoke({
-                        "issue": issue.model_dump_json(indent=2), # 将 pydantic 对象转为json字符串
+                coro = asyncio.wait_for(
+                    chain.ainvoke({
+                        "issue": issue.model_dump_json(indent=2),
                         "rejected_by": ", ".join(rejected_by),
                         "rejection_reason": rejection_reason
-                    })
-
-                    expert_name = decision.expert_name
-                    if expert_name in rejected_by:
-                        logger.error(f"  [Soft Route] LLM 决策失败，专家 {expert_name} 已在退回记录中，降级为通用专家。")
-                        expert_name = "General_Expert"
-
-                    logger.info(f"  [Soft Route] LLM 决策: issue[{id}] ({issue.name or issue.cwe}) -> {expert_name} (原因: {decision.reason})")
-                except Exception as e:
-                    logger.error(f"  [Soft Route] LLM 路由失败，issue[{id}] ({issue.name or issue.cwe}) 被分配给通用专家。错误: {e}\n")
-                    logger.error(issue)
-                    expert_name = "General_Expert"
-            else:
-                logger.info(f"  [Hard Route] 命中字典映射: issue[{id}] ({issue.name or issue.cwe}) -> {expert_name}")
-
-            routing_decisions.append({
-                "expert_name": expert_name,
-                "agent_state_input": {
+                    }), 
+                    timeout=45.0 # 设置超时限制，防止 LLM 持续输出无意义内容
+                )
+                soft_route_tasks.append({
+                    "id": id,
                     "issue": issue,
-                    "remaining_turns": max_turns,
-                    "viewed_docs": [],
-                    "messages": [],
-                    "rejection_history": rejection_history,
-                    "audit_results": []
-                }
-            })
+                    "coro": coro,
+                    "rejected_by": rejected_by
+                })
+
+    # 并发执行所有软路由请求
+    if soft_route_tasks:
+        logger.info(f"  [Soft Route] 正在并发处理 {len(soft_route_tasks)} 个 LLM 路由请求...")
+        coros = [task["coro"] for task in soft_route_tasks]
+        results = await asyncio.gather(*coros, return_exceptions=True)
+
+        for task, result in zip(soft_route_tasks, results):
+            expert_name = "General_Expert"
+            if isinstance(result, Exception):
+                logger.error(f"  [Soft Route] LLM 路由失败，issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) 被分配给通用专家。错误: {result}")
+                logger.error(task['issue'])
+            else:
+                expert_name = result.expert_name
+                if expert_name in task["rejected_by"]:
+                    logger.error(f"  [Soft Route] LLM 决策失败，专家 {expert_name} 已在退回记录中，issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) 降级为通用专家。")
+                    expert_name = "General_Expert"
+                else:
+                    logger.info(f"  [Soft Route] LLM 决策: issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) -> {expert_name} (原因: {result.reason})")
             
+            routing_decisions.append(_build_task(expert_name, task["issue"], max_turns, rejection_history))
+
     return {"routing_decisions": routing_decisions}
+
+def _build_task(expert_name, issue, max_turns, rejection_history):
+    return {
+        "expert_name": expert_name,
+        "agent_state_input": {
+            "issue": issue,
+            "remaining_turns": max_turns,
+            "viewed_docs": [],
+            "messages": [],
+            "rejection_history": rejection_history,
+            "audit_results": []
+        }
+    }            
 
 def aggregate_and_check_node(state: AuditState):
     """该节点仅用来汇聚所有 Agent 子图的执行结果。"""
