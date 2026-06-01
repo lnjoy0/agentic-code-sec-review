@@ -198,9 +198,10 @@ class BaseExpertAgent():
 
     def _format_output_node(self, state: AgentState):
         """格式化节点：提取 LLM 的最终研判结论并进行 Pydantic 强校验"""
-        logger.info(f"[{self.expert_name}]-[issue({issue.id})] ⚖️ 准备校验并格式化输出结果...")
         last_message = state["messages"][-1]
         issue = state['issue']
+
+        logger.info(f"[{self.expert_name}]-[issue({issue.id})] ⚖️ 准备校验并格式化输出结果...")
         
         for tool_call in last_message.tool_calls:
             if tool_call["name"] == "ExpertAuditResult":
