@@ -1,9 +1,9 @@
 import logging
 import frontmatter
+import asyncio
 from pathlib import Path
-from typing import Annotated
 from langchain_core.tools import StructuredTool
-from langchain_core.tools.base import InjectedToolArg
+from typing import Optional
 
 
 logger = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ class VulnKnowledgeBase:
         supported_vulns_list = list(expert_vulns.keys())
         supported_vulns_str = "\n".join([f"- {vuln}" for vuln in supported_vulns_list])
 
-        def get_vulnerability_playbook(vuln_name: str) -> str:
+        async def get_vulnerability_playbook(vuln_name: str) -> str:
             """
             获取目标漏洞的知识文档（包含机制、特征、误报样例、证实标准、证伪标准）。
             
@@ -71,6 +71,17 @@ class VulnKnowledgeBase:
             
             file_path = expert_vulns[vuln_name]
             try:
+                def _read_file_safely() -> Optional[str]:
+                    if not file_path.exists():
+                        return None
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        return frontmatter.load(f).content
+                content = await asyncio.to_thread(_read_file_safely)
+
+                if content is None:
+                    logger.error(f"查询漏洞 {vuln_name} 知识文档失败，文件 `{file_path}` 不存在")
+                    return f"❌ 错误: 文件不存在 `{file_path}`"
+
                 with open(file_path, 'r', encoding='utf-8') as f:
                     content = frontmatter.load(f).content
                 return (
@@ -87,6 +98,6 @@ class VulnKnowledgeBase:
         )
 
         return StructuredTool.from_function(
-            func=get_vulnerability_playbook,
+            coroutine=get_vulnerability_playbook,
             name="get_vulnerability_playbook"
         )

@@ -1056,10 +1056,10 @@ class CodeRetriever:
     def as_tools(self) -> List:
         """将类方法包装为标准 LangChain 工具列表"""
         return [
-            StructuredTool.from_function(func=self.find_definition, name="find_definition"),
-            StructuredTool.from_function(func=self.fetch_definition_chunk, name="fetch_definition_chunk"),
-            StructuredTool.from_function(func=self.find_references, name="find_references"),
-            StructuredTool.from_function(func=self.track_variable_data_flow, name="track_variable_data_flow"),
-            StructuredTool.from_function(func=self.get_code_context, name="get_code_context"),
-            StructuredTool.from_function(func=self.get_file_imports, name="get_file_imports")
+            StructuredTool.from_function(coroutine=self.find_definition, name="find_definition"),
+            StructuredTool.from_function(coroutine=self.fetch_definition_chunk, name="fetch_definition_chunk"),
+            StructuredTool.from_function(coroutine=self.find_references, name="find_references"),
+            StructuredTool.from_function(coroutine=self.track_variable_data_flow, name="track_variable_data_flow"),
+            StructuredTool.from_function(coroutine=self.get_code_context, name="get_code_context"),
+            StructuredTool.from_function(coroutine=self.get_file_imports, name="get_file_imports")
         ]

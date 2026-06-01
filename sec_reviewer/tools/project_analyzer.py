@@ -482,8 +482,8 @@ class ProjectAnalyzer:
     def as_tools(self) -> List:
         """将类方法包装为标准 LangChain 工具列表"""
         return [
-            StructuredTool.from_function(func=self.get_project_structure, name="get_project_structure"),
-            StructuredTool.from_function(func=self.global_search, name="global_search"),
-            StructuredTool.from_function(func=self.read_file_content, name="read_file_content"),
-            StructuredTool.from_function(func=self.get_file_context, name="get_file_context")
+            StructuredTool.from_function(coroutine=self.get_project_structure, name="get_project_structure"),
+            StructuredTool.from_function(coroutine=self.global_search, name="global_search"),
+            StructuredTool.from_function(coroutine=self.read_file_content, name="read_file_content"),
+            StructuredTool.from_function(coroutine=self.get_file_context, name="get_file_context")
         ]
