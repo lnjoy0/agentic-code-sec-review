@@ -41,17 +41,14 @@ async def main_async() -> int:
 
         # Create code reviewer with configuration
         with CodeSecReviewer(config) as reviewer:
-            
             # Perform the code review
-            result = await reviewer.run()
+            success = await reviewer.run()
 
             # Return appropriate exit code
-            if result.errors:
-                for error in result.errors:
-                    print(f"Error: {error}")
-                return 1
-            else:
+            if success:
                 return 0
+            else:
+                return 1
     except Exception as e:
         print(f"Fatal error during code review: {str(e)}")
         return 1

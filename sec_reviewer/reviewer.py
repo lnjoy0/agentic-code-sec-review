@@ -29,7 +29,6 @@ class CodeSecReviewer:
     async def run(self):
         """Main entry point for reviewing a pull request."""
         logger.info("Starting PR review process...")
-        all_comments: List[ReviewComment] = []
 
         try:
             # 解析 GitHub Action event.json 获取 PR 详情 
@@ -63,16 +62,20 @@ class CodeSecReviewer:
             comments = final_state.get("final_comment", [])
 
             # 将评论提交到 GitHub
-            if all_comments:
+            if comments:
                 success = self.github_client.create_review(pr_details, comments)
                 if not success:
                     logger.error("Failed to post review comments to GitHub.")
+                    return False
+            else:
+                logger.info("No security issues found, no comments to post.")
+
+            return True
 
         except Exception as e:
-            logger.exception("Fatal Error during PR review process")
             logger.error(f"Error during PR review: {e}")
             raise ReviewerError(f"Review process failed: {e}")
-                                
+
     def close(self):
         """Clean up resources."""
         try:

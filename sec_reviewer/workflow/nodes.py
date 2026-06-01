@@ -183,7 +183,7 @@ def aggregate_and_check_node(state: AuditState):
     logger.info("[Aggregate and Check] 所有被分配的专家已执行完毕。检查是否需要进入下一轮路由...")
     return {}
 
-def get_comment_node(state: AuditState, config: RunnableConfig) -> List[ReviewComment]:
+def get_comment_node(state: AuditState, config: RunnableConfig):
     """生成评论内容节点"""
     logger.info("=== 所有专家研判完毕，汇总结果 ===")
 
@@ -222,4 +222,6 @@ def get_comment_node(state: AuditState, config: RunnableConfig) -> List[ReviewCo
             )
             comments.append(comment)
     
+    logger.info(f"✅ 研判结果汇总完毕，共生成 {len(comments)} 条评论。")
+
     return {'final_comment': comments}
