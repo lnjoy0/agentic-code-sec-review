@@ -166,3 +166,15 @@ class Config:
             llm = llm_config,
             retrieval = code_retrieval_config
         )
+    
+def get_model_bound_tools(self, config: LLMConfig, tools: List, expert_name: str):
+    model = ChatOpenAI(
+        model=config.model_name,
+        openai_api_base=config.base_url,
+        openai_api_key=config.api_key,
+        temperature=config.Role[expert_name].temperature,
+        top_p=config.Role[expert_name].top_p,
+        max_retries=3,
+        seed=42
+    )
+    return model.bind_tools(tools)

@@ -2,14 +2,12 @@ import logging
 import asyncio
 from langchain_core.runnables import RunnableConfig
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 from typing import Dict, Any, List
 
 from sec_reviewer.scanners.heuristic_scanner import HeuristicScanner
 from sec_reviewer.scanners.semantic_scanner import LLMSemanticScanner
-from sec_reviewer.core.data_models import AuditState, ReviewComment
-from sec_reviewer.core.config import LLMConfig
-from sec_reviewer.core.data_models import LLMRouteDecision, RouteTask
+from sec_reviewer.core.expert_agents import get_model_bound_tools
+from sec_reviewer.core.data_models import LLMRouteDecision, RouteTask, AuditState, ReviewComment, LLMScanReport
 from sec_reviewer.knowledge_base.sys_prompts import ROUTER_PROMPT
 from sec_reviewer.knowledge_base.cwe_category import (INJECTION_CWES, LOGIC_IDENTITY_CWES,
                                                       DATA_ASSET_CWES, INFRA_SUPPLY_CWES)
@@ -17,20 +15,6 @@ from sec_reviewer.knowledge_base.cwe_category import (INJECTION_CWES, LOGIC_IDEN
 
 logger = logging.getLogger(__name__)
 
-
-def get_model(config: LLMConfig, role_name: str, max_tokens: int = None):
-    model = ChatOpenAI(
-        model=config.model_name,
-        base_url=config.base_url,
-        api_key=config.api_key,
-        temperature=config.Role[role_name].temperature,
-        top_p=config.Role[role_name].top_p,
-        max_retries=3,
-        max_tokens=max_tokens,
-        request_timeout=30.0,
-        seed=42
-    )
-    return model
 
 async def heuristic_scanner_node(state: AuditState, config: RunnableConfig) -> Dict[str, Any]:
     """启发式工具扫描器节点"""
@@ -53,7 +37,7 @@ async def semantic_scanner_node(state: AuditState, config: RunnableConfig) -> Di
     llm_config = config['configurable'].get('llm_config')
     patched_files = state['patched_files']
 
-    scanner_llm = get_model(llm_config, role_name="Scanner")
+    scanner_llm = get_model_bound_tools(llm_config, role_name="Scanner", tools=[LLMScanReport])
     semantic_scanner = LLMSemanticScanner(scanner_config, scanner_llm)
     semantic_report = await semantic_scanner.get_report(patched_files)
 
@@ -78,8 +62,8 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
     max_turns = config['configurable'].get('agent_config').max_turns
     llm_config = config['configurable'].get('llm_config')
 
-    router_llm = get_model(llm_config, role_name="Router", max_tokens=500) # router 正常输出只有专家名和简短原因，加上 max_tokens 以防止无限生成
-    structured_router = router_llm.with_structured_output(LLMRouteDecision)
+    # router 正常输出只有专家名和简短原因，加上 max_tokens 以防止无限生成
+    structured_llm = get_model_bound_tools(llm_config, role_name="Router", tools=[LLMRouteDecision], max_tokens=800)
     
     prompt = ChatPromptTemplate.from_messages([
         ("system", ROUTER_PROMPT),
@@ -134,7 +118,7 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
             else:
                 # 软路由，先将协程任务收集起来，稍后并发执行
                 logger.info(f"  [Soft Route] 准备发起大模型路由分析: issue[{id}]")
-                chain = prompt | structured_router
+                chain = prompt | structured_llm
                 coro = asyncio.wait_for(
                     chain.ainvoke({
                         "issue": issue.model_dump_json(indent=2),

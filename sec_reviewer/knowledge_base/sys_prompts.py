@@ -28,9 +28,8 @@ SCANNER_PROMPT = """# ROLE
 2. 当你发现安全漏洞并输出 JSON 报告时，`start_line` 和 `end_line` 必须严格提取左侧的绝对行号（必须是整数数字）。
 3. 忽略左侧的 `=>` 符号和 `|` 分隔符，不要将它们视为代码语法的一部分。
 
-# OUTPUT STRICTNESS
-你必须严格按照系统要求的 JSON Schema 格式进行输出。
-你的输出必须是一个包含所有发现漏洞的列表（List）。如果在这段增量代码中**没有发现任何安全问题，请直接返回一个空列表 `[]`**，绝对不要为了填充数据而捏造漏洞。
+# STRICT OUTPUT PROTOCOL
+你的输出【必须且只能】是工具调用请求（Tool Call），而且【必须且只能】调用 `LLMScanReport`工具。绝不允许输出任何纯文本解释、Markdown 格式或思考过程。
 """
 
 ROUTER_PROMPT = """# ROLE
@@ -77,6 +76,9 @@ ROUTER_PROMPT = """# ROLE
 - 步骤 2：查看 `rejected_by` 列表，划掉已退回的专家；并查看 `rejection_reason`，理解其为什么退回。
 - 步骤 3：在剩余的专家中，选择最佳匹配者。
 - 步骤 4：如果无合适专家，选择 General_Expert。
+
+# STRICT OUTPUT PROTOCOL
+你的输出【必须且只能】是工具调用请求（Tool Call），而且【必须且只能】调用 `LLMRouteDecision`工具。绝不允许输出任何纯文本解释、Markdown 格式或思考过程。
 """
 
 

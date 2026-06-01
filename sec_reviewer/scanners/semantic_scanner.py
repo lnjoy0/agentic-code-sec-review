@@ -1,15 +1,14 @@
-from typing import List, Dict, Set, Tuple, Optional
+from typing import List, Dict, Set, Tuple, Optional, Any
 from unidiff import PatchedFile
 from pathlib import Path
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableSerializable
-from langchain_openai import ChatOpenAI
 import logging
 import asyncio
 import re
 
 from sec_reviewer.core.config import ScannerConfig
-from sec_reviewer.core.data_models import ScannedIssue, LLMScanReport, SnippetRegion
+from sec_reviewer.core.data_models import ScannedIssue, SnippetRegion
 from sec_reviewer.tools.code_retriever import CodeRetriever
 from sec_reviewer.tools.project_analyzer import ProjectAnalyzer
 from sec_reviewer.knowledge_base.sys_prompts import SCANNER_PROMPT
@@ -21,12 +20,11 @@ logger = logging.getLogger(__name__)
 class LLMSemanticScanner:
     """基于大语言模型的语义模式安全扫描器"""
 
-    def __init__(self, scanner_config: ScannerConfig, llm_client: ChatOpenAI):
+    def __init__(self, scanner_config: ScannerConfig, structured_llm: Any):
         self.config = scanner_config
         self.retriever = CodeRetriever(self.config.workspace_dir)
         self.analyzer = ProjectAnalyzer(self.config.workspace_dir)
 
-        structured_llm = llm_client.with_structured_output(LLMScanReport)
         prompt = ChatPromptTemplate.from_messages([
             ("system", SCANNER_PROMPT),
             ("human", "请分析以下增量代码是否引入了漏洞:\n{full_context}")

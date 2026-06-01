@@ -17,8 +17,27 @@ from .data_models import AgentState, ExpertAuditResult, Rejection, IssueAuditRes
 from .config import LLMConfig
 
 
-
 logger = logging.getLogger(__name__)
+
+
+def get_model_bound_tools(
+    config: LLMConfig, 
+    role_name: str, 
+    tools: List, 
+    max_tokens: int = None
+):
+    model = ChatOpenAI(
+        model=config.model_name,
+        base_url=config.base_url,
+        api_key=config.api_key,
+        temperature=config.Role[role_name].temperature,
+        top_p=config.Role[role_name].top_p,
+        max_retries=3,
+        max_tokens=max_tokens,
+        timeout=30.0,
+        seed=42
+    )
+    return model.bind_tools(tools)
 
 
 class AgentError(Exception):
@@ -35,18 +54,6 @@ class BaseExpertAgent():
         self.tools = tools or []
         self.tools_by_name = {tool.name: tool for tool in self.tools 
                               if tool not in (ExpertAuditResult, Rejection)}
-        
-    def _get_model_bound_tools(self, config: LLMConfig, tools: List, expert_name: str):
-        model = ChatOpenAI(
-            model=config.model_name,
-            openai_api_base=config.base_url,
-            openai_api_key=config.api_key,
-            temperature=config.Role[expert_name].temperature,
-            top_p=config.Role[expert_name].top_p,
-            max_retries=3,
-            seed=42
-        )
-        return model.bind_tools(tools)
 
     async def _reasoning_node(self, state: AgentState, config: RunnableConfig):
         """核心推理节点：LLM 观察当前状态并决定下一步动作"""
@@ -89,10 +96,10 @@ class BaseExpertAgent():
 
         # 获取绑定了工具的 LLM 实例
         llm_config = config['configurable'].get('llm_config')
-        model_with_tools = self._get_model_bound_tools(
+        model_with_tools = get_model_bound_tools(
             config=llm_config,
             tools=self.tools,
-            expert_name=self.expert_name
+            role_name=self.expert_name
         )
 
         # 调用大模型
