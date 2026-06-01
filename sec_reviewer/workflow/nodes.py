@@ -193,17 +193,17 @@ def get_comment_node(state: AuditState, config: RunnableConfig):
     for result in audit_results:
         if result.details.verdict == "True Positive":
             name = result.details.name
-            severity = result.details.severity
+            severity = result.details.severity.upper()
             confidence = result.details.confidence
             reason = result.details.analysis_reasoning
             remediation = result.details.remediation
 
-            emoji = {"critical": "🚨", "high": "⚠️", "medium": "💡", "low": "ℹ️"}
+            emoji = {"CRITICAL": "🚨", "HIGH": "⚠️", "MEDIUM": "💡", "LOW": "ℹ️"}
             markdown_body = f"""### 🤖 安全漏洞审查: {name}
 
 | 属性 | 详情 |
 | :--- | :--- |
-| **严重程度** | {emoji[severity.lower()]} `{severity.upper()}` |
+| **严重程度** | {emoji[severity]} `{severity}` |
 | **置信度** | 🎯 `{confidence * 100:.1f}%` |
 
 #### 🔍 研判分析
@@ -222,6 +222,9 @@ def get_comment_node(state: AuditState, config: RunnableConfig):
             )
             comments.append(comment)
     
+    severity_order = {"critical": 1, "high": 2, "medium": 3, "low": 4}
+    comments.sort(key=lambda x: severity_order.get(x.severity, 99))
+
     logger.info(f"✅ 研判结果汇总完毕，共生成 {len(comments)} 条评论。")
 
     return {'final_comment': comments}

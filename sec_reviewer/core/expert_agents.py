@@ -198,7 +198,7 @@ class BaseExpertAgent():
 
     def _format_output_node(self, state: AgentState):
         """格式化节点：提取 LLM 的最终研判结论并进行 Pydantic 强校验"""
-        logger.info(f"[{self.expert_name}]-[issue({state['issue'].id})] ⚖️ 准备校验并格式化输出结果...")
+        logger.info(f"[{self.expert_name}]-[issue({issue.id})] ⚖️ 准备校验并格式化输出结果...")
         last_message = state["messages"][-1]
         issue = state['issue']
         
@@ -220,13 +220,13 @@ class BaseExpertAgent():
                         end_line=issue.snippet_region.end_line,
                         details=audit_data
                     )
-
-                    logger.info(f"[{self.expert_name}]-[issue({state['issue'].id})] ✅ 结果校验通过，研判完成。")
+                    logger.info(f"[{self.expert_name}]-[issue({issue.id})] 审计结果：{str(audit_data)}")
+                    logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 结果校验通过，研判完成。")
                     return {"audit_results": [audit_result]}
 
                 except ValidationError as e:
                     error_str = str(e)
-                    logger.warning(f"[{self.expert_name}]-[issue({state['issue'].id})] ❌ ExpertAuditResult 数据校验失败，打回重做: \n{error_str}")
+                    logger.warning(f"[{self.expert_name}]-[issue({issue.id})] ❌ ExpertAuditResult 数据校验失败，打回重做: \n{error_str}")
 
                     # 构造一个 ToolMessage，将报错扔回给大模型
                     error_msg = ToolMessage(
