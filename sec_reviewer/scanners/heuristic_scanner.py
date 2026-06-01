@@ -19,6 +19,7 @@ class HeuristicScanner:
 
     def __init__(self, scanner_config: ScannerConfig, retrieval_config: CodeRetrievalConfig):
         self.scanner_config = scanner_config
+        self.retrieval_max_lines = int(retrieval_config.context_max_lines)
     
     async def get_report(self, patched_files: List[PatchedFile]) -> Dict[str, List[ScannedIssue]]:
         """获取传统工具的扫描报告"""
@@ -288,7 +289,7 @@ class HeuristicScanner:
                 message = message + '\n' + cve_details
 
             try: 
-                analyzer = ProjectAnalyzer(self.scanner_config.workspace_dir)
+                analyzer = ProjectAnalyzer(self.scanner_config.workspace_dir, self.retrieval_max_lines)
                 snippet_text = await analyzer.core_get_file_snippet(
                         file_path=path,
                         start_point=(snippet_region["start_line"], snippet_region["start_column"]),
@@ -296,7 +297,7 @@ class HeuristicScanner:
                     )
                 
                 if Path(path).suffix == '.py':
-                    retriever = CodeRetriever(self.scanner_config.workspace_dir)
+                    retriever = CodeRetriever(self.scanner_config.workspace_dir, self.retrieval_max_lines)
                     context, _ = await retriever.core_get_code_context(
                         file_path=path,
                         start_point=(snippet_region["start_line"], snippet_region["start_column"]),

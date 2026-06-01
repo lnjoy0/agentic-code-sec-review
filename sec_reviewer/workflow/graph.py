@@ -51,11 +51,11 @@ def check_rejection_edge(state: AuditState) -> Literal["dynamic_router", "__end_
 def create_graph():
     """代码安全审计工作流主图"""
     repo_path = os.getenv("GITHUB_WORKSPACE", ".")
-    retrieval_max_lines = os.getenv("RETRIEVAL_CONTEXT_MAX_LINES", "200")
+    retrieval_max_lines = int(os.getenv("RETRIEVAL_CONTEXT_MAX_LINES", "200"))
     
     # 实例化工具类
-    retriever = CodeRetriever(repo_path, int(retrieval_max_lines))
-    analyzer = ProjectAnalyzer(repo_path, int(retrieval_max_lines))
+    retriever = CodeRetriever(repo_path, retrieval_max_lines)
+    analyzer = ProjectAnalyzer(repo_path, retrieval_max_lines)
     knowledge_base = VulnKnowledgeBase()
     
     general_tools = [*retriever.as_tools(), *analyzer.as_tools()]

@@ -54,7 +54,8 @@ class CodeSecReviewer:
             workflow_config = {'configurable': {
                 'scanner_config': self.config.scanner,
                 'llm_config': self.config.llm,
-                'agent_config': self.config.agent
+                'agent_config': self.config.agent,
+                'retrieval_config': self.config.retrieval
             }}
 
             # 启动多智能体工作流，得到最终评论

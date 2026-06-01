@@ -35,10 +35,11 @@ async def semantic_scanner_node(state: AuditState, config: RunnableConfig) -> Di
 
     scanner_config = config['configurable'].get('scanner_config')
     llm_config = config['configurable'].get('llm_config')
+    retrieval_config = config['configurable'].get('retrieval_config')
     patched_files = state['patched_files']
 
     scanner_llm = get_model_bound_tools(llm_config, role_name="Scanner", tools=[LLMScanReport])
-    semantic_scanner = LLMSemanticScanner(scanner_config, scanner_llm)
+    semantic_scanner = LLMSemanticScanner(scanner_config, retrieval_config, scanner_llm)
     semantic_report = await semantic_scanner.get_report(patched_files)
 
     return {'scanner_reports': semantic_report}

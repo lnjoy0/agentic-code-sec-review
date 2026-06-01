@@ -6,7 +6,7 @@ from langchain_core.runnables import RunnableSerializable
 import logging
 import asyncio
 
-from sec_reviewer.core.config import ScannerConfig
+from sec_reviewer.core.config import ScannerConfig, CodeRetrievalConfig
 from sec_reviewer.core.data_models import ScannedIssue, SnippetRegion, LLMScanReport
 from sec_reviewer.tools.code_retriever import CodeRetriever
 from sec_reviewer.tools.project_analyzer import ProjectAnalyzer
@@ -19,10 +19,16 @@ logger = logging.getLogger(__name__)
 class LLMSemanticScanner:
     """基于大语言模型的语义模式安全扫描器"""
 
-    def __init__(self, scanner_config: ScannerConfig, structured_llm: Any):
+    def __init__(
+        self, 
+        scanner_config: ScannerConfig, 
+        retrieval_config: CodeRetrievalConfig, 
+        structured_llm: Any
+    ):
         self.config = scanner_config
-        self.retriever = CodeRetriever(self.config.workspace_dir)
-        self.analyzer = ProjectAnalyzer(self.config.workspace_dir)
+        retrieval_max_lines = int(retrieval_config.context_max_lines)
+        self.retriever = CodeRetriever(self.config.workspace_dir, retrieval_max_lines)
+        self.analyzer = ProjectAnalyzer(self.config.workspace_dir, retrieval_max_lines)
 
         prompt = ChatPromptTemplate.from_messages([
             ("system", SCANNER_PROMPT),

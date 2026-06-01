@@ -78,6 +78,7 @@ class Config:
     scanner: ScannerConfig
     llm: LLMConfig
     agent: AgentConfig
+    retrieval: CodeRetrievalConfig
 
     @classmethod
     def from_environment(cls) -> 'Config':
@@ -149,6 +150,10 @@ class Config:
                 max_turns=os.environ.get("AGENT_MAX_TURNS", "20")
             )
 
+            # Code retriever configuration
+            code_retrieval_config = CodeRetrievalConfig(
+                context_max_lines=os.environ.get("RETRIEVAL_CONTEXT_MAX_LINES", "200")
+            )
         except ValidationError as e:
             logger.error(f"参数错误：{e}")
             raise
@@ -158,5 +163,6 @@ class Config:
             logging = logging_config,
             scanner = scanner_config,
             agent = agent_config,
-            llm = llm_config
+            llm = llm_config,
+            retrieval = code_retrieval_config
         )
