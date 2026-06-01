@@ -146,12 +146,19 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
                 logger.error(f"  [Soft Route] LLM 路由失败，issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) 被分配给通用专家。错误: {result}")
                 logger.error(task['issue'])
             else:
-                expert_name = result.expert_name
-                if expert_name in task["rejected_by"]:
-                    logger.error(f"  [Soft Route] LLM 决策失败，专家 {expert_name} 已在退回记录中，issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) 降级为通用专家。")
-                    expert_name = "General_Expert"
+                tool_name = result.tool_calls[0]['name']
+                tool_args = result.tool_calls[0]['args']
+
+                if tool_name != "LLMRouteDecision":
+                    logger.error(f"  [Soft Route] LLM 路由失败，issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) 被分配给通用专家。错误: LLM 的输出未调用 LLMRouteDecision 工具，输出内容为 {str(result)}")
                 else:
-                    logger.info(f"  [Soft Route] LLM 决策: issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) -> {expert_name} (原因: {result.reason})")
+                    decision = LLMRouteDecision(**tool_args)
+                    expert_name = decision.expert_name
+                    if expert_name in task["rejected_by"]:
+                        logger.error(f"  [Soft Route] LLM 决策失败，专家 {expert_name} 已在退回记录中，issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) 降级为通用专家。")
+                        expert_name = "General_Expert"
+                    else:
+                        logger.info(f"  [Soft Route] LLM 决策: issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) -> {expert_name} (原因: {decision.reason})")
             
             routing_decisions.append(_build_task(expert_name, task["issue"], max_turns, rejection_history))
 

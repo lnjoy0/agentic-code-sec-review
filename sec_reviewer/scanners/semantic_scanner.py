@@ -223,9 +223,19 @@ class LLMSemanticScanner:
         async with semaphore:
             try:
                 report = await chain.ainvoke({"full_context": hunk_context})
+                
+                tool_name = report.tool_calls[0]['name']
+                tool_args = report.tool_calls[0]['args']
+
+                if tool_name != "LLMScanReport":
+                    logger.error(f"文件 {file_path} 的代码块分析失败，LLM 的输出未调用 LLMScanReport 工具")
+                    return None, hunk_context
+                
+                report = LLMScanReport(**tool_args)
+
                 return report, hunk_context
             except Exception as e:
-                logger.error(f"文件 {file_path} 的 Hunk 分析或 Pydantic 结构校验失败：{e}")
+                logger.error(f"文件 {file_path} 的代码块分析或 Pydantic 结构校验失败：{e}")
                 return None, hunk_context
 
     def _get_added_lines(self, patched_file: PatchedFile) -> Set[int]:
