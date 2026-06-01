@@ -107,55 +107,6 @@ class BaseExpertAgent():
         except Exception as e:
             logger.error(f"LLM 调用出错：{e}。输入消息：{invocation_messages}")
             raise
-
-        # 拦截并手动解析 vLLM 没能识别的自定义 XML 格式
-        if not response.tool_calls and response.content and "<tool_call>" in response.content:
-            logger.info(f"[{self.expert_name}]-[issue({state['issue'].id})] 检测到未解析的 XML Tool Call，开始手动提取...")
-            
-            parsed_tool_calls = []
-            seen_calls = set() # 工具调用去重
-
-            # 正则匹配 function name
-            function_blocks = re.finditer(r"<function=([^>]+)>(.*?)</function>", response.content, re.DOTALL)
-            for block in function_blocks:
-                func_name = block.group(1).strip()
-                func_body = block.group(2)
-                args = {}
-                
-                # 正则匹配 parameters
-                param_matches = re.finditer(r"<parameter=([^>]+)>(.*?)</parameter>", func_body, re.DOTALL)
-                for p in param_matches:
-                    param_name = p.group(1).strip()
-                    param_value = p.group(2).strip()
-                    
-                    # 将类似字典或列表的结构尝试 JSON 解析
-                    if (param_value.startswith('{') and param_value.endswith('}')) or \
-                       (param_value.startswith('[') and param_value.endswith(']')):
-                        try:
-                            param_value = json.loads(param_value)
-                        except json.JSONDecodeError:
-                            logger.debug(f"[{self.expert_name}]-[issue({state['issue'].id})] 工具 {param_name} 的参数 JSON 解析失败，保持普通字符串: {param_value}")
-                    
-                    args[param_name] = param_value
-
-                # 过滤重复的工具调用请求
-                call_signature = f"{func_name}_{json.dumps(args, sort_keys=True)}"
-                if call_signature in seen_calls:
-                    logger.debug(f"[{self.expert_name}]-[issue({state['issue'].id})] 忽略同一轮次内重复的 Tool Call: {call_signature}")
-                    continue
-                seen_calls.add(call_signature)
-
-                parsed_tool_calls.append({
-                    "name": func_name,
-                    "args": args,
-                    "id": f"call_{uuid.uuid4().hex[:8]}"
-                })
-                logger.info(f"[{self.expert_name}]-[issue({state['issue'].id})] 成功解析 Tool Call: {func_name}, 参数: {args}")
-
-            # 将解析到的工具列表注入回 response，并替换掉 content 中的原始 XML 文本
-            if parsed_tool_calls:
-                response.tool_calls = parsed_tool_calls
-                response.content = "I have invoked the necessary tools to continue my analysis."
             
         # 将 LLM 的回复加入状态
         state_update_messages.append(response)

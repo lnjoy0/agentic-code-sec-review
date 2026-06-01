@@ -13,8 +13,10 @@ logger = logging.getLogger(__name__)
 class ProjectAnalyzer:
     """提供项目与文件分析工具"""
     
-    def __init__(self, repo_path: str):
+    def __init__(self, repo_path: str, max_lines: int):
         self.repo_path = Path(repo_path).resolve()
+        self.config_max_lines = max_lines
+
         if not self.repo_path.exists():
             raise ValueError(f"仓库路径不存在: {self.repo_path}")
         if not self.repo_path.is_dir():
@@ -262,7 +264,6 @@ class ProjectAnalyzer:
         file_path: str, 
         start_line: int = 1,
         max_lines: int = 200,
-        config: Annotated[RunnableConfig, InjectedToolArg] = None
     ) -> str:
         """
         精准读取指定非代码文件内容的工具（支持分页读取）。
@@ -285,8 +286,7 @@ class ProjectAnalyzer:
         if start_line > total_lines:
             return f"❌ 错误: 请求的起始行号 ({start_line}) 已超出文件总行数 ({total_lines})。"
 
-        config_max_lines = config['configurable'].get('retrieval_config').context_max_lines
-        max_lines = max(0, min(max_lines, config_max_lines))
+        max_lines = max(0, min(max_lines, self.config_max_lines))
 
         # 计算切片边界
         idx_start = start_line - 1 # 转为 0-indexed
@@ -442,7 +442,6 @@ class ProjectAnalyzer:
         file_path: str, 
         target_line: int, 
         context_lines: int = 20,
-        config: Annotated[RunnableConfig, InjectedToolArg] = None
     ) -> str:
         """
         非代码文件局部上下文提取工具。
@@ -457,8 +456,7 @@ class ProjectAnalyzer:
         Returns:
             str: 附带行号及目标行指示符 (`=>`) 的 Markdown 代码块片段。
         """
-        config_max_lines = config['configurable'].get('retrieval_config').context_max_lines
-        context_lines = max(0, min(context_lines, config_max_lines))
+        context_lines = max(0, min(context_lines, self.config_max_lines))
 
         try:
             context, _ = await self.core_get_file_context(file_path, target_line, context_lines)

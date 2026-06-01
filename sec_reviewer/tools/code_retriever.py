@@ -15,13 +15,14 @@ logger = logging.getLogger(__name__)
 class CodeRetriever:
     """使用 ripgrep 和 tree-sitter 实现的代码检索器"""
     
-    def __init__(self, repo_path: str):
+    def __init__(self, repo_path: str, max_lines: int):
         self.repo_path = Path(repo_path).resolve() # 工作区的绝对路径
         if not self.repo_path.exists():
             raise ValueError(f"仓库路径不存在: {self.repo_path}")
         if not self.repo_path.is_dir():
             raise ValueError(f"Error: 路径 {self.repo_path} 不是一个目录。")
-            
+        
+        self.config_max_lines = max_lines
         self.language = Language(tspython.language())
         self.parser = Parser(self.language)
 
@@ -116,7 +117,6 @@ class CodeRetriever:
         self, 
         target_name: str, 
         max_lines: int = 200,
-        config: Annotated[RunnableConfig, InjectedToolArg] = None
     ) -> str:
         """
         基于 AST 全局检索目标类 (Class) 或函数 (Function) 的源代码定义。
@@ -141,8 +141,7 @@ class CodeRetriever:
         if not nodes_info:
             return f"📄 未找到 `{target_name}` 的任何定义。"
 
-        config_max_lines = config['configurable'].get('retrieval_config').context_max_lines
-        max_lines = max(0, min(max_lines, config_max_lines))
+        max_lines = max(0, min(max_lines, self.config_max_lines))
 
         # 计算动态行数限制
         n_defs = len(nodes_info)
@@ -204,7 +203,6 @@ class CodeRetriever:
         file_path: str, 
         start_line: int,
         max_lines: int = 200,
-        config: Annotated[RunnableConfig, InjectedToolArg] = None
     ) -> str:
         """
         分页拉取长函数或类定义的后续代码片段。
@@ -239,8 +237,7 @@ class CodeRetriever:
 
         def_end_line = target_info['extract_node'].end_point[0] + 1
 
-        config_max_lines = config['configurable'].get('retrieval_config').context_max_lines
-        max_lines = max(0, min(max_lines, config_max_lines))
+        max_lines = max(0, min(max_lines, self.config_max_lines))
 
         idx_start = start_line - 1
         idx_end = min(idx_start + max_lines, def_end_line) # 到定义结束或者再次达到行数限制
@@ -599,7 +596,7 @@ class CodeRetriever:
         # 排版拼接
         output_lines = [
             f"### 🔍 数据流追踪: `{target_variable}` in `{file_path}`",
-            f"> **总计引用**: {len(all_records)} 处",
+            f"> **从第 {start_line} 行开始的引用数量**: {len(filtered_records)}",
             "---"
         ]
         
@@ -856,7 +853,6 @@ class CodeRetriever:
         file_path: str,
         target_line: int,
         max_lines: int = 200,
-        config: Annotated[RunnableConfig, InjectedToolArg] = None
     ) -> str:
         """
         基于 AST 智能提取指定代码行所在的完整逻辑块（函数或类）上下文。
@@ -871,8 +867,7 @@ class CodeRetriever:
         Returns:
             str: 带有行号标注的 Markdown 代码块。
         """
-        config_max_lines = config['configurable'].get('retrieval_config').context_max_lines
-        max_lines = max(0, min(max_lines, config_max_lines))
+        max_lines = max(0, min(max_lines, self.config_max_lines))
 
         try:
             context, _, = await self.core_get_code_context(

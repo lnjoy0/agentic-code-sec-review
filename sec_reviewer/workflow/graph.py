@@ -51,13 +51,14 @@ def check_rejection_edge(state: AuditState) -> Literal["dynamic_router", "__end_
 def create_graph():
     """代码安全审计工作流主图"""
     repo_path = os.getenv("GITHUB_WORKSPACE", ".")
-
+    retrieval_max_lines = os.getenv("RETRIEVAL_CONTEXT_MAX_LINES", "200")
+    
     # 实例化工具类
-    code_retriever = CodeRetriever(repo_path)
-    analyzer = ProjectAnalyzer(repo_path)
+    retriever = CodeRetriever(repo_path, int(retrieval_max_lines))
+    analyzer = ProjectAnalyzer(repo_path, int(retrieval_max_lines))
     knowledge_base = VulnKnowledgeBase()
     
-    general_tools = [*code_retriever.as_tools(), *analyzer.as_tools()]
+    general_tools = [*retriever.as_tools(), *analyzer.as_tools()]
     injection_knowledge = knowledge_base.create_expert_tool('Injection_Expert')
     data_knowledge = knowledge_base.create_expert_tool('Data_Asset_Expert')
     infra_knowledge = knowledge_base.create_expert_tool('Infra_Supply_Expert')
