@@ -203,7 +203,7 @@ def get_comment_node(state: AuditState, config: RunnableConfig):
 
 | 属性 | 详情 |
 | :--- | :--- |
-| **严重程度** | {emoji[severity]} `{severity.upper()}` |
+| **严重程度** | {emoji[severity.lower()]} `{severity.upper()}` |
 | **置信度** | 🎯 `{confidence * 100:.1f}%` |
 
 #### 🔍 研判分析
