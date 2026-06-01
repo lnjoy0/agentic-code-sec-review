@@ -34,7 +34,6 @@ def get_model_bound_tools(
         top_p=config.Role[role_name].top_p,
         max_retries=3,
         max_tokens=max_tokens,
-        timeout=30.0,
         seed=42
     )
     return model.bind_tools(tools)
@@ -217,8 +216,10 @@ class BaseExpertAgent():
                         result = await tool_instance.ainvoke(tool_args, config=config)
                         
                 except Exception as e:
+                    logger.error(f"工具 {tool_name} 参数 {tool_args} 执行出错: {str(e)}")
                     result = f"工具执行出错: {str(e)}"
             else:
+                logger.warning(f"专家 {self.expert_name} 查询工具 {tool_name}，但该工具不存在")
                 result = f"未找到名为 {tool_name} 的工具"
             
             tool_outputs.append(ToolMessage(

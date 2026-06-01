@@ -124,8 +124,11 @@ INJECTION_EXPERT_PROMPT = """# ROLE
    - 一旦调用 `ExpertAuditResult`，即代表你的本次研判任务结束。
 
 # TASK REJECTION
-前置 Router 节点在分配任务时可能发生错误。如果你通过初步阅读漏洞描述和代码片段，发现该漏洞与你的专业领域完全无关，你【必须拒绝】强行研判，并将任务退回。
+前置 Router 节点在分配任务时可能发生错误。如果你通过初步阅读漏洞描述和代码片段，发现该漏洞与你的专业领域完全无关，你可以拒绝强行研判，并将任务退回。
 - 退回任务方法：当你认定任务错配时，必须且只能调用 `Rejection` 工具，并按要求提供 reject_reason 参数。
+- 判断是否需要退回：
+   - 【注意】只有你认为依靠自己可以查询的漏洞知识文档，不足以对这个漏洞做出最终判定结果（判定为误报或真实漏洞）时，才能退回该漏洞。如果已经得出研判结果，请调用 `ExpertAuditResult` 工具进行输出。
+   - 【可分配的专家类型】Router 可分配的专家类型包括 (Injection_Expert, Data_Asset_Expert, Infra_Supply_Expert, Logic_Identity_Expert, General_Expert)。如果这些专家类型中，你是最合适的专家，那么就不应该退回漏洞。
 """
 
 

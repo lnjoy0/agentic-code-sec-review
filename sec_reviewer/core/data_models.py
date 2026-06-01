@@ -122,7 +122,6 @@ class RouteTask(TypedDict):
 class Rejection(BaseModel):
     """
     【拒绝处理该漏洞】当你认为分配给你的漏洞不属于你的职能范围，应该由其他专家处理时，调用此工具将任务退回给 Router。
-    【可分配的专家类型】Router 可分配的专家类型包括 (Injection_Expert, Data_Asset_Expert, Infra_Supply_Expert, Logic_Identity_Expert, General_Expert)。如果这些专家类型中，你是最合适的专家，那么就不应该调用该工具退回漏洞。
     """
     reject_reason: str = Field(
         ..., 

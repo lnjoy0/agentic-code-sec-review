@@ -117,7 +117,7 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
                 routing_decisions.append(_build_task(expert_name, issue, max_turns, rejection_history))
             else:
                 # 软路由，先将协程任务收集起来，稍后并发执行
-                logger.info(f"  [Soft Route] 准备发起大模型路由分析: issue[{id}]")
+                logger.info(f"  [Soft Route] 准备发起大模型路由分析: issue[{id}] ({issue.name or issue.cwe})")
                 chain = prompt | structured_llm
                 coro = asyncio.wait_for(
                     chain.ainvoke({
@@ -125,7 +125,7 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
                         "rejected_by": ", ".join(rejected_by),
                         "rejection_reason": rejection_reason
                     }), 
-                    timeout=45.0 # 设置超时限制，防止 LLM 持续输出无意义内容
+                    timeout=45.0 # 设置超时限制，防止 Router 持续输出无意义内容
                 )
                 soft_route_tasks.append({
                     "id": id,

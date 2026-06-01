@@ -2,10 +2,10 @@ import logging
 import collections
 import asyncio
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Annotated
 import tree_sitter_python as tspython
 from tree_sitter import Language, Parser, Node
-from langchain_core.tools import StructuredTool
+from langchain_core.tools import StructuredTool, InjectedToolArg
 from langchain_core.runnables import RunnableConfig
 
 
@@ -116,7 +116,7 @@ class CodeRetriever:
         self, 
         target_name: str, 
         max_lines: int = 200,
-        config: RunnableConfig = None
+        config: Annotated[RunnableConfig, InjectedToolArg] = None
     ) -> str:
         """
         基于 AST 全局检索目标类 (Class) 或函数 (Function) 的源代码定义。
@@ -204,7 +204,7 @@ class CodeRetriever:
         file_path: str, 
         start_line: int,
         max_lines: int = 200,
-        config: RunnableConfig = None
+        config: Annotated[RunnableConfig, InjectedToolArg] = None
     ) -> str:
         """
         分页拉取长函数或类定义的后续代码片段。
@@ -856,7 +856,7 @@ class CodeRetriever:
         file_path: str,
         target_line: int,
         max_lines: int = 200,
-        config: RunnableConfig = None
+        config: Annotated[RunnableConfig, InjectedToolArg] = None
     ) -> str:
         """
         基于 AST 智能提取指定代码行所在的完整逻辑块（函数或类）上下文。

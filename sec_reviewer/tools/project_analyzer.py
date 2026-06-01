@@ -2,8 +2,8 @@ import logging
 import collections
 import asyncio
 from pathlib import Path
-from typing import List, Optional, Tuple
-from langchain_core.tools import StructuredTool
+from typing import List, Optional, Tuple, Annotated
+from langchain_core.tools import StructuredTool, InjectedToolArg
 from langchain_core.runnables import RunnableConfig
 
 
@@ -262,7 +262,7 @@ class ProjectAnalyzer:
         file_path: str, 
         start_line: int = 1,
         max_lines: int = 200,
-        config: RunnableConfig = None
+        config: Annotated[RunnableConfig, InjectedToolArg] = None
     ) -> str:
         """
         精准读取指定非代码文件内容的工具（支持分页读取）。
@@ -442,7 +442,7 @@ class ProjectAnalyzer:
         file_path: str, 
         target_line: int, 
         context_lines: int = 20,
-        config: RunnableConfig = None
+        config: Annotated[RunnableConfig, InjectedToolArg] = None
     ) -> str:
         """
         非代码文件局部上下文提取工具。
