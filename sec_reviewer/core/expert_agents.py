@@ -193,12 +193,22 @@ class BaseExpertAgent():
             if tool_name in self.tools_by_name:
                 tool_instance = self.tools_by_name[tool_name]
 
-                if tool_name == "knowledge_retrieval":
-                    tool_args['viewed_docs'] = state.get('viewed_docs', [])
-                    tool_args['new_docs'] = new_docs # 传递引用
-
                 try:
-                    result = await tool_instance.invoke(tool_args, config=config)
+                    # 拦截 knowledge_retrieval 工具，处理去重与状态更新
+                    if tool_name == "knowledge_retrieval":
+                        vuln_name = tool_args.get("vuln_name")
+                        viewed_docs = state.get("viewed_docs", [])
+                        
+                        if vuln_name in viewed_docs:
+                            result = f"📄 您已经查阅过 '{vuln_name}' 的文档，它已在您的上下文中。"
+                        else:
+                            result = await tool_instance.ainvoke(tool_args, config=config)
+                            if not result.startswith("❌"):
+                                new_docs.append(vuln_name)
+                    else:
+                        # 其他正常工具直接调用
+                        result = await tool_instance.ainvoke(tool_args, config=config)
+                        
                 except Exception as e:
                     result = f"工具执行出错: {str(e)}"
             else:

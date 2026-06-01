@@ -49,11 +49,7 @@ class VulnKnowledgeBase:
         supported_vulns_list = list(expert_vulns.keys())
         supported_vulns_str = "\n".join([f"- {vuln}" for vuln in supported_vulns_list])
 
-        def get_vulnerability_playbook(
-            vuln_name: str,
-            viewed_docs: Annotated[list, InjectedToolArg] = None, # 已经看过的文档，用于文档去重
-            new_docs: Annotated[list, InjectedToolArg] = None # 新文档列表的引用，用于传递新看过的文档名称
-        ) -> str:
+        def get_vulnerability_playbook(vuln_name: str) -> str:
             """
             获取目标漏洞的知识文档（包含机制、特征、误报样例、证实标准、证伪标准）。
             
@@ -70,23 +66,13 @@ class VulnKnowledgeBase:
             Returns:
                 str: 目标漏洞的 Markdown 知识文档。
             """
-            viewed_docs = viewed_docs or []
-            
             if vuln_name not in expert_vulns:
                 return f"❌ 错误: 未找到名为 '{vuln_name}' 的漏洞知识。请确保您输入的名字在支持的列表中。"
-                
-            if vuln_name in viewed_docs:
-                return f"📄 您已经查阅过 '{vuln_name}' 的文档，它已在您的上下文中。"
-                
+            
             file_path = expert_vulns[vuln_name]
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     content = frontmatter.load(f).content
-                
-                viewed_docs.append(vuln_name)
-                if new_docs is not None:
-                    new_docs.append(vuln_name) # 用于将新文档名传递给子图状态
-                
                 return (
                     f"### 📚 漏洞研判知识库: {vuln_name}\n"
                     f"---\n\n"
