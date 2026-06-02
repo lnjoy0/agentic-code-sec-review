@@ -265,6 +265,7 @@ def merge_rejection_history(old_hist: Dict, new_hist: Dict) -> Dict:
 class AuditState(TypedDict):
     patched_files: List[PatchedFile]
     scanner_reports: Annotated[Dict[str, List[ScannedIssue]], lambda x, y: {**(x or {}), **(y or {})}] # 合并不同扫描器的报告
+    total_target_issues: int # 记录总的待研判漏洞数量
     routing_decisions: List[RouteTask]
     rejection_history: Annotated[Dict[int, List[RejectionRecord]], merge_rejection_history] # 记录某个漏洞被哪些专家拒绝
     audit_results: Annotated[List[IssueAuditResult], lambda x, y: (x or []) + (y or [])]

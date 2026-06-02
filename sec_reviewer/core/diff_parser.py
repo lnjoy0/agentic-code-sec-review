@@ -5,6 +5,7 @@ Modified from [truongnh1992/gemini-ai-code-reviewer]
 import logging
 from typing import List
 from unidiff import PatchSet, PatchedFile
+from pathlib import Path
 
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,14 @@ class DiffParser:
                 
                 if patched_file.is_binary_file: # 跳过二进制文件
                     logger.debug(f"⚠️ Skipping binary file: {patched_file.path}")
+                    continue
+
+                if patched_file.is_rename: # 跳过重命名文件
+                    logger.debug(f"⚠️ Skipping renamed file: {patched_file.source_file} -> {patched_file.target_file}")
+                    continue
+
+                if Path(patched_file.path).suffix in ['.md', '.doc', '.pdf']:
+                    logger.debug(f"⚠️ Skipping documentation file: {patched_file.path}")
                     continue
                 
                 patched_files.append(patched_file)

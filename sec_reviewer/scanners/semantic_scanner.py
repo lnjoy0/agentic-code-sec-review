@@ -149,7 +149,7 @@ class LLMSemanticScanner:
                 current_chunk_end = node_end
             else:
                 # 判断加入当前节点之后，会不会超过最大行数
-                if (node_end - current_chunk_start) <= max_lines:
+                if (node_end - current_chunk_start + 1) <= max_lines:
                     # 不超过，融合进当前块，更新 end
                     current_chunk_end = node_end
                 else:

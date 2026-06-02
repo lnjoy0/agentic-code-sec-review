@@ -747,19 +747,20 @@ class CodeRetriever:
                         bound_end_row = body_node.end_point[0] + 1
 
                 # 计算滑动窗口的起止索引，签名不参与总长度计算
+                # 如果最大行数超过锚点行数
                 if max_lines > anchor_line_count:
+                    # 从锚点开始拓展上下文行数到 max_lines
                     remaining_line_count = max_lines - anchor_line_count
                     half_before = remaining_line_count // 2
 
-                    # 从锚点开始拓展上下文行数到 max_lines
                     start_row = anchor_node.start_point[0] - half_before
                     end_row = anchor_node.end_point[0] + 1 + (remaining_line_count - half_before) # 开区间坐标
                 else:
+                    # 从目标代码片段开始拓展上下文行数到 max_lines
                     target_line_count = end_point_ts[0] - start_point_ts[0] + 1
-                    remaining_line_count = max(0, max_lines - target_line_count)
+                    remaining_line_count = max(0, max_lines - target_line_count) # 当目标代码片段行数超过 max_lines 时，保持目标代码片段不变
                     half_before = remaining_line_count // 2
 
-                    # 从目标代码片段开始拓展上下文行数到 max_lines
                     start_row = start_point_ts[0] - half_before
                     end_row = end_point_ts[0] + 1 + (remaining_line_count - half_before)
 

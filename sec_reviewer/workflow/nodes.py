@@ -85,79 +85,95 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
     soft_route_tasks = []
     unique_issues = []
     
-    for scanner_name, issues in scanner_reports.items():
+    # 漏洞去重
+    ordered_scanners = sorted(scanner_reports.keys(), key=lambda k: 0 if k.lower() == 'llm' else 1) # 先处理 LLM 扫描器的结果
+    for scanner_name in ordered_scanners:
+        issues = scanner_reports[scanner_name]
         for issue in issues:
-            expert_name = None
             id = issue.id
             is_unique = True
             start_line = issue.snippet_region.start_line
             end_line = issue.snippet_region.end_line
 
-            if id in processed_issue_ids:
-                continue # 已经处理过的漏洞不再路由
-
-            for existing_issue in unique_issues:
+            for _, existing_issue in unique_issues:
                 e_start_line = existing_issue.snippet_region.start_line
                 e_end_line = existing_issue.snippet_region.end_line
                 
                 has_intersection = not (end_line < e_start_line or start_line > e_end_line)
                 if issue.path == existing_issue.path and has_intersection and _is_snippet_similar(issue.snippet_text, existing_issue.snippet_text):
+                    if issue.message not in existing_issue.message:
+                        existing_issue.message += f"\n\n[{scanner_name} 扫描器补充报告]:\n{issue.message}"
+                    
                     logger.info(
                         f"  [Deduplication] 漏洞 issue[{id}] ({issue.name or issue.cwe}) "
-                        f"与之前的漏洞 issue[{existing_issue.id}] ({existing_issue.name or existing_issue.cwe}) 路径相同，代码片段相似。将被视为重复漏洞，不再路由。"
+                        f"与之前的漏洞 issue[{existing_issue.id}] ({existing_issue.name or existing_issue.cwe}) 路径相同，代码片段相似。"
+                        f"将被视为重复漏洞，不再路由，同时将该漏洞的描述信息合并到之前的漏洞中。"
                     )
+
                     is_unique = False
                     break
 
             if is_unique:
-                unique_issues.append(issue)
+                unique_issues.append((scanner_name, issue))
             else:
                 continue # 重复的漏洞不再路由
 
-            rejected_by = []
-            rejection_reason = ""
-            if id in rejection_history:
-                rejection_reason = "\n该漏洞已被以下专家退回，请参考其退回理由进行重新路由：\n"
-                for record in rejection_history[id]:
-                    rejected_by.append(record['expert'])
-                    rejection_reason += f"- 专家 [{record['expert']}]: {record['reason']}\n"
+    # 去重后的待研判漏洞总数
+    total_target_issues = len(unique_issues)
+    
+    # 路由决策
+    for scanner_name, issue in unique_issues:
+        expert_name = None
+        id = issue.id
 
-            # 优先进行硬路由，按照字典规则直接映射到专家节点
-            rule = HARD_ROUTING_RULES.get(scanner_name, None)
-            if isinstance(rule, str):
-                expert_name = rule
-            elif isinstance(rule, dict):
-                cwe = issue.cwe.lower().split(':')[0]
-                for rule_cwe, mapped_expert in rule.items():
-                    if rule_cwe == cwe:
-                        expert_name = mapped_expert
-                        break
+        # 过滤已处理过的漏洞
+        if id in processed_issue_ids:
+            continue
 
-            if expert_name in rejected_by:
-                logger.info(f"  [Hard Route] 漏洞 issue[{id}] ({issue.name or issue.cwe}) 被规则路由到 {expert_name}，但它在历史退回记录中，已被退回过。")
-                expert_name = None
+        rejected_by = []
+        rejection_reason = ""
+        if id in rejection_history:
+            rejection_reason = "\n该漏洞已被以下专家退回，请参考其退回理由进行重新路由：\n"
+            for record in rejection_history[id]:
+                rejected_by.append(record['expert'])
+                rejection_reason += f"- 专家 [{record['expert']}]: {record['reason']}\n"
 
-            if expert_name:
-                logger.info(f"  [Hard Route] 命中字典映射: issue[{id}] ({issue.name or issue.cwe}) -> {expert_name}")
-                routing_decisions.append(_build_task(expert_name, issue, max_turns, rejection_history))
-            else:
-                # 软路由，先将协程任务收集起来，稍后并发执行
-                logger.info(f"  [Soft Route] 准备发起大模型路由分析: issue[{id}] ({issue.name or issue.cwe})")
-                chain = prompt | structured_llm
-                coro = asyncio.wait_for(
-                    chain.ainvoke({
-                        "issue": issue.model_dump_json(indent=2),
-                        "rejected_by": ", ".join(rejected_by),
-                        "rejection_reason": rejection_reason
-                    }), 
-                    timeout=45.0 # 设置超时限制，防止 Router 持续输出无意义内容
-                )
-                soft_route_tasks.append({
-                    "id": id,
-                    "issue": issue,
-                    "coro": coro,
-                    "rejected_by": rejected_by
-                })
+        # 优先进行硬路由，按照字典规则直接映射到专家节点
+        rule = HARD_ROUTING_RULES.get(scanner_name, None)
+        if isinstance(rule, str):
+            expert_name = rule
+        elif isinstance(rule, dict):
+            cwe = issue.cwe.lower().split(':')[0]
+            for rule_cwe, mapped_expert in rule.items():
+                if rule_cwe == cwe:
+                    expert_name = mapped_expert
+                    break
+
+        if expert_name in rejected_by:
+            logger.info(f"  [Hard Route] 漏洞 issue[{id}] ({issue.name or issue.cwe}) 被规则路由到 {expert_name}，但它在历史退回记录中，已被退回。因此进入软路由流程...")
+            expert_name = None
+
+        if expert_name:
+            logger.info(f"  [Hard Route] 命中字典映射: issue[{id}] ({issue.name or issue.cwe}) -> {expert_name}")
+            routing_decisions.append(_build_task(expert_name, issue, max_turns, rejection_history))
+        else:
+            # 软路由，先将协程任务收集起来，稍后并发执行
+            logger.info(f"  [Soft Route] 准备发起大模型路由分析: issue[{id}] ({issue.name or issue.cwe})")
+            chain = prompt | structured_llm
+            coro = asyncio.wait_for(
+                chain.ainvoke({
+                    "issue": issue.model_dump_json(indent=2),
+                    "rejected_by": ", ".join(rejected_by),
+                    "rejection_reason": rejection_reason
+                }), 
+                timeout=45.0 # 设置超时限制，防止 Router 持续输出无意义内容
+            )
+            soft_route_tasks.append({
+                "id": id,
+                "issue": issue,
+                "coro": coro,
+                "rejected_by": rejected_by
+            })
 
     # 并发执行所有软路由请求
     if soft_route_tasks:
@@ -187,7 +203,7 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
             
             routing_decisions.append(_build_task(expert_name, task["issue"], max_turns, rejection_history))
 
-    return {"routing_decisions": routing_decisions}
+    return {"routing_decisions": routing_decisions, "total_target_issues": total_target_issues}
 
 def _build_task(expert_name, issue, max_turns, rejection_history):
     return {

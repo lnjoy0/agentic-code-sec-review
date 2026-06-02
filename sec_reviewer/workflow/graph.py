@@ -32,17 +32,14 @@ def distribute_issues_edge(state: AuditState):
 
 def check_rejection_edge(state: AuditState) -> Literal["dynamic_router", "__end__"]:
     """检查是否存在被退回的漏洞"""
-    scanner_reports = state.get("scanner_reports", {})
+    total_target_issues = state.get("total_target_issues", 0)
     audit_results = state.get("audit_results", [])
-    
-    # 总漏洞数
-    total_issues = sum([len(issues) for issues in scanner_reports.values()])
-    
+        
     # 已经拿到最终研判结果的漏洞数
     finished_issues = len(audit_results)
     
-    if finished_issues < total_issues:
-        logger.info(f"🔄 检测到退回！进度 {finished_issues}/{total_issues}。重定向回 Router...")
+    if finished_issues < total_target_issues:
+        logger.info(f"🔄 检测到退回！进度 {finished_issues}/{total_target_issues}。重定向回 Router...")
         return "dynamic_router"
     
     logger.info("✅ 所有漏洞处理完毕！")

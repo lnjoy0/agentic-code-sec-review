@@ -200,6 +200,60 @@ class BaseExpertAgent():
             "viewed_docs": new_docs
         }
 
+    async def _adversary_node(self, state: AgentState, config: RunnableConfig):
+        """对抗节点：审查专家结论与工具查询证据链"""
+        issue = state["issue"]
+        draft = state.get("draft_result")
+        messages = state.get("messages", [])
+        adversary_turns = state.get("adversary_turns", 2) # 默认允许 2 轮推翻
+        
+        # 将历史的 Tool 调用和对话转化为纯文本，供 Adversary 审查
+        trace_str = "\n".join([f"{m.type}: {m.content}" for m in messages if m.type in ['ai', 'tool']])
+        draft_json = draft.model_dump_json(indent=2)
+        
+        sys_prompt = (
+            "你是一个安全审计对抗专家 (Adversary)。你的目标是挑战主审查专家的结论。\n"
+            "对于研判为真实的漏洞，寻找无法利用的证据；对于研判为误报的漏洞，寻找可以利用的证据。\n"
+            "请仔细检查专家的工具调用记录（证据链）是否完整。如果专家没有查询数据流、没有验证函数定义，或凭空捏造假设，请推翻其结论。"
+        )
+        
+        human_prompt = f"【漏洞扫描报告】\n{issue.model_dump_json(indent=2)}\n\n【专家工具调用记录】\n{trace_str}\n\n【专家初步结论】\n{draft_json}"
+        
+        # 配置对抗模型 (需要你在配置中增加一个 ROLE_ADVERSARY 角色)
+        llm_config = config['configurable'].get('llm_config')
+        model = ChatOpenAI(
+            model=llm_config.model_name,
+            base_url=llm_config.base_url,
+            api_key=llm_config.api_key,
+            temperature=float(os.environ.get("ROLE_ADVERSARY_TEMP", "0.2")), 
+            top_p=float(os.environ.get("ROLE_ADVERSARY_TOP_P", "0.6")),
+        )
+        
+        # 强制模型输出 AdversaryDecision 结构化数据
+        structured_llm = model.with_structured_output(AdversaryDecision)
+        
+        logger.info(f"[Adversary]-[issue({issue.id})] ⚖️ 正在进行对抗性审查...")
+        decision = await structured_llm.ainvoke([
+            SystemMessage(content=sys_prompt),
+            HumanMessage(content=human_prompt)
+        ])
+        
+        if decision.overthrown and adversary_turns > 0:
+            logger.warning(f"[Adversary]-[issue({issue.id})] 🚫 专家结论被推翻！理由：{decision.reason}")
+            # 返回 HumanMessage 刺激原专家重新思考
+            critique_msg = HumanMessage(
+                content=f"【对抗节点驳回】你的结论已被推翻。理由如下：\n{decision.reason}\n请根据上述质疑，重新调用工具完善证据链，或修正你的研判结论。"
+            )
+            return {
+                "messages": [critique_msg], 
+                "adversary_turns": adversary_turns - 1,
+                "draft_result": None # 清空草稿
+            }
+            
+        # 如果无法推翻，或者对抗轮数已耗尽，则漏洞验证通过
+        logger.info(f"[Adversary]-[issue({issue.id})] ✅ 验证通过 (剩余辩论轮数: {adversary_turns})。")
+        return {"audit_results": [draft]} # 正式写入最终结果数组
+
     def _format_output_node(self, state: AgentState):
         """格式化节点：提取 LLM 的最终研判结论并进行 Pydantic 强校验"""
         last_message = state["messages"][-1]
