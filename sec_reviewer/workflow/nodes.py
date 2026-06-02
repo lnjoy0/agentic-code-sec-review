@@ -196,6 +196,7 @@ def get_comment_node(state: AuditState, config: RunnableConfig):
             severity = result.details.severity.upper()
             confidence = result.details.confidence
             reason = result.details.analysis_reasoning
+            defense_checks = result.details.defense_checks
             attack_scenario = result.details.attack_scenario
             remediation = result.details.remediation
 
@@ -209,6 +210,9 @@ def get_comment_node(state: AuditState, config: RunnableConfig):
 
 #### 🔍 研判分析
 {reason}
+
+### 🛡️ 防御检查
+{defense_checks}
 
 #### 🚀 攻击场景
 {attack_scenario}
