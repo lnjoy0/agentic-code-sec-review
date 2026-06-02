@@ -213,6 +213,22 @@ class ExpertAuditResult(BaseModel):
             
         return self
 
+
+class AdversaryDecision(BaseModel):
+    overthrown: Literal["True", "False"] = Field(
+        ...,
+        description=(
+            "是否成功推翻专家的结论。必须是 'True' 或 'False'。\n"
+            "- 如果专家证据链不完整或逻辑错误，设为 True。"
+            "- 如果专家结论合理且证据充分，设为 False。"
+        )
+    )
+    reason: str = Field(
+        ...,
+        description="推翻的详细理由，明确指出缺失的证据或逻辑漏洞；若未推翻，说明同意的理由。"
+    )
+
+
 class IssueAuditResult(BaseModel):
     """每个漏洞的最终审计结果"""
     id: str
@@ -221,6 +237,7 @@ class IssueAuditResult(BaseModel):
     start_line: int
     end_line: int
     details: ExpertAuditResult
+
 
 # 自定义的 Reducer
 def merge_rejection_history(old_hist: Dict, new_hist: Dict) -> Dict:

@@ -95,6 +95,8 @@ class LLMSemanticScanner:
                     seen_scope.add(scope)
                     contexts.append(hunk_context)
 
+        logger.info(f"文件 {file_path} 生成了 {len(contexts)} 个分析上下文，准备调用 LLM 进行扫描。上下文区间包括: {seen_scope}")
+
         if not contexts:
             return []
 

@@ -96,23 +96,21 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
             if id in processed_issue_ids:
                 continue # 已经处理过的漏洞不再路由
 
-            for unique_issue in unique_issues:
-                has_intersection = not (end_line < unique_issue[2][0] or start_line > unique_issue[2][1])
-                if issue.path == unique_issue[1] and has_intersection and _is_snippet_similar(issue.snippet_text, unique_issue[4]):
+            for existing_issue in unique_issues:
+                e_start_line = existing_issue.snippet_region.start_line
+                e_end_line = existing_issue.snippet_region.end_line
+                
+                has_intersection = not (end_line < e_start_line or start_line > e_end_line)
+                if issue.path == existing_issue.path and has_intersection and _is_snippet_similar(issue.snippet_text, existing_issue.snippet_text):
                     logger.info(
-                        f"  [Deduplication] 漏洞 issue[{id}] ({issue.name or issue.cwe}) 与之前的漏洞 issue[{unique_issues[0]}] ({unique_issues[3] or unique_issues[4]}) 路径相同，代码片段相似。将被视为重复漏洞，不再路由。"
+                        f"  [Deduplication] 漏洞 issue[{id}] ({issue.name or issue.cwe}) "
+                        f"与之前的漏洞 issue[{existing_issue.id}] ({existing_issue.name or existing_issue.cwe}) 路径相同，代码片段相似。将被视为重复漏洞，不再路由。"
                     )
                     is_unique = False
                     break
 
             if is_unique:
-                unique_issues.append((
-                    issue.id,
-                    issue.path, 
-                    (start_line, end_line), 
-                    issue.name, 
-                    issue.snippet_text
-                ))
+                unique_issues.append(issue)
             else:
                 continue # 重复的漏洞不再路由
 
