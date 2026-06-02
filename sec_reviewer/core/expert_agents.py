@@ -1,6 +1,4 @@
 import logging
-import re
-import uuid
 import json
 from typing import List, Literal
 from langgraph.graph import StateGraph, START, END
@@ -144,7 +142,7 @@ class BaseExpertAgent():
                 )
             return {"messages": tool_outputs, "remaining_turns": remaining_turns - 1}
             
-        # 遍历 LLM 发出的所有工具调用请求（可能同时调用多个）
+        # 遍历 LLM 发出的所有工具调用请求
         for tool_call in tool_calls_message.tool_calls:
             tool_name = tool_call["name"]
             tool_args = tool_call["args"]

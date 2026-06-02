@@ -1,7 +1,6 @@
 import logging
 import collections
 import asyncio
-import json
 from pathlib import Path
 from typing import List, Optional, Tuple
 from langchain_core.tools import StructuredTool
@@ -471,7 +470,7 @@ class ProjectAnalyzer:
             output_lines.append("\n---")
             output_lines.append(
                 f"💡 **下一步建议**:\n"
-                f"- 若上下文不足，可调大 `context_lines` 参数重新调用此工具（最大支持 {self.max_lines}）。\n"
+                f"- 若上下文不足，可调大 `context_lines` 参数重新调用此工具（最大支持 {self.config_max_lines}）。\n"
                 f"- 若需查阅此文件其他部分，可以：\n"
                 f"  1. 使用 `read_file_content` 工具进行分页通读。\n"
                 f"  2. 再次调用此工具，调整 `target_line` 参数，读取该文件的其他部分"

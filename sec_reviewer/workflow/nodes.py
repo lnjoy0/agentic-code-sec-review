@@ -1,5 +1,7 @@
 import logging
 import asyncio
+import re
+import difflib
 from langchain_core.runnables import RunnableConfig
 from langchain_core.prompts import ChatPromptTemplate
 from typing import Dict, Any, List
@@ -81,14 +83,38 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
     
     routing_decisions: List[RouteTask] = []
     soft_route_tasks = []
+    unique_issues = set()
     
     for scanner_name, issues in scanner_reports.items():
         for issue in issues:
             expert_name = None
             id = issue.id
+            is_unique = True
+            start_line = issue.snippet_region.start_line
+            end_line = issue.snippet_region.end_line
 
             if id in processed_issue_ids:
                 continue # 已经处理过的漏洞不再路由
+
+            for unique_issue in unique_issues:
+                has_intersection = not (end_line < unique_issue[2][0] or start_line > unique_issue[2][1])
+                if issue.path == unique_issue[1] and has_intersection and _is_snippet_similar(issue.snippet_text, unique_issue[4]):
+                    logger.info(
+                        f"  [Deduplication] 漏洞 issue[{id}] ({issue.name or issue.cwe}) 与之前的漏洞 issue[{unique_issues[0]}] ({unique_issues[3] or unique_issues[4]}) 路径相同，代码片段相似。将被视为重复漏洞，不再路由。"
+                    )
+                    is_unique = False
+                    break
+
+            if is_unique:
+                unique_issues.add((
+                    issue.id,
+                    issue.path, 
+                    (start_line, end_line), 
+                    issue.name, 
+                    issue.snippet_text
+                ))
+            else:
+                continue # 重复的漏洞不再路由
 
             rejected_by = []
             rejection_reason = ""
@@ -176,7 +202,28 @@ def _build_task(expert_name, issue, max_turns, rejection_history):
             "rejection_history": rejection_history,
             "audit_results": []
         }
-    }            
+    }
+
+def _normalize_text(text: str) -> str:
+    if not text:
+        return ""
+    # 移除所有空白字符并转小写
+    return re.sub(r'\s+', '', text).lower()
+
+def _is_snippet_similar(snippet1: str, snippet2: str, threshold: float = 0.6) -> bool:
+    norm_1 = _normalize_text(snippet1)
+    norm_2 = _normalize_text(snippet2)
+    
+    if not norm_1 or not norm_2:
+        return False
+        
+    # 如果存在包含关系，直接认定为重复
+    if norm_1 in norm_2 or norm_2 in norm_1:
+        return True
+        
+    # 计算字符串的相似度比率
+    similarity = difflib.SequenceMatcher(None, norm_1, norm_2).ratio()
+    return similarity >= threshold
 
 def aggregate_and_check_node(state: AuditState):
     """该节点仅用来汇聚所有 Agent 子图的执行结果。"""

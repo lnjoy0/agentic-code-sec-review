@@ -1022,7 +1022,7 @@ class CodeRetriever:
             def traverse(node):
                 # 判断节点范围与起止范围是否有交集
                 # 只要不是（节点在区间左侧）也不是（节点在区间右侧），就是有交集
-                has_intersection = (node.end_point[0] >= start_line_ts and node.start_point[0] <= end_line_ts)
+                has_intersection = not (node.end_point[0] < start_line_ts or node.start_point[0] > end_line_ts)
 
                 if has_intersection and node.type in BLOCK_TYPES:
                     scopes_info.append({

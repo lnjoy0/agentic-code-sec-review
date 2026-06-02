@@ -258,7 +258,6 @@ class HeuristicScanner:
 
                 report_cwe = raw_result.get("extra", {}).get("metadata", {}).get("cwe")
                 cwe = report_cwe[0] if isinstance(report_cwe, list) else cwe
-                logger.info(f"Semgrep 报告漏洞：{cwe}")
 
                 snippet_region={
                     "start_line": raw_result.get("start", {}).get("line"),
@@ -270,7 +269,6 @@ class HeuristicScanner:
                 path = raw_result.get("locations")[0].get("physicalLocation", {}).get("artifactLocation", {}).get("uri", "")
                 message = raw_result.get("message", {}).get("text", "")
                 cwe = 'Unknown (Trivy or Gitleaks)'
-                logger.info(f"Trivy or Gitleaks 报告漏洞：{cwe}")
 
                 snippet_region = {
                     "start_line": raw_result.get("locations")[0].get("physicalLocation", {}).get("region", {}).get("startLine"),
@@ -313,13 +311,18 @@ class HeuristicScanner:
                 logger.warning(f"Failed to retrieve code snippet for {tool_name} result at {path}:{snippet_region['start_line']}: {e}")
                 continue
 
-            scan_results.append(ScannedIssue(
+            issue = ScannedIssue(
                 path=path,
                 message=message,
                 cwe=cwe,
                 snippet_region=snippet_region,
                 snippet_text=snippet_text,
                 context=context
-            ))
+            )
+            scan_results.append(issue)
 
-        return scan_results 
+            logger.info(
+                f"Heuristic Scanner 报告漏洞 id: {issue.id}, cwe: {cwe}, path: {path}, snippet region: {snippet_region}, snippet text: {snippet_text}, message: {message}"
+            )
+
+        return scan_results

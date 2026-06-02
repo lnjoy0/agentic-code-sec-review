@@ -189,13 +189,23 @@ class ExpertAuditResult(BaseModel):
 
     @model_validator(mode='after')
     def validate_logic(self) -> 'ExpertAuditResult':
-        # 真实漏洞时必须有修复建议
-        if self.verdict == "True Positive" and not self.remediation.strip():
-            raise ValueError("校验失败：判定为 True Positive 时，必须提供具体的 remediation 修复建议代码。")
+        # 真实漏洞时，必须有防御检查、攻击场景、修复建议
+        if self.verdict == "True Positive":
+            if not self.defense_checks.strip():
+                raise ValueError("校验失败：判定为 True Positive 时，必须提供具体的 defense_checks 防御检查。")
+            if not self.attack_scenario.strip():
+                raise ValueError("校验失败：判定为 True Positive 时，必须提供具体的 attack_scenario 攻击场景。")
+            if not self.remediation.strip():
+                raise ValueError("校验失败：判定为 True Positive 时，必须提供具体的 remediation 修复建议。")
         
-        # 确保误报时没有修复建议
-        if self.verdict == "False Positive" and self.remediation.strip():
-            self.remediation = "" 
+        # 误报时，这些字段必须为空
+        if self.verdict == "False Positive":
+            if self.defense_checks.strip():
+                self.defense_checks = ""
+            if self.attack_scenario.strip():
+                self.attack_scenario = ""
+            if self.remediation.strip():
+                self.remediation = ""
 
         # 确保真实漏洞的严重性不能为 none
         if self.verdict == "True Positive" and self.severity == "none":
