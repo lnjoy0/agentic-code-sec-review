@@ -459,7 +459,12 @@ class ProjectAnalyzer:
         context_lines = max(0, min(context_lines, self.config_max_lines))
 
         try:
-            context, _ = await self.core_get_file_context(file_path, target_line, context_lines)
+            context, _ = await self.core_get_file_context(
+                file_path=file_path,
+                start_line=target_line,
+                end_line=target_line,
+                context_lines=context_lines
+            )
 
             # 底部操作指引
             output_lines = [context]

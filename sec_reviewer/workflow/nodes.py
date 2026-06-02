@@ -211,7 +211,7 @@ def get_comment_node(state: AuditState, config: RunnableConfig):
 #### 🔍 研判分析
 {reason}
 
-### 🛡️ 防御检查
+#### 🛡️ 防御检查
 {defense_checks}
 
 #### 🚀 攻击场景

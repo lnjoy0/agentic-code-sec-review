@@ -118,6 +118,7 @@ class BaseExpertAgent():
         remaining_turns = state.get('remaining_turns')
         tool_outputs = []
         new_docs = [] # 用于接收新查询到的文档名称
+        refusal_msg = []
 
         if remaining_turns <= -3:
             logger.error(
@@ -127,8 +128,13 @@ class BaseExpertAgent():
             raise AgentError(f"{self.expert_name}故障，行动轮数耗尽，且 LLM 仍然连续三轮没有输出结果")
         elif remaining_turns <= 0:
             logger.warning(f"[{self.expert_name}]-[issue({state['issue'].id})] 🚫 拦截工具调用：行动轮数已耗尽。")
+            refusal_msg = "工具调用失败: 行动轮数已全部用尽，你当前只能调用 ExpertAuditResult 工具"
+        
+        if len(tool_calls_message.tool_calls) > 2:
+            refusal_msg = "工具调用失败: 一轮行动最多只能调用两个工具"
+
+        if refusal_msg:
             for tool_call in tool_calls_message.tool_calls:
-                refusal_msg = "工具调用失败: 行动轮数已全部用尽，你当前只能调用 ExpertAuditResult 工具"
                 tool_outputs.append(
                     ToolMessage(
                         content=refusal_msg, 
@@ -137,7 +143,7 @@ class BaseExpertAgent():
                     )
                 )
             return {"messages": tool_outputs, "remaining_turns": remaining_turns - 1}
-
+            
         # 遍历 LLM 发出的所有工具调用请求（可能同时调用多个）
         for tool_call in tool_calls_message.tool_calls:
             tool_name = tool_call["name"]
