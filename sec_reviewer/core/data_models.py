@@ -261,4 +261,6 @@ class AgentState(TypedDict):
     remaining_turns: int
     viewed_docs: Annotated[List[str], lambda x, y: list({*(x or []), *(y or [])})]
     rejection_history: Annotated[Dict[int, List[RejectionRecord]], merge_rejection_history]
+    draft_result: IssueAuditResult # 存放专家初步得出的结论草稿，等待对抗节点审查
+    adversary_turns: int # 控制对抗辩论的轮数上限，避免死循环
     audit_results: Annotated[List[IssueAuditResult], lambda x, y: (x or []) + (y or [])]

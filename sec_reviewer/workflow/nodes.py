@@ -83,7 +83,7 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
     
     routing_decisions: List[RouteTask] = []
     soft_route_tasks = []
-    unique_issues = set()
+    unique_issues = []
     
     for scanner_name, issues in scanner_reports.items():
         for issue in issues:
@@ -106,7 +106,7 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
                     break
 
             if is_unique:
-                unique_issues.add((
+                unique_issues.append((
                     issue.id,
                     issue.path, 
                     (start_line, end_line), 
