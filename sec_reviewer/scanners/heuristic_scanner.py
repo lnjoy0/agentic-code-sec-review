@@ -7,6 +7,7 @@ import json
 
 from sec_reviewer.core.config import ScannerConfig, CodeRetrievalConfig
 from sec_reviewer.core.data_models import ScannedIssue
+from sec_reviewer.core.diff_parser import IGNORED_SUFFIXES
 from sec_reviewer.tools.code_retriever import CodeRetriever
 from sec_reviewer.tools.project_analyzer import ProjectAnalyzer
 
@@ -189,17 +190,17 @@ class HeuristicScanner:
 
     def _filter_results(self, all_results: List[Dict[str, Any]], patched_files: List[PatchedFile]) -> List[Dict[str, Any]]:
         """
-        过滤扫描到的结果，只保留与本次 PR 中新增或修改行相关的结果。
+        过滤与本次 PR 中新增或修改行无关的结果。
         """
-        # 找出每个补丁文件中的新增行的行号
         added_lines_by_file: Dict[str, Set[int]] = {}
 
         try:
+            # 找出每个补丁文件中的新增行的行号
             for patched_file in patched_files:
                 file_path = patched_file.path
                 if file_path not in added_lines_by_file:
                     added_lines_by_file[file_path] = set()
-                
+
                 for hunk in patched_file:
                     for line in hunk:
                         if line.is_added:
@@ -276,6 +277,11 @@ class HeuristicScanner:
                     "start_column": raw_result.get("locations")[0].get("physicalLocation", {}).get("region", {}).get("startColumn"),
                     "end_column": raw_result.get("locations")[0].get("physicalLocation", {}).get("region", {}).get("endColumn")
                 }
+            
+            # 过滤文档文件和二进制文件
+            if Path(path).suffix.lower() in IGNORED_SUFFIXES:
+                logger.info(f"Skipping file: {path}")
+                continue
             
             # 为 trivy 的漏洞报告添加依赖相关的 CVE 详情 
             if cve_list:

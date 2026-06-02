@@ -4,7 +4,7 @@ from .data_models import (
     ScannedIssue, LLMRouteDecision, RouteTask, Rejection, RejectionRecord,
     ExpertAuditResult, IssueAuditResult, AuditState, AgentState
 )
-from .diff_parser import DiffParser
+from .diff_parser import DiffParser, IGNORED_SUFFIXES
 from .expert_agents import (
     InjectionExpert, DataAssetExpert, InfraSupplyExpert,
     LogicIdentityExpert, GeneralExpert

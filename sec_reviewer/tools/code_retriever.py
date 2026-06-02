@@ -102,12 +102,20 @@ class CodeRetriever:
                             "source_code": source_code,
                             "type": "class" if node.type == "class_definition" else "function"
                         }
+                    
                 for child in node.children:
-                    traverse(child)
+                    result = traverse(child)
+                    if result:
+                        return result
+                
+                return None
 
-            traverse(tree.root_node)
-            logger.warning(f"在 {rel_file_path} 未找到 {target_name} 的定义节点")
-            return {}
+            result = traverse(tree.root_node)
+            if result:
+                return result
+            else:
+                logger.warning(f"在 {rel_file_path} 未找到 {target_name} 的定义节点")
+                return {}
         except Exception as e:
             logger.error(f"解析文件 {rel_file_path} 失败: {e}")
             return {}

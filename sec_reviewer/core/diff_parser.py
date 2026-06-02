@@ -69,8 +69,8 @@ class DiffParser:
                     logger.debug(f"⚠️ Skipping renamed file: {patched_file.source_file} -> {patched_file.target_file}")
                     continue
 
-                if Path(patched_file.path).suffix in ['.md', '.doc', '.pdf']:
-                    logger.debug(f"⚠️ Skipping documentation file: {patched_file.path}")
+                if Path(patched_file.path).suffix.lower() in IGNORED_SUFFIXES:
+                    logger.debug(f"⚠️ Skipping file: {patched_file.path}")
                     continue
                 
                 patched_files.append(patched_file)
@@ -83,3 +83,28 @@ class DiffParser:
             logger.warning(f"Unidiff parsing error: {str(e)}")
             logger.debug(f"Diff content preview: {diff_content[:1000]}...")
             raise
+
+# 要过滤的扩展名集合
+IGNORED_SUFFIXES = {
+    # === 文档文件 (Document Files) ===
+    '.md', '.txt', '.rtf', '.pdf', 
+    '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', 
+    '.odt', '.ods', '.odp', '.csv', '.epub', '.mobi',
+
+    # === 编译产物/可执行二进制文件 (Compiled / Executables) ===
+    '.pyc', '.pyo', '.exe', '.dll', '.so', '.dylib', 
+    '.class', '.jar', '.war', '.bin', '.o', '.a', '.lib', '.apk', '.app',
+
+    # === 压缩包/归档二进制文件 (Archives) ===
+    '.zip', '.tar', '.gz', '.rar', '.7z', '.bz2', '.xz', '.whl',
+
+    # === 多媒体/图像二进制文件 (Media / Images) ===
+    '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg', '.ico', '.webp', '.tiff',
+    '.mp3', '.mp4', '.avi', '.mov', '.wav', '.flac', '.mkv',
+
+    # === 数据库文件 (Databases) ===
+    '.db', '.sqlite', '.sqlite3', '.mdb', '.frm', '.ibd',
+
+    # === 字体及其他二进制文件 (Fonts & Others) ===
+    '.ttf', '.otf', '.woff', '.woff2', '.eot', '.DS_Store'
+}
