@@ -1,6 +1,7 @@
 import logging
 import collections
 import asyncio
+import re
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 import tree_sitter_python as tspython
@@ -25,7 +26,7 @@ class CodeRetriever:
         self.language = Language(tspython.language())
         self.parser = Parser(self.language)
 
-    async def _rg_filter(self, params: List[str]) -> List[Path]:
+    async def _rg_filter(self, params: List[str]) -> List[Path]: # 返回的是绝对路径
         """使用 ripgrep 过滤文件"""
         cmd = [
             "rg", "-l", 
@@ -279,30 +280,48 @@ class CodeRetriever:
     def _iter_identifier_usages(self, source_code: bytes, root_node: Node, target_name: str):
         """
         通用的 AST 遍历生成器，寻找目标标识符的所有非定义调用。
-        每次找到匹配项时，yield: (当前标识符节点, 当前作用域节点, 所在完整语句的节点)
+        支持点号（如 member.name）和括号（如 os.path.join()）过滤。
+        每次找到匹配项时，yield: (当前标识符节点, 当前作用域节点, 所在完整语句的节点)。
         """
+        is_call = target_name.endswith("()") # 带括号表示搜索函数调用
+        target_str = target_name[:-2] if is_call else target_name
+
         def traverse(node: Node, current_scope: Optional[Node]):
             if node.type in ('class_definition', 'function_definition'):
                 current_scope = node
             
-            if node.type == 'identifier':
+            # 兼容 identifier (如 join, name) 和 attribute (如 os.path.join, member.name)
+            if node.type in ('identifier', 'attribute'):
                 name = source_code[node.start_byte:node.end_byte].decode('utf-8')
-                if name == target_name:
-                    # 排除类定义或函数定义本身的名称
-                    is_definition_name = False
-                    if node.parent and node.parent.type in ('class_definition', 'function_definition'):
-                        if node.parent.child_by_field_name('name') == node:
-                            is_definition_name = True
-                    
-                    if not is_definition_name:
-                        track_node = node
-                        # 查完整语句
-                        while track_node and track_node.parent and track_node.parent.type not in ('block', 'module'):
-                            track_node = track_node.parent
-                        snippet_node = track_node if track_node else node
+                if name == target_str:
+                    valid_match = True
+
+                    if is_call:
+                        curr = node
+                        # 判断当前节点是否处于属性链的最右侧，例如 os.path.join 中的 path；并且向上移动，直到父节点类型变成 call，此时 curr 变成 os.path.join （父节点是os.path.join('a', 'b')）
+                        while curr.parent and curr.parent.type == 'attribute' and curr.parent.child_by_field_name('attribute') == curr:
+                            curr = curr.parent
                         
-                        # 把这三个关键节点抛出给外层使用
-                        yield node, current_scope, snippet_node
+                        # 判断父节点是否为 call，且当前节点为 function 角色
+                        if not (curr.parent and curr.parent.type == 'call' and curr.parent.child_by_field_name('function') == curr):
+                            valid_match = False
+
+                    if valid_match:
+                        # 排除类定义或函数定义本身的名称
+                        is_definition_name = False
+                        if node.parent and node.parent.type in ('class_definition', 'function_definition'):
+                            if node.parent.child_by_field_name('name') == node:
+                                is_definition_name = True
+                        
+                        if not is_definition_name:
+                            track_node = node
+                            # 查完整语句
+                            while track_node and track_node.parent and track_node.parent.type not in ('block', 'module'):
+                                track_node = track_node.parent
+                            snippet_node = track_node if track_node else node
+                            
+                            # 把这三个关键节点抛出给外层使用
+                            yield node, current_scope, snippet_node
 
             # 递归遍历子节点
             for child in node.children:
@@ -328,10 +347,26 @@ class CodeRetriever:
             # 提取签名（截取到 body 开始前）
             body_node = current_scope.child_by_field_name('body')
             if body_node:
-                extract_node = current_scope
                 if current_scope.parent and current_scope.parent.type == 'decorated_definition':
-                    extract_node = current_scope.parent
-                signature = source_code[extract_node.start_byte:body_node.start_byte].decode('utf-8').strip()
+                    sig_lines = []
+                    for child in current_scope.parent.children:
+                        if child.type == 'decorator':
+                            # 提取装饰器的纯文本
+                            raw_dec = source_code[child.start_byte:child.end_byte].decode('utf-8')
+                            # 如果装饰器带有参数，进行截断 (例如 @pytest.mark.parametrize(...))
+                            if '(' in raw_dec:
+                                dec_name = raw_dec.split('(')[0]
+                                sig_lines.append(f"{dec_name}(...)")
+                            else:
+                                sig_lines.append(raw_dec)
+                        elif child == current_scope:
+                            # 加上函数/类定义本身的签名
+                            func_sig = source_code[current_scope.start_byte:body_node.start_byte].decode('utf-8').strip()
+                            sig_lines.append(func_sig)
+                    
+                    signature = "\n".join(sig_lines)
+                else:
+                    signature = source_code[current_scope.start_byte:body_node.start_byte].decode('utf-8').strip()
 
         return scope_name, signature
 
@@ -362,29 +397,63 @@ class CodeRetriever:
             
         return '\n'.join(truncated_lines)
 
-    async def find_references(self, target_name: str) -> str:
+    async def find_references(
+        self, 
+        target_name: str, 
+        file_filters: Optional[list[str]] = None,
+        start_index: int = 1,
+        detail_limit: int = 20,
+        unseen_limit: int = 30
+    ) -> str:
         """
         全局检索目标函数、类或变量的所有调用与引用记录（Cross-Reference）。
         
         【何时使用】：当需要进行正/逆向污点追踪（验证 Source 是否触达危险 Sink）、评估某个缺陷组件/弱加密算法的全局影响面，或审查自定义鉴权/脱敏规则在系统中的覆盖率时调用。
         
         Args:
-            target_name (str): 需检索的目标标识符名称（需精确匹配，勿带括号或参数，如 "eval", "sanitize_input", "AES"）。
+            target_name (str): 需检索的目标标识符名称。
+                ✅ 支持纯变量: 如 `user_input`, `max_lens`
+                ✅ 支持属性链: 如 `member.name`, `member.id`
+                ✅ 支持函数调用过滤: 结尾加上 `()` 可专门只查函数调用，排除变量引用。如 `eval()`, `tarfile.open()`
+                ❌ 绝对禁止: 通配符、正则符号、传参形式 (如 `open(file)`, `tar.*`)
+            file_filters (list[str], optional): 文件名或路径过滤列表。如果提供，仅在匹配这些子串的路径中检索。
+                ✅ 支持文件名: `["utils.py", "main.py"]`
+                ✅ 支持路径片段: `["src/core", "tools/"]`
+            start_index (int, optional): 全局结果列表的分页起始索引（默认 1）。用于遇到截断时继续拉取后续记录。
+            detail_limit (int, optional): 详细代码片段的显示上限（默认 20）。超过限制将仅显示单行摘要。
+            unseen_limit (int, optional): 单行摘要的显示上限（默认 30）。超过此限制的摘要将被完全隐藏。
 
         Returns:
-            str: 按文件分组的引用列表，包含调用所在行号、所属作用域/函数签名（Scope Signature）以及目标前后的精简上下文代码片段。
-            💡 提示：为防上下文溢出，返回的片段已裁剪为目标前后的核心行。若需深挖某次特定调用的完整执行链，请利用此处获取的文件路径与行号，配合相关代码读取工具进一步探查。
+            str: 按文件分组的引用列表。包含前部“详细片段”与后部“单行摘要”。若需继续查阅，请通过调整 `start_index` 翻页。
+            💡 提示：若需深挖某次特定调用的完整执行链，请利用此处获取的文件路径与行号，配合相关代码读取工具进一步探查。
         """
+        search_str = target_name[:-2] if target_name.endswith("()") else target_name # 剥离括号以进行 rg 搜索
+        escaped_target = re.escape(search_str)
+
         regexp = [
-            "-e", f"\\b{target_name}\\b"
+            "-e", f"\\b{escaped_target}\\b"
         ]
         candidate_files = await self._rg_filter(regexp)
         if not candidate_files:
             return f"📄 未找到 `{target_name}` 的任何调用或引用记录。"
 
+        if file_filters:
+            filtered_files = []
+
+            for abs_path in candidate_files:
+                # 只要相对路径中包含 filters 列表里的任意一个子串，就保留该文件
+                rel_path = str(abs_path.relative_to(self.repo_path))
+                if any(f in rel_path for f in file_filters):
+                    filtered_files.append(abs_path)
+
+            candidate_files = filtered_files
+            if not candidate_files:
+                return f"📄 在指定的文件/路径范围 ({", ".join(file_filters)}) 中，未找到 `{target_name}` 的任何调用或引用记录。"
+
         results = []
         for abs_file_path in candidate_files:
             try:
+                rel_file_path = abs_file_path.relative_to(self.repo_path) # 相对路径
 
                 def _read_file_safely():
                     if not abs_file_path.exists():
@@ -393,9 +462,6 @@ class CodeRetriever:
                         return f.read()
 
                 source_code = await asyncio.to_thread(_read_file_safely)
-                
-                rel_file_path = abs_file_path.relative_to(self.repo_path) # 相对路径
-
                 if source_code is None:
                     return f"❌ 错误: 文件不存在 `{rel_file_path}`"
                 
@@ -454,34 +520,72 @@ class CodeRetriever:
         # 按文件路径和行号排序
         results.sort(key=lambda x: (x['file_path'], x['line_number']))
 
-        # 按文件对引用进行分组
-        grouped_results = collections.defaultdict(list)
-        for res in results:
-            grouped_results[res['file_path']].append(res)
+        # 分页显示
+        start_index_0 = start_index - 1 # 转成 0-indexed
+        total_results = len(results)
+        if start_index_0 >= total_results:
+            return f"📄 共找到 {total_results} 处引用，但指定的起始索引 `start_index={start_index}` 已超出范围。"
+
+        filtered_results = results[start_index_0:]
+        detailed_results = filtered_results[:detail_limit]
+        summary_results = filtered_results[detail_limit:detail_limit + unseen_limit]
+        hidden_count = max(0, len(filtered_results) - detail_limit - unseen_limit)
+
+        summary_msg = f" (附带 {len(summary_results)} 项摘要)" if summary_results else ""
+        end_idx = min(start_index_0 + len(detailed_results), total_results)
 
         # 排版拼接
         output_lines = [
-            f"### 🔗 引用查找结果: `{target_name}`",
+            f"### 🔗 引用查找结果: `{target_name}`" + (f"（已使用 {', '.join(file_filters)} 过滤）" if file_filters else ""),
             f"> **总计调用/引用次数**: {len(results)} 处",
+            f"> **当前显示范围**: 第 {start_index} 到 {end_idx} 项详情{summary_msg}",
             "---"
         ]
 
-        for rel_file_path, refs in grouped_results.items(): # 分文件进行渲染
+        # 按文件对引用进行分组
+        detailed_grouped = collections.defaultdict(list)
+        for res in detailed_results:
+            detailed_grouped[res['file_path']].append(res)
+
+        for rel_file_path, refs in detailed_grouped.items(): # 分文件进行渲染
             output_lines.append(f"\n#### 📄 `{rel_file_path}`")
             for ref in refs:
                 # 标题标明行号和作用域
                 scope_display = f"def {ref['scope_name']}" if ref['scope_name'] != "<module_level>" else "Global Scope"
                 output_lines.append(f"**Line {ref['line_number']}** in `{scope_display}`:")
                 
-                # 如果有具体的函数签名（不是全局作用域），可以折叠或引用展示，辅助 LLM 理解上下文约束
+                # 添加函数签名
                 if ref['signature'] != "Global Scope":
-                    # 将签名的换行进行缩进处理，使其在 blockquote 中显示更好看
                     formatted_sig = ref['signature'].replace('\n', '\n> ')
                     output_lines.append(f"> *Signature*: \n> {formatted_sig}")
                 
                 output_lines.append("```python")
                 output_lines.append(ref['snippet'])
                 output_lines.append("```")
+
+        if summary_results:
+            output_lines.append("\n### 📌 后续引用摘要 (未显示详情)")
+            summary_grouped = collections.defaultdict(list)
+            for res in summary_results:
+                summary_grouped[res['file_path']].append(res)
+            
+            for rel_file_path, refs in summary_grouped.items():
+                output_lines.append(f"**📄 `{rel_file_path}`**")
+                for ref in refs:
+                    scope_display = f"def {ref['scope_name']}" if ref['scope_name'] != "<module_level>" else "Global"
+                    output_lines.append(f"- Line {ref['line_number']} in `{scope_display}`")
+
+        if hidden_count > 0:
+            output_lines.append(f"\n- ... *(剩余 {hidden_count} 项摘要已完全隐藏)*")
+        
+        has_more_detail = len(filtered_results) > detail_limit
+        if has_more_detail:
+            next_start = start_index_0 + detail_limit
+            output_lines.append("\n---")
+            output_lines.append(
+                f"💡 **提示**: 仍有 {len(filtered_results) - detail_limit} 个引用未显示详情代码块。若需继续追查，"
+                f"请重新调用此工具并传入 `start_index={next_start}`。"
+            )
 
         return "\n".join(output_lines)
     
@@ -537,7 +641,10 @@ class CodeRetriever:
         3. [逻辑与状态] 追踪权限标识（如 `is_admin`）或核心业务变量是否在执行流中遭到意外篡改。
         
         Args:
-            target_variable (str): 需追踪的变量名（需精确匹配，勿带修饰符，如 "user_input"）。
+            target_variable (str): 需追踪的变量名。
+                ✅ 支持纯变量: 如 `user_input`, `max_lens`
+                ✅ 支持属性链: 如 `member.name`, `member.id`
+                ❌ 绝对禁止: 通配符、正则符号等
             file_path (str): 目标代码文件的相对路径。
             start_line (int, optional): 起始追踪行号（默认 1）。用于遇到截断时继续拉取后续记录。
             detail_limit (int, optional): 详细代码片段的显示上限（默认 20）。超过此限制的引用将仅显示单行摘要，以防上下文溢出。
