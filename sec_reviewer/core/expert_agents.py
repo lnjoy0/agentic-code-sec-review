@@ -227,13 +227,13 @@ class BaseExpertAgent():
 
         if tool_name != 'AdversaryDecision':
             logger.error(f"对抗性审查失败，Adversary 的输出未调用 AdversaryDecision 工具")
-            return {"audit_results": [draft]}
+            return {"audit_results": [state["draft_result"]]}
             
         try: 
             adversary_dc = AdversaryDecision(**tool_args)
         except ValidationError as e:
             logger.error(f"对抗性审查失败，Adversary 的输出参数未通过 Pydantic 校验，报错：{e}")
-            return {"audit_results": [draft]}
+            return {"audit_results": [state["draft_result"]]}
 
         if adversary_dc.decision == "overthrow" and adversary_turns > 0:
             logger.warning(f"[{self.expert_name}]-[issue({issue.id})] 🚫 专家结论被推翻！理由：{adversary_dc.reason}")
@@ -248,7 +248,7 @@ class BaseExpertAgent():
 
         logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 结论验证通过 (剩余辩论轮数: {adversary_turns})。")
         logger.info(f"[{self.expert_name}]-[issue({issue.id})] 最终审计结果：{str(draft)}")
-        return {"audit_results": [draft]}
+        return {"audit_results": [state["draft_result"]]}
 
     def _format_output_node(self, state: AgentState):
         """格式化节点：提取 LLM 的最终研判结论，存为草稿交由 Adversary 审查"""
