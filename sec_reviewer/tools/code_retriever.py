@@ -448,7 +448,7 @@ class CodeRetriever:
 
             candidate_files = filtered_files
             if not candidate_files:
-                return f"📄 在指定的文件/路径范围 ({", ".join(file_filters)}) 中，未找到 `{target_name}` 的任何调用或引用记录。"
+                return f"📄 在指定的文件/路径范围 ({', '.join(file_filters)}) 中，未找到 `{target_name}` 的任何调用或引用记录。"
 
         results = []
         for abs_file_path in candidate_files:
