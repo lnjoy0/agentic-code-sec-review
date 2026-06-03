@@ -1,6 +1,6 @@
 ---
 cwe_id: ["CWE-798", "CWE-540", "CWE-321"]
-name: "Hardcoded_Secrets"
+name: "Hardcoded_Sensitive_Credentials"
 domain: ["Data_Asset_Expert", "General_Expert"]
 ---
 

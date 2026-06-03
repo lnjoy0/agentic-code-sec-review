@@ -57,12 +57,14 @@ class LLMConfig(BaseModel):
         'Infra_Supply_Expert': RoleParams(temperature=0.14, top_p=0.62),
         'Logic_Identity_Expert': RoleParams(temperature=0.2, top_p=0.7),
         'General_Expert': RoleParams(temperature=0.4, top_p=0.87),
+        'Adversary': RoleParams(temperature=0.2, top_p=0.6)
     })
 
 
 class AgentConfig(BaseModel):
     """配置Agent参数"""
-    max_turns: int = Field(default=20, ge=0) # Agent的最大行动轮数
+    max_turns: int = Field(default=30, ge=0) # Agent的最大行动轮数
+    adversary_turns: int = Field(default=3, ge=0)
 
 
 class CodeRetrievalConfig(BaseModel):
@@ -142,12 +144,16 @@ class Config:
                     'General_Expert': RoleParams(
                         temperature=os.environ.get("ROLE_GENERAL_TEMP", "0.4"), 
                         top_p=os.environ.get("ROLE_GENERAL_TOP_P", "0.87")),
+                    'Adversary': RoleParams(
+                        temperature=os.environ.get("ROLE_GENERAL_TEMP", "0.2"), 
+                        top_p=os.environ.get("ROLE_GENERAL_TOP_P", "0.6")),
                 }
             )
 
             # Agent configuration
             agent_config = AgentConfig(
-                max_turns=os.environ.get("AGENT_MAX_TURNS", "20")
+                max_turns=os.environ.get("AGENT_MAX_TURNS", "30"),
+                adversary_turns = os.environ.get("ADVERSARY_TURNS", "3")
             )
 
             # Code retriever configuration

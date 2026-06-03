@@ -38,7 +38,11 @@ inputs:
   max_turns:
     description: 'Agent 最大行动轮数'
     required: false
-    default: '20'
+    default: '30'
+  adversary_turns:
+    description: '研判专家与对抗节点的最大辩论轮数'
+    required: false
+    default: '3'
   scan_context_max_lines:
     description: 'LLM 扫描器的单次扫描上下文最大行数'
     required: false

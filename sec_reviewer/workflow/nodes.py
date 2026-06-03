@@ -5,6 +5,7 @@ import difflib
 from langchain_core.runnables import RunnableConfig
 from langchain_core.prompts import ChatPromptTemplate
 from typing import Dict, Any, List
+from pydantic import ValidationError
 
 from sec_reviewer.scanners.heuristic_scanner import HeuristicScanner
 from sec_reviewer.scanners.semantic_scanner import LLMSemanticScanner
@@ -63,6 +64,7 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
     logger.info("\n[Router Node] 开始漏洞路由分析...")
 
     max_turns = config['configurable'].get('agent_config').max_turns
+    adversary_turns = config['configurable'].get('agent_config').adversary_turns
     llm_config = config['configurable'].get('llm_config')
 
     # router 正常输出只有专家名和简短原因，加上 max_tokens 以防止无限生成
@@ -155,7 +157,7 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
 
         if expert_name:
             logger.info(f"  [Hard Route] 命中字典映射: issue[{id}] ({issue.name or issue.cwe}) -> {expert_name}")
-            routing_decisions.append(_build_task(expert_name, issue, max_turns, rejection_history))
+            routing_decisions.append(_build_task(expert_name, issue, max_turns, rejection_history, adversary_turns))
         else:
             # 软路由，先将协程任务收集起来，稍后并发执行
             logger.info(f"  [Soft Route] 准备发起大模型路由分析: issue[{id}] ({issue.name or issue.cwe})")
@@ -193,27 +195,32 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
                 if tool_name != "LLMRouteDecision":
                     logger.error(f"  [Soft Route] LLM 路由失败，issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) 被分配给通用专家。错误: LLM 的输出未调用 LLMRouteDecision 工具，输出内容为 {str(result)}")
                 else:
-                    decision = LLMRouteDecision(**tool_args)
-                    expert_name = decision.expert_name
-                    if expert_name in task["rejected_by"]:
-                        logger.error(f"  [Soft Route] LLM 决策失败，专家 {expert_name} 已在退回记录中，issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) 降级为通用专家。")
-                        expert_name = "General_Expert"
-                    else:
-                        logger.info(f"  [Soft Route] LLM 决策: issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) -> {expert_name} (原因: {decision.reason})")
-            
-            routing_decisions.append(_build_task(expert_name, task["issue"], max_turns, rejection_history))
+                    try:
+                        decision = LLMRouteDecision(**tool_args)
+                        expert_name = decision.expert_name
+                        if expert_name in task["rejected_by"]:
+                            logger.error(f"  [Soft Route] LLM 决策失败，专家 {expert_name} 已在退回记录中，issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) 降级为通用专家。")
+                            expert_name = "General_Expert"
+                        else:
+                            logger.info(f"  [Soft Route] LLM 决策: issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) -> {expert_name} (原因: {decision.reason})")
+                    except ValidationError as e:
+                        logger.error(f"  [Soft Route] LLM 路由失败，issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) 被分配给通用专家。错误: LLM 的输出的参数未通过 Pydantic 校验，输出内容为 {str(result)}，报错 {e}")
+
+            routing_decisions.append(_build_task(expert_name, task["issue"], max_turns, rejection_history, adversary_turns))
 
     return {"routing_decisions": routing_decisions, "total_target_issues": total_target_issues}
 
-def _build_task(expert_name, issue, max_turns, rejection_history):
+def _build_task(expert_name, issue, max_turns, rejection_history, adversary_turns):
     return {
         "expert_name": expert_name,
         "agent_state_input": {
             "issue": issue,
+            "messages": [],
             "remaining_turns": max_turns,
             "viewed_docs": [],
-            "messages": [],
             "rejection_history": rejection_history,
+            "draft_result": None,
+            "adversary_turns": adversary_turns,
             "audit_results": []
         }
     }

@@ -215,17 +215,18 @@ class ExpertAuditResult(BaseModel):
 
 
 class AdversaryDecision(BaseModel):
-    overthrown: Literal["True", "False"] = Field(
+    """【提交是否推翻结论的决策】当你完成分析后，【必须且只能】调用此工具提交你的最终决策。"""
+    decision: Literal["overthrow", "agree"] = Field(
         ...,
         description=(
-            "是否成功推翻专家的结论。必须是 'True' 或 'False'。\n"
-            "- 如果专家证据链不完整或逻辑错误，设为 True。"
-            "- 如果专家结论合理且证据充分，设为 False。"
+            "是否成功推翻专家的结论。必须是 'overthrow' 或 'agree'。\n"
+            "- 如果专家证据链不完整或逻辑错误，要推翻该结论，请设为 'overthrow'。"
+            "- 如果专家结论合理且证据充分，要同意该结论，请设为 'agree'。"
         )
     )
     reason: str = Field(
         ...,
-        description="推翻的详细理由，明确指出缺失的证据或逻辑漏洞；若未推翻，说明同意的理由。"
+        description="决策的详细理由。"
     )
 
 
@@ -275,10 +276,10 @@ class AuditState(TypedDict):
 # 单个Agent的子图状态
 class AgentState(TypedDict):
     issue: ScannedIssue
-    messages: Annotated[list[BaseMessage], add_messages] # add_messages自动合并多轮对话
-    remaining_turns: int
+    messages: Annotated[list[BaseMessage], add_messages]
+    remaining_turns: int # 专家的剩余行动轮数
     viewed_docs: Annotated[List[str], lambda x, y: list({*(x or []), *(y or [])})]
     rejection_history: Annotated[Dict[int, List[RejectionRecord]], merge_rejection_history]
-    draft_result: IssueAuditResult # 存放专家初步得出的结论草稿，等待对抗节点审查
-    adversary_turns: int # 控制对抗辩论的轮数上限，避免死循环
+    draft_result: Optional[IssueAuditResult]
+    adversary_turns: int # 专家与对抗节点的剩余辩论轮数
     audit_results: Annotated[List[IssueAuditResult], lambda x, y: (x or []) + (y or [])]

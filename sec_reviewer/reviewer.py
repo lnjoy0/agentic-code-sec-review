@@ -45,6 +45,7 @@ class CodeSecReviewer:
             initial_state = {
                 'patched_files': patched_files,
                 'scanner_reports': {},
+                'total_target_issues': 0,
                 'routing_decisions': [],
                 'rejection_history': {},
                 'audit_results': [],

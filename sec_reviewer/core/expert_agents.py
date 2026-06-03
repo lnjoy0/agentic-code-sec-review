@@ -9,9 +9,9 @@ from pydantic import ValidationError
 
 from sec_reviewer.knowledge_base.sys_prompts import (
     INJECTION_EXPERT_PROMPT, DATA_ASSET_EXPERT_PROMPT, INFRA_SUPPLY_EXPERT_PROMPT,
-    LOGIC_IDENTITY_EXPERT_PROMPT, GENERAL_EXPERT_PROMPT
+    LOGIC_IDENTITY_EXPERT_PROMPT, GENERAL_EXPERT_PROMPT, ADVERSARY_PROMPT
 )
-from .data_models import AgentState, ExpertAuditResult, Rejection, IssueAuditResult
+from .data_models import AgentState, ExpertAuditResult, Rejection, IssueAuditResult, AdversaryDecision
 from .config import LLMConfig
 
 
@@ -200,100 +200,90 @@ class BaseExpertAgent():
             "viewed_docs": new_docs
         }
 
-    # async def _adversary_node(self, state: AgentState, config: RunnableConfig):
-    #     """对抗节点：审查专家结论与工具查询证据链"""
-    #     issue = state["issue"]
-    #     draft = state.get("draft_result")
-    #     messages = state.get("messages", [])
-    #     adversary_turns = state.get("adversary_turns", 2) # 默认允许 2 轮推翻
+    async def _adversary_node(self, state: AgentState, config: RunnableConfig):
+        """对抗节点：审查专家结论与工具查询证据链"""
+        issue = state["issue"]
+        draft = state["draft_result"].details
+        messages = state.get("messages", [])
+        adversary_turns = state["adversary_turns"]
         
-    #     # 将历史的 Tool 调用和对话转化为纯文本，供 Adversary 审查
-    #     trace_str = "\n".join([f"{m.type}: {m.content}" for m in messages if m.type in ['ai', 'tool']])
-    #     draft_json = draft.model_dump_json(indent=2)
+        # 将历史的 Tool 调用和对话转为纯文本，供 Adversary 审查
+        trace_str = "\n".join([f"{m.type}: {m.content}" for m in messages[:-1] if m.type in ['ai', 'tool']])
+        draft_json = draft.model_dump_json(indent=2)
         
-    #     sys_prompt = (
-    #         "你是一个安全审计对抗专家 (Adversary)。你的目标是挑战主审查专家的结论。\n"
-    #         "对于研判为真实的漏洞，寻找无法利用的证据；对于研判为误报的漏洞，寻找可以利用的证据。\n"
-    #         "请仔细检查专家的工具调用记录（证据链）是否完整。如果专家没有查询数据流、没有验证函数定义，或凭空捏造假设，请推翻其结论。"
-    #     )
+        human_prompt = f"【漏洞扫描报告】\n{issue.model_dump_json(indent=2)}\n\n【专家工具调用记录】\n{trace_str}\n\n【专家初步结论】\n{draft_json}"
         
-    #     human_prompt = f"【漏洞扫描报告】\n{issue.model_dump_json(indent=2)}\n\n【专家工具调用记录】\n{trace_str}\n\n【专家初步结论】\n{draft_json}"
-        
-    #     # 配置对抗模型 (需要你在配置中增加一个 ROLE_ADVERSARY 角色)
-    #     llm_config = config['configurable'].get('llm_config')
-    #     model = ChatOpenAI(
-    #         model=llm_config.model_name,
-    #         base_url=llm_config.base_url,
-    #         api_key=llm_config.api_key,
-    #         temperature=float(os.environ.get("ROLE_ADVERSARY_TEMP", "0.2")), 
-    #         top_p=float(os.environ.get("ROLE_ADVERSARY_TOP_P", "0.6")),
-    #     )
-        
-    #     # 强制模型输出 AdversaryDecision 结构化数据
-    #     structured_llm = model.with_structured_output(AdversaryDecision)
-        
-    #     logger.info(f"[Adversary]-[issue({issue.id})] ⚖️ 正在进行对抗性审查...")
-    #     decision = await structured_llm.ainvoke([
-    #         SystemMessage(content=sys_prompt),
-    #         HumanMessage(content=human_prompt)
-    #     ])
-        
-    #     if decision.overthrown and adversary_turns > 0:
-    #         logger.warning(f"[Adversary]-[issue({issue.id})] 🚫 专家结论被推翻！理由：{decision.reason}")
-    #         # 返回 HumanMessage 刺激原专家重新思考
-    #         critique_msg = HumanMessage(
-    #             content=f"【对抗节点驳回】你的结论已被推翻。理由如下：\n{decision.reason}\n请根据上述质疑，重新调用工具完善证据链，或修正你的研判结论。"
-    #         )
-    #         return {
-    #             "messages": [critique_msg], 
-    #             "adversary_turns": adversary_turns - 1,
-    #             "draft_result": None # 清空草稿
-    #         }
+        llm_config = config['configurable'].get('llm_config')
+        structured_llm = get_model_bound_tools(llm_config, 'Adversary', [AdversaryDecision], max_tokens=800)
+
+        logger.info(f"[{self.expert_name}]-[issue({issue.id})] ⚖️ 正在进行对抗性审查...")
+        results = await structured_llm.ainvoke([
+            SystemMessage(content=ADVERSARY_PROMPT),
+            HumanMessage(content=human_prompt)
+        ])
+
+        tool_name = results.tool_calls[0]['name']
+        tool_args = results.tool_calls[0]['args']
+
+        if tool_name != 'AdversaryDecision':
+            logger.error(f"对抗性审查失败，Adversary 的输出未调用 AdversaryDecision 工具")
+            return {"audit_results": [draft]}
             
-    #     # 如果无法推翻，或者对抗轮数已耗尽，则漏洞验证通过
-    #     logger.info(f"[Adversary]-[issue({issue.id})] ✅ 验证通过 (剩余辩论轮数: {adversary_turns})。")
-    #     return {"audit_results": [draft]} # 正式写入最终结果数组
+        try: 
+            adversary_dc = AdversaryDecision(**tool_args)
+        except ValidationError as e:
+            logger.error(f"对抗性审查失败，Adversary 的输出参数未通过 Pydantic 校验，报错：{e}")
+            return {"audit_results": [draft]}
+
+        if adversary_dc.decision == "overthrow" and adversary_turns > 0:
+            logger.warning(f"[{self.expert_name}]-[issue({issue.id})] 🚫 专家结论被推翻！理由：{adversary_dc.reason}")
+            critique_msg = HumanMessage(
+                content=f"【对抗节点驳回】你的结论已被推翻。理由如下：\n{adversary_dc.reason}\n请根据上述质疑，重新调用工具完善证据链，或修正你的研判结论与分析。"
+            )
+            return {
+                "messages": [critique_msg], 
+                "adversary_turns": adversary_turns - 1,
+                "draft_result": None
+            }
+
+        logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 结论验证通过 (剩余辩论轮数: {adversary_turns})。")
+        logger.info(f"[{self.expert_name}]-[issue({issue.id})] 最终审计结果：{str(draft)}")
+        return {"audit_results": [draft]}
 
     def _format_output_node(self, state: AgentState):
-        """格式化节点：提取 LLM 的最终研判结论并进行 Pydantic 强校验"""
-        last_message = state["messages"][-1]
+        """格式化节点：提取 LLM 的最终研判结论，存为草稿交由 Adversary 审查"""
+        tool_call = state["messages"][-1].tool_calls[0]
         issue = state['issue']
-
-        logger.info(f"[{self.expert_name}]-[issue({issue.id})] ⚖️ 准备校验并格式化输出结果...")
         
-        for tool_call in last_message.tool_calls:
-            if tool_call["name"] == "ExpertAuditResult":
-                raw_args = tool_call["args"] # 获取 ExpertAuditResult 的参数
-                
-                try:
-                    # 实例化 Pydantic 模型，如果数据校验不通过会抛出异常
-                    audit_obj = ExpertAuditResult(**raw_args) 
+        raw_args = tool_call["args"] # 获取 ExpertAuditResult 的参数
+        
+        try:
+            # 实例化 Pydantic 模型，如果数据校验不通过会抛出异常
+            audit_obj = ExpertAuditResult(**raw_args) 
+            audit_data = audit_obj.model_dump() 
 
-                    audit_data = audit_obj.model_dump() 
+            audit_result = IssueAuditResult(
+                id=issue.id,
+                expert=self.expert_name,
+                path=issue.path,
+                start_line=issue.snippet_region.start_line,
+                end_line=issue.snippet_region.end_line,
+                details=audit_data
+            )
+            logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 专家生成初步结论，准备进入对抗审查。")
+            return {"draft_result": audit_result}
 
-                    audit_result = IssueAuditResult(
-                        id=issue.id,
-                        expert=self.expert_name,
-                        path=issue.path,
-                        start_line=issue.snippet_region.start_line,
-                        end_line=issue.snippet_region.end_line,
-                        details=audit_data
-                    )
-                    logger.info(f"[{self.expert_name}]-[issue({issue.id})] 审计结果：{str(audit_data)}")
-                    logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 结果校验通过，研判完成。")
-                    return {"audit_results": [audit_result]}
+        except ValidationError as e:
+            error_str = str(e)
+            logger.warning(f"[{self.expert_name}]-[issue({issue.id})] ❌ LLM 输出的参数未通过 Pytandic 校验，打回重做: {error_str}")
 
-                except ValidationError as e:
-                    error_str = str(e)
-                    logger.warning(f"[{self.expert_name}]-[issue({issue.id})] ❌ ExpertAuditResult 数据校验失败，打回重做: \n{error_str}")
-
-                    # 构造一个 ToolMessage，将报错扔回给大模型
-                    error_msg = ToolMessage(
-                        content=f"【提交失败】你提交的最终结论未通过逻辑校验，请根据以下报错修正后重新调用 ExpertAuditResult:\n{error_str}",
-                        name=tool_call["name"],
-                        tool_call_id=tool_call["id"]
-                    )
-                    return {"messages": [error_msg]}    
+            # 构造一个 ToolMessage，将报错扔回给大模型
+            error_msg = ToolMessage(
+                content=f"【提交失败】你提交的最终结论未通过 pydantic 逻辑校验，请修正:{error_str}",
+                name=tool_call["name"],
+                tool_call_id=tool_call["id"]
+            )
+            return {"messages": [error_msg], "remaining_turns": state['remaining_turns']-1}
 
     def _retry_node(self, state: AgentState):
         """
@@ -309,7 +299,6 @@ class BaseExpertAgent():
             warning_content = "行动轮数已全部用尽，你当前只能调用 ExpertAuditResult 工具"
         else:
             logger.warning(f"[{self.expert_name}]-[issue({state['issue'].id})] ⚠️ 检测到 LLM 仅输出了纯文本内容，进行警告\nLLM 输出内容：{state['messages'][-1]}")
-            # 构造一条警告消息
             warning_content = (
                 "【系统拦截】你只能进行工具调用，禁止输出纯文本内容。\n"
                 "请调用 `ExpertAuditResult` 工具来提交最终的研判结果，或者调用其他工具来辅助研判分析。"
@@ -317,7 +306,7 @@ class BaseExpertAgent():
         
         warning_msg = HumanMessage(content=warning_content)
     
-        return {"messages": [warning_msg], "remaining_turns": remaining_turns - 1}
+        return {"messages": [warning_msg], "remaining_turns": remaining_turns-1}
 
     def _reject_node(self, state: AgentState):
         """当该专家认为分配的漏洞不在它的职能范围时，触发该节点进行退回"""
@@ -348,7 +337,7 @@ class BaseExpertAgent():
                         name=tool_call["name"],
                         tool_call_id=tool_call["id"]
                     )
-                    return {"messages": [error_msg]}
+                    return {"messages": [error_msg], "remaining_turns": state['remaining_turns']-1}
 
     def _router_edge(self, state: AgentState) -> Literal["reject", "retry", "tools_call", "format_output"]:
         """条件边路由逻辑：判断是否需要调用工具"""
@@ -368,13 +357,22 @@ class BaseExpertAgent():
             return "tools_call"
 
     def _data_validation_router_edge(self, state: AgentState) -> Literal["reasoning", "__end__"]:
-        """在 Pydantic 数据校验之后，判断是否校验成功，如果校验失败则需要路由回 LLM"""
+        """在 Pydantic 数据校验之后，判断是否校验成功"""
         last_message = state["messages"][-1]
         
-        # 如果最后一条消息是 ToolMessage，则说明校验没有通过
+        # 如果最后一条消息是 ToolMessage，则说明校验失败
         if isinstance(last_message, ToolMessage):
-            return "reasoning"
+            return "failed"
             
+        return 'successful'
+
+    def _adversary_router_edge(self, state: AgentState) -> Literal["reasoning", "__end__"]:
+        """对抗节点后的路由逻辑"""
+
+        # 草稿被清空，说明结论被驳回
+        if state.get("draft_result") is None:
+            return "reasoning"
+        
         return END
 
     def compile(self):
@@ -382,10 +380,11 @@ class BaseExpertAgent():
         builder = StateGraph(AgentState)
         
         builder.add_node("reasoning", self._reasoning_node)
+        builder.add_node("reject", self._reject_node)
+        builder.add_node("retry", self._retry_node)
         builder.add_node("tools_call", self._tools_call_node)
         builder.add_node("format_output", self._format_output_node)
-        builder.add_node("retry", self._retry_node)
-        builder.add_node("reject", self._reject_node)
+        builder.add_node("adversary", self._adversary_node)
     
         builder.add_edge(START, "reasoning")
         builder.add_conditional_edges(
@@ -404,13 +403,21 @@ class BaseExpertAgent():
             "reject",
             self._data_validation_router_edge,
             {
-                "reasoning": "reasoning",
-                END: END
+                "failed": "reasoning",
+                "successful": END
             }
         )
         builder.add_conditional_edges(
             "format_output",
             self._data_validation_router_edge,
+            {
+                "failed": "reasoning",
+                "successful": "adversary"
+            }
+        )
+        builder.add_conditional_edges(
+            "adversary",
+            self._adversary_router_edge,
             {
                 "reasoning": "reasoning",
                 END: END
