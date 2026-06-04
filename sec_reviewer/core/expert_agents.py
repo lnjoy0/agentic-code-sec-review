@@ -94,8 +94,8 @@ class BaseExpertAgent():
             if critical_history:
                 critical_msg = f"【上次研判结论与审查意见】以下是你上一次的研判结论以及审查节点对其给出的意见。\n{critical_history[-1].model_dump_json(indent=2)}"
                 invocation_messages = [sys_msg] + messages + [HumanMessage(content=critical_msg)]
-            
-            invocation_messages = [sys_msg] + messages
+            else:
+                invocation_messages = [sys_msg] + messages
 
         # 获取绑定了工具的 LLM 实例
         llm_config = config['configurable'].get('llm_config')
@@ -301,11 +301,11 @@ class BaseExpertAgent():
                 review_suggest=critic_dc.suggested_action
             )
             
-            critique_msg = HumanMessage(
-                content=f"【审查节点驳回】你的结论已被驳回。\n理由如下：\n{critic_dc.critique_reason}\n建议如下：\n{critic_dc.suggested_action}\n请根据上述建议进行修正。"
-            )
+            # critique_msg = HumanMessage(
+            #     content=f"【审查节点驳回】你的结论已被驳回。\n理由如下：\n{critic_dc.critique_reason}\n建议如下：\n{critic_dc.suggested_action}\n请根据上述建议进行修正。"
+            # )
             return {
-                "messages": [RemoveMessage(id=messages[-1].id), critique_msg], # 移除旧的审计结论，以节省上下文空间
+                "messages": [RemoveMessage(id=messages[-1].id)], # 移除旧的审计结论，以节省上下文空间
                 "critical_history": [critical_content],
                 "draft_result": None
             }
