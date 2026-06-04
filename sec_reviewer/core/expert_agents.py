@@ -207,6 +207,11 @@ class BaseExpertAgent():
         critical_rounds = state["critical_rounds"]
         max_critical_rounds = config['configurable'].get('agent_config').max_critical_rounds
         
+        if critical_rounds > max_critical_rounds:
+            logger.warning(f"[{self.expert_name}]-[issue({issue.id})] ⚠️ 由于已达到最大审查轮数 {max_critical_rounds}，批判节点不再审查专家结论，直接放行")
+            logger.info(f"[{self.expert_name}]-[issue({issue.id})] 最终审计结果：{str(draft)}")
+            return {"audit_results": [state["draft_result"]]}
+
         # 构造工具调用记录
         trace_lines = []
         for i, m in enumerate(messages[:-1]):
@@ -268,23 +273,19 @@ class BaseExpertAgent():
             return {"audit_results": [state["draft_result"]]}
 
         if critic_dc.decision == "revise":
-            if critical_rounds >= max_critical_rounds:
-                logger.warning(f"[{self.expert_name}]-[issue({issue.id})] 🚫 专家结论被驳回！理由：{critic_dc.critique_reason}，建议: {critic_dc.suggested_action}")
-                critique_msg = HumanMessage(
-                    content=f"【批判节点驳回】你的结论已被驳回。\n理由如下：\n{critic_dc.critique_reason}\n建议如下：\n{critic_dc.suggested_action}\n请根据上述建议进行修正。"
-                )
-                return {
-                    "messages": [critique_msg], 
-                    "critical_rounds": critical_rounds + 1,
-                    "draft_result": None
-                }
-            else:
-                logger.warning(f"[{self.expert_name}]-[issue({issue.id})] ⚠️ 专家结论被驳回，但已达最大辩论轮数，系统强制放行。")
+            logger.warning(f"[{self.expert_name}]-[issue({issue.id})] 🚫 专家结论被驳回！理由：{critic_dc.critique_reason}，建议: {critic_dc.suggested_action}")
+            critique_msg = HumanMessage(
+                content=f"【批判节点驳回】你的结论已被驳回。\n理由如下：\n{critic_dc.critique_reason}\n建议如下：\n{critic_dc.suggested_action}\n请根据上述建议进行修正。"
+            )
+            return {
+                "messages": [critique_msg], 
+                "critical_rounds": critical_rounds + 1,
+                "draft_result": None
+            }
         else:
-            logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 结论验证通过 (剩余辩论轮数: {max_critical_rounds-critical_rounds})。")
-
-        logger.info(f"[{self.expert_name}]-[issue({issue.id})] 最终审计结果：{str(draft)}")
-        return {"audit_results": [state["draft_result"]]}
+            logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 结论验证通过 (剩余审查轮数: {max_critical_rounds-critical_rounds})。")
+            logger.info(f"[{self.expert_name}]-[issue({issue.id})] 最终审计结果：{str(draft)}")
+            return {"audit_results": [state["draft_result"]]}
 
     def _format_output_node(self, state: AgentState):
         """格式化节点：提取 LLM 的最终研判结论，存为草稿交由 Critic 审查"""
