@@ -281,5 +281,5 @@ class AgentState(TypedDict):
     viewed_docs: Annotated[List[str], lambda x, y: list({*(x or []), *(y or [])})]
     rejection_history: Annotated[Dict[int, List[RejectionRecord]], merge_rejection_history]
     draft_result: Optional[IssueAuditResult]
-    critical_rounds: int # 专家与批判节点的剩余辩论轮数
+    critical_rounds: int # 批判节点的当前辩论轮数
     audit_results: Annotated[List[IssueAuditResult], lambda x, y: (x or []) + (y or [])]

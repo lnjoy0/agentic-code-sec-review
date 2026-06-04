@@ -205,6 +205,7 @@ class BaseExpertAgent():
         draft = state["draft_result"].details
         messages = state.get("messages", [])
         critical_rounds = state["critical_rounds"]
+        max_critical_rounds = config['configurable'].get('agent_config').max_critical_rounds
         
         # 构造工具调用记录
         trace_lines = []
@@ -222,7 +223,7 @@ class BaseExpertAgent():
 
         # 构造提示词
         human_prompt = (
-            f"【审查状态提示】：当前是针对该漏洞的第 {critical_rounds} 轮批判审查。\n"
+            f"【审查状态提示】：当前是针对该漏洞的第 {critical_rounds} 轮批判审查，总审查轮数为 {max_critical_rounds}。\n"
             "请严格按照系统指令，对以下专家的研判过程和最终结论进行审查：\n\n"
 
             "<vulnerability_report>\n"
@@ -267,14 +268,14 @@ class BaseExpertAgent():
             return {"audit_results": [state["draft_result"]]}
 
         if critic_dc.decision == "revise":
-            if critical_rounds > 0:
+            if critical_rounds > max_critical_rounds:
                 logger.warning(f"[{self.expert_name}]-[issue({issue.id})] 🚫 专家结论被驳回！理由：{critic_dc.critique_reason}，建议: {critic_dc.suggested_action}")
                 critique_msg = HumanMessage(
                     content=f"【批判节点驳回】你的结论已被驳回。\n理由如下：\n{critic_dc.critique_reason}\n建议如下：\n{critic_dc.suggested_action}\n请根据上述建议进行修正。"
                 )
                 return {
                     "messages": [critique_msg], 
-                    "critical_rounds": critical_rounds - 1,
+                    "critical_rounds": critical_rounds + 1,
                     "draft_result": None
                 }
             else:

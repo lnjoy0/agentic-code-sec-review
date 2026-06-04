@@ -57,14 +57,14 @@ class LLMConfig(BaseModel):
         'Infra_Supply_Expert': RoleParams(temperature=0.14, top_p=0.62),
         'Logic_Identity_Expert': RoleParams(temperature=0.2, top_p=0.7),
         'General_Expert': RoleParams(temperature=0.4, top_p=0.87),
-        'Critic': RoleParams(temperature=0.2, top_p=0.6)
+        'Critic': RoleParams(temperature=0.12, top_p=0.45)
     })
 
 
 class AgentConfig(BaseModel):
     """配置Agent参数"""
-    max_rounds: int = Field(default=30, ge=0) # Agent的最大行动轮数
-    critical_rounds: int = Field(default=2, ge=0)
+    agent_max_rounds: int = Field(default=30, ge=0) # Agent的最大行动轮数
+    max_critical_rounds: int = Field(default=2, ge=0)
 
 
 class CodeRetrievalConfig(BaseModel):
@@ -145,15 +145,15 @@ class Config:
                         temperature=os.environ.get("ROLE_GENERAL_TEMP", "0.4"), 
                         top_p=os.environ.get("ROLE_GENERAL_TOP_P", "0.87")),
                     'Critic': RoleParams(
-                        temperature=os.environ.get("ROLE_GENERAL_TEMP", "0.2"), 
-                        top_p=os.environ.get("ROLE_GENERAL_TOP_P", "0.6")),
+                        temperature=os.environ.get("ROLE_CRITIC_TEMP", "0.12"), 
+                        top_p=os.environ.get("ROLE_CRITIC_TOP_P", "0.45")),
                 }
             )
 
             # Agent configuration
             agent_config = AgentConfig(
-                max_rounds=os.environ.get("AGENT_MAX_rounds", "30"),
-                critical_rounds = os.environ.get("critical_rounds", "2")
+                agent_max_rounds=os.environ.get("AGENT_MAX_ROUNDS", "30"),
+                max_critical_rounds = os.environ.get("MAX_CRITICAL_ROUNDS", "2")
             )
 
             # Code retriever configuration

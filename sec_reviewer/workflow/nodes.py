@@ -63,8 +63,7 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
     """路由判定节点：执行硬/软路由，生成分发任务清单"""
     logger.info("\n[Router Node] 开始漏洞路由分析...")
 
-    max_rounds = config['configurable'].get('agent_config').max_rounds
-    critical_rounds = config['configurable'].get('agent_config').critical_rounds
+    max_rounds = config['configurable'].get('agent_config').agent_max_rounds
     llm_config = config['configurable'].get('llm_config')
 
     # router 正常输出只有专家名和简短原因，加上 max_tokens 以防止无限生成
@@ -157,7 +156,7 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
 
         if expert_name:
             logger.info(f"  [Hard Route] 命中字典映射: issue[{id}] ({issue.name or issue.cwe}) -> {expert_name}")
-            routing_decisions.append(_build_task(expert_name, issue, max_rounds, rejection_history, critical_rounds))
+            routing_decisions.append(_build_task(expert_name, issue, max_rounds, rejection_history))
         else:
             # 软路由，先将协程任务收集起来，稍后并发执行
             logger.info(f"  [Soft Route] 准备发起大模型路由分析: issue[{id}] ({issue.name or issue.cwe})")
@@ -206,11 +205,11 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
                     except ValidationError as e:
                         logger.error(f"  [Soft Route] LLM 路由失败，issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) 被分配给通用专家。错误: LLM 的输出的参数未通过 Pydantic 校验，输出内容为 {str(result)}，报错 {e}")
 
-            routing_decisions.append(_build_task(expert_name, task["issue"], max_rounds, rejection_history, critical_rounds))
+            routing_decisions.append(_build_task(expert_name, task["issue"], max_rounds, rejection_history))
 
     return {"routing_decisions": routing_decisions, "total_target_issues": total_target_issues}
 
-def _build_task(expert_name, issue, max_rounds, rejection_history, critical_rounds):
+def _build_task(expert_name, issue, max_rounds, rejection_history):
     return {
         "expert_name": expert_name,
         "agent_state_input": {
@@ -220,7 +219,7 @@ def _build_task(expert_name, issue, max_rounds, rejection_history, critical_roun
             "viewed_docs": [],
             "rejection_history": rejection_history,
             "draft_result": None,
-            "critical_rounds": critical_rounds,
+            "critical_rounds": 1,
             "audit_results": []
         }
     }

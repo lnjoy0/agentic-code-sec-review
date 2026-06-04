@@ -35,12 +35,12 @@ inputs:
     default: 'token-is-not-needed'
 
   # === Agent 与 Context 配置 ===
-  max_rounds:
+  agent_max_rounds:
     description: 'Agent 最大行动轮数'
     required: false
     default: '30'
-  critical_rounds:
-    description: '研判专家与批判节点的最大辩论轮数'
+  max_critical_rounds:
+    description: '批判节点的最大审查轮数'
     required: false
     default: '2'
   scan_context_max_lines:
@@ -116,6 +116,15 @@ inputs:
     required: false
     default: '0.87'
 
+  critic_temperature:
+    description: 'Critic 角色的 temperature'
+    required: false
+    default: '0.12'
+  critic_top_p:
+    description: 'Critic 角色的 top_p'
+    required: false
+    default: '0.45'
+
 runs:
   using: 'composite'
   steps:
@@ -190,7 +199,8 @@ runs:
         LLM_MODEL_NAME: ${{ inputs.llm_model_name }}
         LLM_BASE_URL: ${{ inputs.llm_base_url }}
         LLM_API_KEY: ${{ inputs.llm_api_key }}
-        AGENT_MAX_rounds: ${{ inputs.max_rounds }}
+        AGENT_MAX_ROUNDS: ${{ inputs.agent_max_rounds }}
+        MAX_CRITICAL_ROUNDS: ${{ inputs.max_critical_rounds }}
         SCAN_CONTEXT_MAX_LINES: ${{ inputs.scan_context_max_lines }}
         RETRIEVAL_CONTEXT_MAX_LINES: ${{ inputs.retrieval_context_max_lines }}
 
@@ -209,6 +219,8 @@ runs:
         ROLE_LOGIC_IDENTITY_TOP_P: ${{ inputs.logic_identity_expert_top_p }}
         ROLE_GENERAL_TEMP: ${{ inputs.general_expert_temperature }}
         ROLE_GENERAL_TOP_P: ${{ inputs.general_expert_top_p }}
+        ROLE_CRITIC_TEMP: ${{ inputs.critic_temperature }}
+        ROLE_CRITIC_TOP_P: ${{ inputs.critic_top_p }}
         
       run: |
         echo "$(date) - Starting Agentic Code Sec Reviewer..."
