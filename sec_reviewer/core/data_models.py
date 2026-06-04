@@ -235,8 +235,8 @@ class CriticalContent(BaseModel):
     round: int
     expert_verdict: str
     expert_reason: str
-    review_action: str
-    review_feedback: str
+    review_decision: str
+    review_decision_reason: str
     review_suggest: str
 
 

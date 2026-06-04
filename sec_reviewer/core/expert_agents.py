@@ -301,9 +301,6 @@ class BaseExpertAgent():
                 review_suggest=critic_dc.suggested_action
             )
             
-            # critique_msg = HumanMessage(
-            #     content=f"【审查节点驳回】你的结论已被驳回。\n理由如下：\n{critic_dc.critique_reason}\n建议如下：\n{critic_dc.suggested_action}\n请根据上述建议进行修正。"
-            # )
             return {
                 "messages": [RemoveMessage(id=messages[-1].id)], # 移除旧的审计结论，以节省上下文空间
                 "critical_history": [critical_content],
