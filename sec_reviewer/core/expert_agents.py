@@ -87,7 +87,7 @@ class BaseExpertAgent():
             invocation_messages = [sys_msg, human_msg]
             state_update_messages = [human_msg]
         else:
-            logger.info(f"[{self.expert_name}]-[issue({state['issue'].id})] 🧠 接收工具反馈，继续综合推理...")
+            logger.info(f"[{self.expert_name}]-[issue({state['issue'].id})] 🧠 接收反馈，继续综合推理...")
             invocation_messages = [sys_msg] + messages
 
         # 获取绑定了工具的 LLM 实例
@@ -275,7 +275,7 @@ class BaseExpertAgent():
         if critic_dc.decision == "revise":
             logger.warning(f"[{self.expert_name}]-[issue({issue.id})] 🚫 专家结论被驳回。理由：{critic_dc.critique_reason}，建议: {critic_dc.suggested_action}")
             critique_msg = HumanMessage(
-                content=f"【批判节点驳回】你的结论已被驳回。\n理由如下：\n{critic_dc.critique_reason}\n建议如下：\n{critic_dc.suggested_action}\n请根据上述建议进行修正。"
+                content=f"【审查节点驳回】你的结论已被驳回。\n理由如下：\n{critic_dc.critique_reason}\n建议如下：\n{critic_dc.suggested_action}\n请根据上述建议进行修正。"
             )
             return {
                 "messages": [critique_msg], 
