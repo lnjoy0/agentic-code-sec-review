@@ -268,7 +268,7 @@ class BaseExpertAgent():
             return {"audit_results": [state["draft_result"]]}
 
         if critic_dc.decision == "revise":
-            if critical_rounds > max_critical_rounds:
+            if critical_rounds >= max_critical_rounds:
                 logger.warning(f"[{self.expert_name}]-[issue({issue.id})] 🚫 专家结论被驳回！理由：{critic_dc.critique_reason}，建议: {critic_dc.suggested_action}")
                 critique_msg = HumanMessage(
                     content=f"【批判节点驳回】你的结论已被驳回。\n理由如下：\n{critic_dc.critique_reason}\n建议如下：\n{critic_dc.suggested_action}\n请根据上述建议进行修正。"
@@ -281,7 +281,7 @@ class BaseExpertAgent():
             else:
                 logger.warning(f"[{self.expert_name}]-[issue({issue.id})] ⚠️ 专家结论被驳回，但已达最大辩论轮数，系统强制放行。")
         else:
-            logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 结论验证通过 (剩余辩论轮数: {critical_rounds})。")
+            logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 结论验证通过 (剩余辩论轮数: {max_critical_rounds-critical_rounds})。")
 
         logger.info(f"[{self.expert_name}]-[issue({issue.id})] 最终审计结果：{str(draft)}")
         return {"audit_results": [state["draft_result"]]}
