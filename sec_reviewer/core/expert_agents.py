@@ -231,6 +231,8 @@ class BaseExpertAgent():
                 )
         trace_str = '\n\n'.join(trace_lines)
 
+        history_str = '\n'.join([c.model_dump_json(indent=2) for c in critical_history])
+
         # 构造提示词
         human_prompt = (
             f"【审查状态提示】：当前是针对该漏洞的第 {critical_rounds} 轮批判审查，总审查轮数为 {max_critical_rounds}。\n"
@@ -245,7 +247,7 @@ class BaseExpertAgent():
             "</expert_tool_trace>\n\n"
             
             "<review_history>\n"
-            f"{'\n'.join([c.model_dump_json(indent=2) for c in critical_history])}\n"
+            f"{history_str}\n"
             "</review_history>\n\n"
 
             "<expert_final_conclusion>\n"

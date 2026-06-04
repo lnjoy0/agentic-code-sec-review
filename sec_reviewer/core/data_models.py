@@ -239,6 +239,7 @@ class CriticalContent(BaseModel):
     review_feedback: str
     review_suggest: str
 
+
 class IssueAuditResult(BaseModel):
     """每个漏洞的最终审计结果"""
     id: str
