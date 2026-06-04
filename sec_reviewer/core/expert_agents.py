@@ -235,7 +235,7 @@ class BaseExpertAgent():
 
         # 构造提示词
         human_prompt = (
-            f"【审查状态提示】：当前是针对该漏洞的第 {critical_rounds} 轮批判审查，总审查轮数为 {max_critical_rounds}。\n"
+            f"【审查状态提示】：当前是针对该漏洞的第 {critical_rounds} 轮审查，总审查轮数为 {max_critical_rounds}。\n"
             "请严格按照系统指令，对以下专家的研判过程和最终结论进行审查：\n\n"
 
             "<vulnerability_report>\n"
