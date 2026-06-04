@@ -420,7 +420,7 @@ class BaseExpertAgent():
         builder.add_node("retry", self._retry_node)
         builder.add_node("tools_call", self._tools_call_node)
         builder.add_node("format_output", self._format_output_node)
-        builder.add_node("critic", self._critic_node)
+        builder.add_node("critic", self._critical_node)
     
         builder.add_edge(START, "reasoning")
         builder.add_conditional_edges(
