@@ -93,7 +93,7 @@ class BaseExpertAgent():
             
             if critical_history:
                 critical_msg = f"【上次研判结论与审查意见】以下是你上一次的研判结论以及审查节点对其给出的意见。\n{critical_history[-1].model_dump_json(indent=2)}"
-                invocation_messages = [sys_msg] + messages + HumanMessage(content=critical_msg)
+                invocation_messages = [sys_msg] + messages + [HumanMessage(content=critical_msg)]
             
             invocation_messages = [sys_msg] + messages
 
