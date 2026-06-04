@@ -42,7 +42,7 @@ inputs:
   max_critical_rounds:
     description: '批判节点的最大审查轮数'
     required: false
-    default: '2'
+    default: '3'
   scan_context_max_lines:
     description: 'LLM 扫描器的单次扫描上下文最大行数'
     required: false
