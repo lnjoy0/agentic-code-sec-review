@@ -9,9 +9,9 @@ from pydantic import ValidationError
 
 from sec_reviewer.knowledge_base.sys_prompts import (
     INJECTION_EXPERT_PROMPT, DATA_ASSET_EXPERT_PROMPT, INFRA_SUPPLY_EXPERT_PROMPT,
-    LOGIC_IDENTITY_EXPERT_PROMPT, GENERAL_EXPERT_PROMPT, ADVERSARY_PROMPT
+    LOGIC_IDENTITY_EXPERT_PROMPT, GENERAL_EXPERT_PROMPT, CRITIC_PROMPT
 )
-from .data_models import AgentState, ExpertAuditResult, Rejection, IssueAuditResult, AdversaryDecision
+from .data_models import AgentState, ExpertAuditResult, Rejection, IssueAuditResult, CriticDecision
 from .config import LLMConfig
 
 
@@ -55,22 +55,21 @@ class BaseExpertAgent():
     async def _reasoning_node(self, state: AgentState, config: RunnableConfig):
         """核心推理节点：LLM 观察当前状态并决定下一步动作"""
         messages = state.get("messages", [])
-        remaining_turns = state.get('remaining_turns')
+        remaining_rounds = state.get('remaining_rounds')
         rejection_history = state.get('rejection_history', {})
         issue = state["issue"]
         state_update_messages = []
 
         # 记录剩余行动轮数
-        if remaining_turns > 0:
-            remaining_turns_prompt = f"【系统提示】你还可以行动 {remaining_turns} 轮。请合理规划，如果已有足够信心，可以直接调用 ExpertAuditResult 工具，填入最终的漏洞研判结果。"
+        if remaining_rounds > 0:
+            remaining_rounds_prompt = f"【系统提示】你还可以行动 {remaining_rounds} 轮。请合理规划，如果已有足够信心，可以直接调用 ExpertAuditResult 工具，填入最终的漏洞研判结果。"
         else:
             logger.warning(
-                f"[{self.expert_name}]-[issue({state['issue'].id})] ⚠️ 行动轮数耗尽，强制要求大模型输出结论。",
-                f"\nLLM 行动记录：{str(messages)}"                
+                f"[{self.expert_name}]-[issue({state['issue'].id})] ⚠️ 行动轮数耗尽，强制要求大模型输出结论。"
             )
-            remaining_turns_prompt = f"【系统提示】警告：你的行动轮数已全部用尽！无法再调用除了 ExpertAuditResult 以外的其他工具。请立刻基于上述对话历史中的已知信息，调用 ExpertAuditResult 给出最终研判结果。"
+            remaining_rounds_prompt = f"【系统提示】警告：你的行动轮数已全部用尽！无法再调用除了 ExpertAuditResult 以外的其他工具。请立刻基于上述对话历史中的已知信息，调用 ExpertAuditResult 给出最终研判结果。"
 
-        sys_msg = SystemMessage(content=self.system_prompt+"\n\n"+remaining_turns_prompt)
+        sys_msg = SystemMessage(content=self.system_prompt+"\n\n"+remaining_rounds_prompt)
 
         # 如果是第一轮，初始化 System Prompt 和初始输入
         if not messages:
@@ -113,18 +112,18 @@ class BaseExpertAgent():
     async def _tools_call_node(self, state: AgentState, config: RunnableConfig):
         """动作执行节点：执行 LLM 要求的工具，并将结果返回"""
         tool_calls_message = state["messages"][-1] # 获取 LLM 的 tool_calls 消息
-        remaining_turns = state.get('remaining_turns')
+        remaining_rounds = state.get('remaining_rounds')
         tool_outputs = []
         new_docs = [] # 用于接收新查询到的文档名称
         refusal_msg = []
 
-        if remaining_turns <= -3:
+        if remaining_rounds <= -3:
             logger.error(
                 f"[{self.expert_name}]-[issue({state['issue'].id})] 🚫 LLM 在行动轮数耗尽后仍然连续三轮没有调用 ExpertAuditResult 输出最终结果",
                 f"\nLLM 行动记录：{str(state['messages'])}"
             )
             raise AgentError(f"{self.expert_name}故障，行动轮数耗尽，且 LLM 仍然连续三轮没有输出结果")
-        elif remaining_turns <= 0:
+        elif remaining_rounds <= 0:
             logger.warning(f"[{self.expert_name}]-[issue({state['issue'].id})] 🚫 拦截工具调用：行动轮数已耗尽。")
             refusal_msg = "工具调用失败: 行动轮数已全部用尽，你当前只能调用 ExpertAuditResult 工具"
         
@@ -140,7 +139,7 @@ class BaseExpertAgent():
                         tool_call_id=tool_call["id"]
                     )
                 )
-            return {"messages": tool_outputs, "remaining_turns": remaining_turns - 1}
+            return {"messages": tool_outputs, "remaining_rounds": remaining_rounds - 1}
             
         # 遍历 LLM 发出的所有工具调用请求
         for tool_call in tool_calls_message.tool_calls:
@@ -196,62 +195,98 @@ class BaseExpertAgent():
 
         return {
             "messages": tool_outputs, 
-            "remaining_turns": remaining_turns - 1,
+            "remaining_rounds": remaining_rounds - 1,
             "viewed_docs": new_docs
         }
 
-    async def _adversary_node(self, state: AgentState, config: RunnableConfig):
-        """对抗节点：审查专家结论与工具查询证据链"""
+    async def _critical_node(self, state: AgentState, config: RunnableConfig):
+        """批判节点：审查专家结论与工具查询证据链"""
         issue = state["issue"]
         draft = state["draft_result"].details
         messages = state.get("messages", [])
-        adversary_turns = state["adversary_turns"]
+        critical_rounds = state["critical_rounds"]
         
-        # 将历史的 Tool 调用和对话转为纯文本，供 Adversary 审查
-        trace_str = "\n".join([f"{m.type}: {m.content}" for m in messages[:-1] if m.type in ['ai', 'tool']])
-        draft_json = draft.model_dump_json(indent=2)
-        
-        human_prompt = f"【漏洞扫描报告】\n{issue.model_dump_json(indent=2)}\n\n【专家工具调用记录】\n{trace_str}\n\n【专家初步结论】\n{draft_json}"
+        # 构造工具调用记录
+        trace_lines = []
+        for i, m in enumerate(messages[:-1]):
+            if m.type == 'ai':
+                calls_str = "\n".join([f"  - 调用工具: {tc['name']}, 参数: {tc['args']}" for tc in m.tool_calls])
+                trace_lines.append(f"<turn id=\"{i}\" role=\"ai\">\n{calls_str}\n</turn>")
+            elif m.type == 'tool':
+                trace_lines.append(
+                    f"<turn id=\"{i}\" role=\"tool\" tool_name=\"{m.name}\">\n"
+                    f"{m.content}\n"
+                    f"</turn>"
+                )
+        trace_str = '\n\n'.join(trace_lines)
+
+        # 构造提示词
+        human_prompt = (
+            f"【审查状态提示】：当前是针对该漏洞的第 {critical_rounds} 轮批判审查。\n"
+            "请严格按照系统指令，对以下专家的研判过程和最终结论进行审查：\n\n"
+
+            "<vulnerability_report>\n"
+            f"{issue.model_dump_json(indent=2)}\n"
+            "</vulnerability_report>\n\n"
+            
+            "<expert_tool_trace>\n"
+            f"{trace_str}\n"
+            "</expert_tool_trace>\n\n"
+            
+            "<expert_draft_conclusion>\n"
+            f"{draft.model_dump_json(indent=2)}\n"
+            "</expert_draft_conclusion>"
+
+            "【最终行动指令】：请思考并得出结论后，调用 CriticDecision 工具，输出你的审查决定（approve 或 revise），并给出详细理由。"
+        )
         
         llm_config = config['configurable'].get('llm_config')
-        structured_llm = get_model_bound_tools(llm_config, 'Adversary', [AdversaryDecision], max_tokens=800)
+        structured_llm = get_model_bound_tools(llm_config, 'Critic', [CriticDecision], max_tokens=800)
 
-        logger.info(f"[{self.expert_name}]-[issue({issue.id})] ⚖️ 正在进行对抗性审查...")
+        logger.info(f"[{self.expert_name}]-[issue({issue.id})] ⚖️ 正在进行第 {critical_rounds} 轮批判节点审查...")
         results = await structured_llm.ainvoke([
-            SystemMessage(content=ADVERSARY_PROMPT),
+            SystemMessage(content=CRITIC_PROMPT),
             HumanMessage(content=human_prompt)
         ])
+
+        if not hasattr(results, 'tool_calls') or not results.tool_calls:
+            logger.error(f"批判节点审查失败，LLM 未调用任何工具，返回了纯文本: {results.content}")
+            return {"audit_results": [state["draft_result"]]}
 
         tool_name = results.tool_calls[0]['name']
         tool_args = results.tool_calls[0]['args']
 
-        if tool_name != 'AdversaryDecision':
-            logger.error(f"对抗性审查失败，Adversary 的输出未调用 AdversaryDecision 工具")
+        if tool_name != 'CriticDecision':
+            logger.error(f"批判节点审查失败，LLM 的输出未调用 CriticDecision 工具")
             return {"audit_results": [state["draft_result"]]}
             
         try: 
-            adversary_dc = AdversaryDecision(**tool_args)
+            critic_dc = CriticDecision(**tool_args)
         except ValidationError as e:
-            logger.error(f"对抗性审查失败，Adversary 的输出参数未通过 Pydantic 校验，报错：{e}")
+            logger.error(f"批判节点审查失败，LLM 的输出参数未通过 Pydantic 校验，报错：{e}")
             return {"audit_results": [state["draft_result"]]}
 
-        if adversary_dc.decision == "overthrow" and adversary_turns > 0:
-            logger.warning(f"[{self.expert_name}]-[issue({issue.id})] 🚫 专家结论被推翻！理由：{adversary_dc.reason}")
-            critique_msg = HumanMessage(
-                content=f"【对抗节点驳回】你的结论已被推翻。理由如下：\n{adversary_dc.reason}\n请根据上述质疑，重新调用工具完善证据链，或修正你的研判结论与分析。"
-            )
-            return {
-                "messages": [critique_msg], 
-                "adversary_turns": adversary_turns - 1,
-                "draft_result": None
-            }
+        if critic_dc.decision == "revise":
+            if critical_rounds > 0:
+                logger.warning(f"[{self.expert_name}]-[issue({issue.id})] 🚫 专家结论被驳回！理由：{critic_dc.critique_reason}，建议: {critic_dc.suggested_action}")
+                critique_msg = HumanMessage(
+                    content=f"【批判节点驳回】你的结论已被驳回。\n理由如下：\n{critic_dc.critique_reason}\n建议如下：\n{critic_dc.suggested_action}\n请根据上述建议进行修正。"
+                )
+                return {
+                    "messages": [critique_msg], 
+                    "critical_rounds": critical_rounds - 1,
+                    "draft_result": None
+                }
+            else:
+                logger.warning(f"[{self.expert_name}]-[issue({issue.id})] ⚠️ 专家结论被驳回，但已达最大辩论轮数，系统强制放行。")
+        else:
+            logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 结论验证通过 (剩余辩论轮数: {critical_rounds})。")
 
-        logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 结论验证通过 (剩余辩论轮数: {adversary_turns})。")
         logger.info(f"[{self.expert_name}]-[issue({issue.id})] 最终审计结果：{str(draft)}")
         return {"audit_results": [state["draft_result"]]}
 
     def _format_output_node(self, state: AgentState):
-        """格式化节点：提取 LLM 的最终研判结论，存为草稿交由 Adversary 审查"""
+        """格式化节点：提取 LLM 的最终研判结论，存为草稿交由 Critic 审查"""
         tool_call = state["messages"][-1].tool_calls[0]
         issue = state['issue']
         
@@ -271,6 +306,7 @@ class BaseExpertAgent():
                 details=audit_data
             )
             logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 专家生成初步结论，准备进入对抗审查。")
+            logger.info(f"[{self.expert_name}]-[issue({issue.id})] 初步审计结果：{str(audit_data)}")
             return {"draft_result": audit_result}
 
         except ValidationError as e:
@@ -283,18 +319,18 @@ class BaseExpertAgent():
                 name=tool_call["name"],
                 tool_call_id=tool_call["id"]
             )
-            return {"messages": [error_msg], "remaining_turns": state['remaining_turns']-1}
+            return {"messages": [error_msg], "remaining_rounds": state['remaining_rounds']-1}
 
     def _retry_node(self, state: AgentState):
         """
         当模型输出纯文本而没有调用工具时，触发此节点进行警告。
         """
-        remaining_turns = state.get('remaining_turns')
+        remaining_rounds = state.get('remaining_rounds')
 
-        if remaining_turns <= -3:
+        if remaining_rounds <= -3:
             logger.error(f"[{self.expert_name}]-[issue({state['issue'].id})] ⚠️ LLM 在行动轮数耗尽后仍然连续三轮没有调用 ExpertAuditResult 输出最终结果")
             raise AgentError(f"{self.expert_name}故障，行动轮数耗尽，且 LLM 仍然连续三轮没有输出结果")
-        elif remaining_turns <= 0:
+        elif remaining_rounds <= 0:
             logger.warning(f"[{self.expert_name}]-[issue({state['issue'].id})] ⚠️ 行动轮数已耗尽。")
             warning_content = "行动轮数已全部用尽，你当前只能调用 ExpertAuditResult 工具"
         else:
@@ -306,7 +342,7 @@ class BaseExpertAgent():
         
         warning_msg = HumanMessage(content=warning_content)
     
-        return {"messages": [warning_msg], "remaining_turns": remaining_turns-1}
+        return {"messages": [warning_msg], "remaining_rounds": remaining_rounds-1}
 
     def _reject_node(self, state: AgentState):
         """当该专家认为分配的漏洞不在它的职能范围时，触发该节点进行退回"""
@@ -337,7 +373,7 @@ class BaseExpertAgent():
                         name=tool_call["name"],
                         tool_call_id=tool_call["id"]
                     )
-                    return {"messages": [error_msg], "remaining_turns": state['remaining_turns']-1}
+                    return {"messages": [error_msg], "remaining_rounds": state['remaining_rounds']-1}
 
     def _router_edge(self, state: AgentState) -> Literal["reject", "retry", "tools_call", "format_output"]:
         """条件边路由逻辑：判断是否需要调用工具"""
@@ -366,8 +402,8 @@ class BaseExpertAgent():
             
         return 'successful'
 
-    def _adversary_router_edge(self, state: AgentState) -> Literal["reasoning", "__end__"]:
-        """对抗节点后的路由逻辑"""
+    def _critic_router_edge(self, state: AgentState) -> Literal["reasoning", "__end__"]:
+        """批判节点后的路由逻辑"""
 
         # 草稿被清空，说明结论被驳回
         if state.get("draft_result") is None:
@@ -384,7 +420,7 @@ class BaseExpertAgent():
         builder.add_node("retry", self._retry_node)
         builder.add_node("tools_call", self._tools_call_node)
         builder.add_node("format_output", self._format_output_node)
-        builder.add_node("adversary", self._adversary_node)
+        builder.add_node("critic", self._critic_node)
     
         builder.add_edge(START, "reasoning")
         builder.add_conditional_edges(
@@ -412,12 +448,12 @@ class BaseExpertAgent():
             self._data_validation_router_edge,
             {
                 "failed": "reasoning",
-                "successful": "adversary"
+                "successful": "critic"
             }
         )
         builder.add_conditional_edges(
-            "adversary",
-            self._adversary_router_edge,
+            "critic",
+            self._critic_router_edge,
             {
                 "reasoning": "reasoning",
                 END: END

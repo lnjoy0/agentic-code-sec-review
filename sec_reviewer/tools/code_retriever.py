@@ -135,7 +135,7 @@ class CodeRetriever:
             target_name (str): 目标函数名或类名（需提供精确名称，勿带括号或模块前缀，如 "sanitize_input"）。
             max_lines (int, optional): 读取定义的最大行数，默认 200。该值只能小于或等于200。
 
-        Returns:
+        Rerounds:
             str: 包含定义所在路径、行号与代码片段的 Markdown 文本。
         """
         nodes_info = []
@@ -223,7 +223,7 @@ class CodeRetriever:
             start_line (int): 继续阅读的起始行号（严格填入截断提示中给出的 `next_start_line`）。
             max_lines (int, optional): 读取后续定义的最大行数，默认 200。该值只能小于或等于200。
 
-        Returns:
+        Rerounds:
             str: 指定行号后续的代码片段。
         """
         abs_path = self.repo_path / file_path
@@ -423,7 +423,7 @@ class CodeRetriever:
             detail_limit (int, optional): 详细代码片段的显示上限（默认 20）。超过限制将仅显示单行摘要。
             unseen_limit (int, optional): 单行摘要的显示上限（默认 30）。超过此限制的摘要将被完全隐藏。
 
-        Returns:
+        Rerounds:
             str: 按文件分组的引用列表。包含前部“详细片段”与后部“单行摘要”。若需继续查阅，请通过调整 `start_index` 翻页。
             💡 提示：若需深挖某次特定调用的完整执行链，请利用此处获取的文件路径与行号，配合相关代码读取工具进一步探查。
         """
@@ -650,7 +650,7 @@ class CodeRetriever:
             detail_limit (int, optional): 详细代码片段的显示上限（默认 20）。超过此限制的引用将仅显示单行摘要，以防上下文溢出。
             unseen_limit (int, optional): 单行摘要的显示上限（默认 30）。超过此限制的摘要将被完全隐藏。
 
-        Returns:
+        Rerounds:
             str: 包含读写类型 `[Read]/[Write]`、所在作用域及代码片段的 Markdown 记录流。
             ⚠️ 分页策略：为防上下文溢出，返回结果由前部的“详细片段”与后部的“单行摘要”组成。若详细区尚未展现变量的最终归宿（Sink），且摘要区暗示后续有重要操作，请严格按底部提示更新 `start_line` 继续拉取；若漏洞已被证实或证伪，请立即停止以节省 Token。
         """
@@ -979,7 +979,7 @@ class CodeRetriever:
             target_line (int): 需重点分析的中心行号（返回的代码片段中将以 `=>` 明确高亮指示该行）。
             max_lines (int, optional): 允许返回的最大上下文行数，默认 200。该值只能小于或等于200。
 
-        Returns:
+        Rerounds:
             str: 带有行号标注的 Markdown 代码块。
         """
         max_lines = max(0, min(max_lines, self.config_max_lines))
@@ -1055,7 +1055,7 @@ class CodeRetriever:
         Args:
             file_path (str): 目标 Python 文件的相对路径。
 
-        Returns:
+        Rerounds:
             str: 按作用域（全局 `<module_level>` 与局部 `def scope_name`）分组聚合的 import 语句 Markdown 列表。
         """
         grouped_imports, err = await self._core_get_file_imports(file_path)
@@ -1099,7 +1099,7 @@ class CodeRetriever:
             start_line (int): 起始行
             end_line (int): 结束行
             
-        Returns:
+        Rerounds:
             List[Dict]: 形如 [{"start": 10, "end": 50}, ...] 的列表
         """
         abs_path = self.repo_path / file_path

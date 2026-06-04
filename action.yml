@@ -35,14 +35,14 @@ inputs:
     default: 'token-is-not-needed'
 
   # === Agent 与 Context 配置 ===
-  max_turns:
+  max_rounds:
     description: 'Agent 最大行动轮数'
     required: false
     default: '30'
-  adversary_turns:
-    description: '研判专家与对抗节点的最大辩论轮数'
+  critical_rounds:
+    description: '研判专家与批判节点的最大辩论轮数'
     required: false
-    default: '3'
+    default: '2'
   scan_context_max_lines:
     description: 'LLM 扫描器的单次扫描上下文最大行数'
     required: false
@@ -190,7 +190,7 @@ runs:
         LLM_MODEL_NAME: ${{ inputs.llm_model_name }}
         LLM_BASE_URL: ${{ inputs.llm_base_url }}
         LLM_API_KEY: ${{ inputs.llm_api_key }}
-        AGENT_MAX_TURNS: ${{ inputs.max_turns }}
+        AGENT_MAX_rounds: ${{ inputs.max_rounds }}
         SCAN_CONTEXT_MAX_LINES: ${{ inputs.scan_context_max_lines }}
         RETRIEVAL_CONTEXT_MAX_LINES: ${{ inputs.retrieval_context_max_lines }}
 

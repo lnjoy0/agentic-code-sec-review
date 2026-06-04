@@ -214,19 +214,19 @@ class ExpertAuditResult(BaseModel):
         return self
 
 
-class AdversaryDecision(BaseModel):
-    """【提交是否推翻结论的决策】当你完成分析后，【必须且只能】调用此工具提交你的最终决策。"""
-    decision: Literal["overthrow", "agree"] = Field(
+class CriticDecision(BaseModel):
+    """【提交决策】当你完成分析后，【必须且只能】调用此工具提交你的最终决策。"""
+    decision: Literal["approve", "revise"] = Field(
         ...,
-        description=(
-            "是否成功推翻专家的结论。必须是 'overthrow' 或 'agree'。\n"
-            "- 如果专家证据链不完整或逻辑错误，要推翻该结论，请设为 'overthrow'。"
-            "- 如果专家结论合理且证据充分，要同意该结论，请设为 'agree'。"
-        )
+        description=("如果逻辑闭环且证据充分则选择 approve；如果发现逻辑漏洞或证据缺失则选择 revise。")
     )
-    reason: str = Field(
-        ...,
-        description="决策的详细理由。"
+    critique_reason: str = Field(
+        default="", 
+        description="如果不赞同专家的结论，请在这里详细、严厉地指出其分析过程中的逻辑漏洞或缺失的证据。如果 approve，则保持为空字符串。"
+    )
+    suggested_action: str = Field(
+        default="",
+        description="给专家的修改建议。例如具体指出下一步应该调用哪个工具查询什么信息，或者应该修改结论中的某些语句。如果 approve，则保持为空字符串。"
     )
 
 
@@ -277,9 +277,9 @@ class AuditState(TypedDict):
 class AgentState(TypedDict):
     issue: ScannedIssue
     messages: Annotated[list[BaseMessage], add_messages]
-    remaining_turns: int # 专家的剩余行动轮数
+    remaining_rounds: int # 专家的剩余行动轮数
     viewed_docs: Annotated[List[str], lambda x, y: list({*(x or []), *(y or [])})]
     rejection_history: Annotated[Dict[int, List[RejectionRecord]], merge_rejection_history]
     draft_result: Optional[IssueAuditResult]
-    adversary_turns: int # 专家与对抗节点的剩余辩论轮数
+    critical_rounds: int # 专家与批判节点的剩余辩论轮数
     audit_results: Annotated[List[IssueAuditResult], lambda x, y: (x or []) + (y or [])]

@@ -35,7 +35,7 @@ class ProjectAnalyzer:
             max_depth (int, optional): 遍历最大深度。默认3。警告：非必要勿轻易增大此值，以防返回过长导致上下文溢出。
             ignore_dirs (List[str], optional): 需额外跳过的目录名列表（默认已忽略 .git, venv, __pycache__ 等构建目录），必须是列表形式，请勿传字符串。
 
-        Returns:
+        Rerounds:
             str: 项目目录结构的树状字符串。
         """
         # 忽略的目录，用于节省 Token 和过滤无关安全审计的构建产物
@@ -102,7 +102,7 @@ class ProjectAnalyzer:
             is_regex (bool, optional): pattern 是否作为正则表达式解析。默认 True。提示：若检索包含代码符号的纯文本（如 `password = "123"`），建议设为 False 以避免正则语法错误。
             max_results (int, optional): 限制返回的最大匹配行数。默认 40。警告：为防止上下文溢出，非必要请勿调大此值。
 
-        Returns:
+        Rerounds:
             str: 包含匹配文件路径、行号及对应代码片段的 Markdown 文本。
         """
         # -n: 显示行号
@@ -274,7 +274,7 @@ class ProjectAnalyzer:
             start_line (int, optional): 起始读取行号，默认 1。
             max_lines (int, optional): 单次读取的最大行数，默认 200。该值只能小于或等于200。
 
-        Returns:
+        Rerounds:
             str: 附带行号的 Markdown 格式文件内容片段。
         """
         try:
@@ -452,7 +452,7 @@ class ProjectAnalyzer:
             target_line (int): 核心聚焦的中心行号（通常来源于搜索结果或告警信息）。工具会在返回文本中用 `=>` 明确高亮标出此行，方便快速定位。
             context_lines (int, optional): 上下文窗口的总展现行数（默认 20 行，目标行动态居中）。核心提示：仅当默认窗口未能覆盖完整的局部信息时，才适度调大此值。
 
-        Returns:
+        Rerounds:
             str: 附带行号及目标行指示符 (`=>`) 的 Markdown 代码块片段。
         """
         context_lines = max(0, min(context_lines, self.config_max_lines))

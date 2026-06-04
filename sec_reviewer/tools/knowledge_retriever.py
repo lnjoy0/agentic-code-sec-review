@@ -63,7 +63,7 @@ class VulnKnowledgeBase:
             Args:
                 vuln_name (str): 必须是上述【支持的漏洞列表】中精确的漏洞名称。
 
-            Returns:
+            Rerounds:
                 str: 目标漏洞的 Markdown 知识文档。
             """
             if vuln_name not in expert_vulns:
