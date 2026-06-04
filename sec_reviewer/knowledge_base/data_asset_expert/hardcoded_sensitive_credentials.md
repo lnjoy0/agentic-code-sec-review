@@ -36,7 +36,7 @@ domain: ["Data_Asset_Expert", "General_Expert"]
 
 #### 4. 证实标准
 
-当满足以下所有条件时，即可研判为真实漏洞（True Positive）：
+当满足以下**所有条件**时，即可研判为真实漏洞（True Positive）：
 1. **内容有效性**：硬编码的字符串具有高熵值，或者符合特定云服务商/平台的票据正则格式（如 GitHub 的 `ghp_...`，Slack 的 `xoxb-...`，OpenAI 的 `sk-...`）。
 2. **上下文敏感性**：该字符串在代码中被实际用于网络请求、数据库连接、加密签名、解密流程等需要鉴权/保密的上下文。
 3. **生产环境倾向**：文件路径和模块命名表明其属于核心业务逻辑或生产配置，而非测试文件、示例模板（如 `.env.example`）或文档。
@@ -44,7 +44,7 @@ domain: ["Data_Asset_Expert", "General_Expert"]
 
 #### 5. 证伪标准
 
-当满足以下任一条件时，即可研判为误报（False Positive）：
+当满足以下**任一条件**时，即可研判为误报（False Positive）：
 1. **环境上下文证伪**：文件路径包含 `test`, `demo`, `example`, `mock`, `doc`，或属于 `.env.example` / `.env.template` 等模板文件。
 2. **占位语义证伪**：字符串明显是占位符（如包含 `<...>`, `YOUR_...`, `REPLACE_...`）或是极低熵值的弱密码（在非生产逻辑中，如 `password123` 用于本地 SQLite 测试）。
 3. **公有资产证伪**：被标记的字符串实际上是公钥（Public Key）、非对称加密证书（CRT）、或者开源项目中已公开的校验用哈希值（如 MD5/SHA256 file hash）。

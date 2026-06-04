@@ -68,7 +68,7 @@ domain: ["Data_Asset_Expert", "General_Expert"]
 
 #### 4. 证实标准
 
-当满足以下所有条件时，即可研判为真实漏洞（True Positive）：
+当满足以下**所有条件**时，即可研判为真实漏洞（True Positive）：
 1.  **明确使用了弱随机源：** 代码实际调用了 `random` 模块或类似非 CSPRNG 库的方法。
 2.  **处于安全敏感上下文：** 生成的随机值用于直接或间接影响系统安全性，例如：
     *   用户认证凭据（密码、一次性密码 OTP、验证码）。
@@ -79,7 +79,7 @@ domain: ["Data_Asset_Expert", "General_Expert"]
 
 #### 5. 证伪标准
 
-当满足以下任一条件时，即可研判为误报（False Positive）：
+当满足以下**任一条件**时，即可研判为误报（False Positive）：
 1.  **非安全敏感上下文：** 随机数仅用于统计模拟、数据抽样、UI 展示打乱、游戏逻辑、网络重试抖动（Jitter）、非安全业务的唯一性去重（且不作为鉴权依据）或测试代码。
 2.  **已使用安全的替代方案：** 代码表面上导入了 `random` 模块，但实际调用的是 `random.SystemRandom` 实例（它底层依赖 `os.urandom`，是密码学安全的）。
     ```python

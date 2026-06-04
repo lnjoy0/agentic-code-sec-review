@@ -273,7 +273,7 @@ class BaseExpertAgent():
             return {"audit_results": [state["draft_result"]]}
 
         if critic_dc.decision == "revise":
-            logger.warning(f"[{self.expert_name}]-[issue({issue.id})] 🚫 专家结论被驳回！理由：{critic_dc.critique_reason}，建议: {critic_dc.suggested_action}")
+            logger.warning(f"[{self.expert_name}]-[issue({issue.id})] 🚫 专家结论被驳回。理由：{critic_dc.critique_reason}，建议: {critic_dc.suggested_action}")
             critique_msg = HumanMessage(
                 content=f"【批判节点驳回】你的结论已被驳回。\n理由如下：\n{critic_dc.critique_reason}\n建议如下：\n{critic_dc.suggested_action}\n请根据上述建议进行修正。"
             )
@@ -307,7 +307,7 @@ class BaseExpertAgent():
                 end_line=issue.snippet_region.end_line,
                 details=audit_data
             )
-            logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 专家生成初步结论，准备进入对抗审查。")
+            logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 专家生成初步结论，准备进入批判节点审查。")
             logger.info(f"[{self.expert_name}]-[issue({issue.id})] 初步审计结果：{str(audit_data)}")
             return {"draft_result": audit_result}
 

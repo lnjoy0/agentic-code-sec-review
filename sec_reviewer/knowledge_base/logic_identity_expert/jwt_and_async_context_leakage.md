@@ -32,7 +32,7 @@ domain: ["Logic_Identity_Expert", "General_Expert"]
 
 #### 4. 证实标准
 
-若同时满足以下条件，应将该漏洞判定为 **True Positive (证实)**：
+若以下条件**全部满足**，应将该漏洞判定为 **True Positive (证实)**：
 1. **异步环境确认**：执行环境为异步（涉及 `async def`, `await`, 或明确的 ASGI 框架）。
 2. **共享状态写入**：JWT 解析后的用户信息被写入了共享作用域。具体表现为：
    - 使用了 `global` 关键字修改模块级变量。
@@ -43,7 +43,7 @@ domain: ["Logic_Identity_Expert", "General_Expert"]
 
 #### 5. 证伪标准
 
-若满足以下任何一个条件，应将该漏洞判定为 **False Positive (证伪)**：
+若满足以下**任意一条**，应将该漏洞判定为 **False Positive (证伪)**：
 1. **协程安全变量**：身份信息的存储变量被明确定义为 `contextvars.ContextVar`，且读写操作均通过其内置的 `.set()` 和 `.get()` 方法完成。
 2. **请求绑定存储**：数据被挂载到框架明确隔离的请求上下文容器中（如 `request.state`, `request.scope`, 或 Quart 的 `g` 变量）。
 3. **局部作用域与显式传参**：身份信息仅存在于函数的局部变量中，并作为参数在函数调用栈中显式向下层传递，没有任何脱离函数作用域的驻留。

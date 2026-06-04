@@ -61,7 +61,7 @@ domain: ["Data_Asset_Expert", "General_Expert"]
 
 #### 4. 证实标准
 
-当满足以下所有条件时，即可研判为真实漏洞（True Positive）：
+当满足以下**所有条件**时，即可研判为真实漏洞（True Positive）：
 1.  **数据源确认**：通过数据流分析（Data Flow Analysis），确认被记录的变量确实来源于敏感输入（如接收前端传来的密码、从环境变量/Vault读取的真实密钥、包含 PII 的数据库查询结果）。
 2.  **触发点确认**：确认该变量被作为参数传递给了 `logging` 等持久化输出函数的输出负载中。
 3.  **链路无净化**：在数据源赋值到日志触发点之间的数据流链路上，**不存在**针对该变量的字符串替换、切片脱敏、哈希计算或白名单字段过滤操作。
@@ -69,7 +69,7 @@ domain: ["Data_Asset_Expert", "General_Expert"]
 
 #### 5. 证伪标准
 
-当满足以下任一条件时，即可研判为误报（False Positive）：
+当满足以下**任一条件**时，即可研判为误报（False Positive）：
 1.  **链路已净化**：数据流途径了明确的清洗函数（如 `sanitize_dict()`, `mask_credit_card()`, `hashlib.sha256().hexdigest()`），日志实际打印的是安全数据。
 2.  **安全上下文/占位符**：输出的字符串是一个固定常量、占位符或仅代表字段的存在性，如 `logger.info("Key format is invalid")` 或 `logger.info(f"API key is set: {bool(api_key)}")`。
 3.  **全局拦截器存在**：当前 Python 项目初始化时，为 Logger 绑定了可靠的、基于正则或键名的全局敏感词过滤组件（如自定义的 `SanitizedFormatter`），因此即使业务层直接传入敏感对象，底层也不会泄露。
