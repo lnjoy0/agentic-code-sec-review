@@ -73,6 +73,10 @@ def get_file(user_input):
         return open(os.path.join(BASE_DIR, ALLOWED_FILES[user_input])).read()
 ```
 
+#### 4. 绕过技巧
+1. 对于过滤方法： `name.replace('../', '')`，该方法会将 `name` 中的所有 `../` 都替换为空字符串
+   1. 如果该方法仅执行一次的话，可以使用 `....//` 来绕过（`....//` 被替换一次 `../` 之后仍然是 `../`）
+
 #### 4. 证实标准
 智能体在研判扫描报告时，若要确认该漏洞为**真实漏洞 (True Positive)**，需同时满足以下条件：
 1.  **完整污点链路**: 存在从外部不可信输入（Source）到文件操作 API（Sink）的明确数据流。
