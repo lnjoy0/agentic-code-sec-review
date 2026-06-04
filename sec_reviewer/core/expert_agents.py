@@ -296,8 +296,8 @@ class BaseExpertAgent():
                 round=critical_rounds,
                 expert_verdict=draft.verdict,
                 expert_reason=draft.analysis_reasoning,
-                review_action=critic_dc.decision,
-                review_feedback=critic_dc.critique_reason,
+                review_decision=critic_dc.decision,
+                review_decision_reason=critic_dc.critique_reason,
                 review_suggest=critic_dc.suggested_action
             )
             
