@@ -222,13 +222,22 @@ class CriticDecision(BaseModel):
     )
     critique_reason: str = Field(
         default="", 
-        description="如果不赞同专家的结论，请在这里详细、严厉地指出其分析过程中的逻辑漏洞或缺失的证据。如果 approve，则保持为空字符串。"
+        description="如果不赞同专家的结论，请在这里详细地指出其存在的问题。如果 approve，则保持为空字符串。"
     )
     suggested_action: str = Field(
         default="",
-        description="给专家的修改建议。例如具体指出下一步应该调用哪个工具查询什么信息，或者应该修改结论中的某些语句。如果 approve，则保持为空字符串。"
+        description="给专家的修改建议。如果 approve，则保持为空字符串。"
     )
 
+
+class CriticalContent(BaseModel):
+    """审查节点的批判内容"""
+    round: int
+    expert_verdict: str
+    expert_reason: str
+    review_action: str
+    review_feedback: str
+    review_suggest: str
 
 class IssueAuditResult(BaseModel):
     """每个漏洞的最终审计结果"""
@@ -281,5 +290,5 @@ class AgentState(TypedDict):
     viewed_docs: Annotated[List[str], lambda x, y: list({*(x or []), *(y or [])})]
     rejection_history: Annotated[Dict[int, List[RejectionRecord]], merge_rejection_history]
     draft_result: Optional[IssueAuditResult]
-    critical_rounds: int # 批判节点的当前审查轮数
+    critical_history: Annotated[List[CriticalContent], lambda x, y: (x or []) + (y or [])]
     audit_results: Annotated[List[IssueAuditResult], lambda x, y: (x or []) + (y or [])]

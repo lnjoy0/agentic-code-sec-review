@@ -4,14 +4,15 @@ from typing import List, Literal
 from langgraph.graph import StateGraph, START, END
 from langchain_openai import ChatOpenAI
 from langchain_core.runnables import RunnableConfig
-from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
+from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, RemoveMessage
 from pydantic import ValidationError
 
 from sec_reviewer.knowledge_base.sys_prompts import (
     INJECTION_EXPERT_PROMPT, DATA_ASSET_EXPERT_PROMPT, INFRA_SUPPLY_EXPERT_PROMPT,
     LOGIC_IDENTITY_EXPERT_PROMPT, GENERAL_EXPERT_PROMPT, CRITIC_PROMPT
 )
-from .data_models import AgentState, ExpertAuditResult, Rejection, IssueAuditResult, CriticDecision
+from .data_models import (AgentState, ExpertAuditResult, Rejection,
+                          IssueAuditResult, CriticDecision, CriticalContent)
 from .config import LLMConfig
 
 
@@ -104,9 +105,12 @@ class BaseExpertAgent():
         except Exception as e:
             logger.error(f"LLM 调用出错：{e}。输入消息：{invocation_messages}")
             raise
-            
-        # 将 LLM 的回复加入状态
+        
         state_update_messages.append(response)
+
+        if messages[-1].content.startswith("【审查节点驳回】"):
+            state_update_messages.append(RemoveMessage(id=messages[-1].id))
+
         return {"messages": state_update_messages}
 
     async def _tools_call_node(self, state: AgentState, config: RunnableConfig):
@@ -204,9 +208,10 @@ class BaseExpertAgent():
         issue = state["issue"]
         draft = state["draft_result"].details
         messages = state.get("messages", [])
-        critical_rounds = state["critical_rounds"]
+        critical_history = state["critical_history"]
         max_critical_rounds = config['configurable'].get('agent_config').max_critical_rounds
         
+        critical_rounds = len(critical_history) + 1
         if critical_rounds > max_critical_rounds:
             logger.warning(f"[{self.expert_name}]-[issue({issue.id})] ⚠️ 由于已达到最大审查轮数 {max_critical_rounds}，批判节点不再审查专家结论，直接放行")
             logger.info(f"[{self.expert_name}]-[issue({issue.id})] 最终审计结果：{str(draft)}")
@@ -239,11 +244,15 @@ class BaseExpertAgent():
             f"{trace_str}\n"
             "</expert_tool_trace>\n\n"
             
-            "<expert_draft_conclusion>\n"
-            f"{draft.model_dump_json(indent=2)}\n"
-            "</expert_draft_conclusion>"
+            "<review_history>\n"
+            f"{'\n'.join([c.model_dump_json(indent=2) for c in critical_history])}\n"
+            "</review_history>\n\n"
 
-            "【最终行动指令】：请思考并得出结论后，调用 CriticDecision 工具，输出你的审查决定（approve 或 revise），并给出详细理由。"
+            "<expert_final_conclusion>\n"
+            f"{draft.model_dump_json(indent=2)}\n"
+            "</expert_final_conclusion>"
+
+            "【最终行动指令】：请思考并得出结论后，调用 CriticDecision 工具进行输出。"
         )
         
         llm_config = config['configurable'].get('llm_config')
@@ -274,12 +283,22 @@ class BaseExpertAgent():
 
         if critic_dc.decision == "revise":
             logger.warning(f"[{self.expert_name}]-[issue({issue.id})] 🚫 专家结论被驳回。理由：{critic_dc.critique_reason}，建议: {critic_dc.suggested_action}")
+                        
+            critical_content = CriticalContent(
+                round=critical_rounds,
+                expert_verdict=draft.verdict,
+                expert_reason=draft.analysis_reasoning,
+                review_action=critic_dc.decision,
+                review_feedback=critic_dc.critique_reason,
+                review_suggest=critic_dc.suggested_action
+            )
+            
             critique_msg = HumanMessage(
                 content=f"【审查节点驳回】你的结论已被驳回。\n理由如下：\n{critic_dc.critique_reason}\n建议如下：\n{critic_dc.suggested_action}\n请根据上述建议进行修正。"
             )
             return {
-                "messages": [critique_msg], 
-                "critical_rounds": critical_rounds + 1,
+                "messages": [RemoveMessage(id=messages[-1].id), critique_msg], # 移除旧的审计结论，以节省上下文空间
+                "critical_history": [critical_content],
                 "draft_result": None
             }
         else:

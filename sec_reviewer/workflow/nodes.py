@@ -219,7 +219,7 @@ def _build_task(expert_name, issue, max_rounds, rejection_history):
             "viewed_docs": [],
             "rejection_history": rejection_history,
             "draft_result": None,
-            "critical_rounds": 1,
+            "critical_history": [],
             "audit_results": []
         }
     }
