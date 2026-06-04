@@ -108,7 +108,7 @@ class BaseExpertAgent():
         
         state_update_messages.append(response)
 
-        if messages[-1].content.startswith("【审查节点驳回】"):
+        if messages and messages[-1].content.startswith("【审查节点驳回】"):
             state_update_messages.append(RemoveMessage(id=messages[-1].id))
 
         return {"messages": state_update_messages}
