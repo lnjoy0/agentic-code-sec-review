@@ -8,6 +8,8 @@ import tree_sitter_python as tspython
 from tree_sitter import Language, Parser, Node
 from langchain_core.tools import StructuredTool
 
+from sec_reviewer.core.config import CodeRetrievalConfig
+
 
 logger = logging.getLogger(__name__)
 
@@ -15,14 +17,14 @@ logger = logging.getLogger(__name__)
 class CodeRetriever:
     """使用 ripgrep 和 tree-sitter 实现的代码检索器"""
     
-    def __init__(self, repo_path: str, max_lines: int):
+    def __init__(self, repo_path: str, config: CodeRetrievalConfig):
         self.repo_path = Path(repo_path).resolve() # 工作区的绝对路径
         if not self.repo_path.exists():
             raise ValueError(f"仓库路径不存在: {self.repo_path}")
         if not self.repo_path.is_dir():
             raise ValueError(f"Error: 路径 {self.repo_path} 不是一个目录。")
         
-        self.config_max_lines = max_lines
+        self.config_max_lines = config.context_max_lines
         self.language = Language(tspython.language())
         self.parser = Parser(self.language)
 

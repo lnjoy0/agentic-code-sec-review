@@ -70,6 +70,7 @@ class AgentConfig(BaseModel):
 class CodeRetrievalConfig(BaseModel):
     """配置代码检索参数"""
     context_max_lines: int = Field(default=200, ge=1) # 检索代码时的最大上下文行数
+    single_line_max_length: int = Field(default=500, ge=1) # 检索代码时的单行最大字符数
 
 
 @dataclass

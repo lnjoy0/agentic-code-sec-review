@@ -7,7 +7,8 @@ import os
 from sec_reviewer.tools.code_retriever import CodeRetriever
 from sec_reviewer.tools.project_analyzer import ProjectAnalyzer
 from sec_reviewer.tools.knowledge_retriever import VulnKnowledgeBase
-from sec_reviewer.core.data_models import AgentState, AuditState
+from sec_reviewer.core.data_models import AuditState
+from sec_reviewer.core.config import CodeRetrievalConfig
 from sec_reviewer.core.expert_agents import (InjectionExpert, DataAssetExpert, InfraSupplyExpert,
                                              LogicIdentityExpert, GeneralExpert)
 from .nodes import (heuristic_scanner_node, semantic_scanner_node,
@@ -48,11 +49,14 @@ def check_rejection_edge(state: AuditState) -> Literal["dynamic_router", "__end_
 def create_graph():
     """代码安全审计工作流主图"""
     repo_path = os.getenv("GITHUB_WORKSPACE", ".")
-    retrieval_max_lines = int(os.getenv("RETRIEVAL_CONTEXT_MAX_LINES", "200"))
+    retrieval_config = CodeRetrievalConfig(
+        context_max_lines=int(os.getenv("RETRIEVAL_CONTEXT_MAX_LINES", "200")),
+        single_line_max_length=500
+    )
     
     # 实例化工具类
-    retriever = CodeRetriever(repo_path, retrieval_max_lines)
-    analyzer = ProjectAnalyzer(repo_path, retrieval_max_lines)
+    retriever = CodeRetriever(repo_path, retrieval_config)
+    analyzer = ProjectAnalyzer(repo_path, retrieval_config)
     knowledge_base = VulnKnowledgeBase()
     
     general_tools = [*retriever.as_tools(), *analyzer.as_tools()]

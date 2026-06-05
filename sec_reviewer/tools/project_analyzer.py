@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 from langchain_core.tools import StructuredTool
 
+from sec_reviewer.core.config import CodeRetrievalConfig
+
 
 logger = logging.getLogger(__name__)
 
@@ -12,9 +14,10 @@ logger = logging.getLogger(__name__)
 class ProjectAnalyzer:
     """提供项目与文件分析工具"""
     
-    def __init__(self, repo_path: str, max_lines: int):
+    def __init__(self, repo_path: str, config: CodeRetrievalConfig):
         self.repo_path = Path(repo_path).resolve()
-        self.config_max_lines = max_lines
+        self.config_max_lines = config.context_max_lines
+        self.single_line_max_length = config.single_line_max_length
 
         if not self.repo_path.exists():
             raise ValueError(f"仓库路径不存在: {self.repo_path}")
@@ -107,7 +110,7 @@ class ProjectAnalyzer:
         """
         # -n: 显示行号
         # --no-heading: 确保每行格式为 filepath:line:content
-        cmd = ["rg", "-n", "--color=never", "--no-heading"]
+        cmd = ["rg", "-n", "--color=never", "--no-heading", "-M", "2000"]
         
         if not is_regex:
             cmd.append("-F") # 固定字符串匹配
@@ -156,6 +159,20 @@ class ProjectAnalyzer:
             if len(parts) >= 3:
                 abs_file_path, line_num, content = parts[0], parts[1], parts[2]
                 
+                # 防止单行文本超长（例如 .min.js 等压缩文件）造成 LLM 上下文爆炸
+                if len(content) > self.single_line_max_length:
+                    # 如果是普通文本搜索，尝试将关键字居中截取，保留有意义的上下文
+                    if not is_regex and pattern in content:
+                        idx = content.find(pattern)
+                        start = max(0, idx - (self.single_line_max_length // 2))
+                        end = min(len(content), idx + (self.single_line_max_length // 2))
+                        prefix = "..." if start > 0 else ""
+                        suffix = "..." if end < len(content) else ""
+                        content = f"{prefix}{content[start:end]}{suffix} [单行过长已截断]"
+                    else:
+                        # 正则搜索或未找到精确位置时，直接截断头部
+                        content = content[:self.single_line_max_length] + " ... [单行过长已截断]"
+
                 # 转为相对路径，使输出更简短
                 try:
                     from pathlib import Path
@@ -301,6 +318,10 @@ class ProjectAnalyzer:
         ]
         
         for i, line in enumerate(chunk_lines):
+            if len(line) > self.single_line_max_length:
+                hidden_chars = len(line) - self.single_line_max_length
+                line = line[:self.single_line_max_length] + f" ... [单行超长截断，已隐藏 {hidden_chars} 字符]"
+
             current_line_num = start_line + i
             output_lines.append(f"{current_line_num:4d} | {line}") # 附带行号
             
@@ -422,6 +443,10 @@ class ProjectAnalyzer:
         
         for i, line in enumerate(chunk_lines):
             current_line_num = idx_start + 1 + i
+
+            if len(line) > self.single_line_max_length:
+                hidden_chars = len(line) - self.single_line_max_length
+                line = line[:self.single_line_max_length] + f" ... [单行超长截断，已隐藏 {hidden_chars} 字符]"
             
             # 给目标行打上 `=>` 箭头标记
             if start_line <= current_line_num <= end_line:
