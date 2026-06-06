@@ -21,6 +21,8 @@ class HeuristicScanner:
     def __init__(self, scanner_config: ScannerConfig, retrieval_config: CodeRetrievalConfig):
         self.scanner_config = scanner_config
         self.retrieval_max_lines = int(retrieval_config.context_max_lines)
+        self.retriever = CodeRetriever(scanner_config.workspace_dir, retrieval_config)
+        self.analyzer = ProjectAnalyzer(scanner_config.workspace_dir, retrieval_config)
     
     async def get_report(self, patched_files: List[PatchedFile]) -> Dict[str, List[ScannedIssue]]:
         """获取传统工具的扫描报告"""
@@ -293,22 +295,20 @@ class HeuristicScanner:
                 message = message + '\n' + cve_details
 
             try: 
-                analyzer = ProjectAnalyzer(self.scanner_config.workspace_dir, self.retrieval_max_lines)
-                snippet_text = await analyzer.core_get_file_snippet(
+                snippet_text = await self.analyzer.core_get_file_snippet(
                         file_path=path,
                         start_point=(snippet_region["start_line"], snippet_region["start_column"]),
                         end_point=(snippet_region["end_line"], snippet_region["end_column"])    
                     )
                 
                 if Path(path).suffix == '.py':
-                    retriever = CodeRetriever(self.scanner_config.workspace_dir, self.retrieval_max_lines)
-                    context, _ = await retriever.core_get_code_context(
+                    context, _ = await self.retriever.core_get_code_context(
                         file_path=path,
                         start_point=(snippet_region["start_line"], snippet_region["start_column"]),
                         end_point=(snippet_region["end_line"], snippet_region["end_column"])
                     )
                 else:
-                    context, _ = await analyzer.core_get_file_context(
+                    context, _ = await self.analyzer.core_get_file_context(
                         file_path=path, 
                         start_line=snippet_region["start_line"],
                         end_line=snippet_region["end_line"]
