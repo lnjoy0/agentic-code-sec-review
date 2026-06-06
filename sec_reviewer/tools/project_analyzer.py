@@ -333,8 +333,9 @@ class ProjectAnalyzer:
             output_lines.append("\n---")
             output_lines.append(
                 f"💡 **文件截断提示**: 当前仅展示至第 {idx_end} 行，文件尚未结束。\n"
-                f"若需继续阅读后续配置内容，请再次调用此工具并传入参数 `start_line={next_start}`。"
-                f"**注意**：某些配置文件可能拥有超大内容，很容易引起上下文爆炸，**如非必要，禁止反复读取无关配置文件**。"
+                f"若需继续阅读后续配置内容，请再次调用此工具并传入参数 `start_line={next_start}`。\n"
+                f"**注意**：某些配置文件可能拥有超大内容，很容易引起上下文爆炸，**如非必要，禁止反复读取无关配置文件**。\n"
+                f"如果需要搜索某个内容，请使用 `global_search` 工具。"
             )
         else:
             output_lines.append(f"\n*(✅ 已达文件末尾)*")
