@@ -1,11 +1,11 @@
 ---
 cwe_id: ["CWE-1336"]
-name: "Server-Side_Template_Injection"
+name: "SSTI"
 domain: ["Injection_Expert", "General_Expert"]
 ---
 
 #### 1. 漏洞机制
-攻击者能够将恶意构造的输入直接作为模板内容的一部分，注入到服务端模板引擎（如 Jinja2、Mako、Django Templates 等）中并被解析执行，从而导致敏感信息泄露、沙箱逃逸或远程代码执行（RCE）。
+SSTI（Server-Side Template Injection）：攻击者能够将恶意构造的输入直接作为模板内容的一部分，注入到服务端模板引擎（如 Jinja2、Mako、Django Templates 等）中并被解析执行，从而导致敏感信息泄露、沙箱逃逸或远程代码执行（RCE）。
 
 #### 2. 漏洞代码样例
 

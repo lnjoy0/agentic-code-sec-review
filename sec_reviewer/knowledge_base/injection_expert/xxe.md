@@ -1,11 +1,11 @@
 ---
 cwe_id: ["CWE-611"]
-name: "XML_External_Entity_Injection"
+name: "XXE"
 domain: ["Injection_Expert", "General_Expert"]
 ---
 
 #### 1. 漏洞机制
-应用程序在解析不受信任的XML输入时，未禁用外部实体（External Entities）和文档类型定义（DTD）的加载，导致攻击者可通过构造恶意的XML载荷读取服务器本地文件、发起服务器端请求伪造（SSRF）或执行拒绝服务攻击（DoS）。
+XXE（XML_External_Entity_Injection），应用程序在解析不受信任的XML输入时，未禁用外部实体（External Entities）和文档类型定义（DTD）的加载，导致攻击者可通过构造恶意的XML载荷读取服务器本地文件、发起服务器端请求伪造（SSRF）或执行拒绝服务攻击（DoS）。
 
 #### 2. 漏洞代码样例
 

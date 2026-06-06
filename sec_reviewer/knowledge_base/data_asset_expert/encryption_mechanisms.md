@@ -1,6 +1,6 @@
 ---
 cwe_id: ["CWE-327", "CWE-329", "CWE-1204", "CWE-780"]
-name: "Encryption_Mechanisms"
+name: "Weak_Encryption_Mechanisms"
 domain: ["Data_Asset_Expert", "General_Expert"]
 ---
 #### 1. 漏洞机制

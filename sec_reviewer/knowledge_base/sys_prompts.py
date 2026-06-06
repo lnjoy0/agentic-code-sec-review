@@ -16,7 +16,7 @@ SCANNER_PROMPT = """# ROLE
 4. 【业务与身份逻辑】：应用上下文相关的权限与业务流程缺陷。
    - 涵盖：越权访问（IDOR）、未授权访问、鉴权绕过、支付漏洞、状态机绕过、异步上下文泄露、批量赋值漏洞、条件竞争漏洞等。
 5. 【其他边缘风险与异常模式】：所有无法清晰归类到上述 4 类，但存在潜在安全隐患的模糊或长尾缺陷。
-   - 涵盖：拒绝服务（ReDoS、内存/资源耗尽）、语言底层 API 罕见误用、多类低危缺陷组合的复合型风险，以及任何凭直觉认为存在异常的代码逻辑。
+   - 涵盖：拒绝服务（ReDos、内存/资源耗尽、Zip Bomb）、Python 动态特性与反射滥用、Python 魔法方法滥用与类型混淆缺陷、多类低危缺陷组合的复合型风险，以及任何凭直觉认为存在安全漏洞的代码逻辑。
 
 # OPERATING RULES
 1. 仅基于提供的增量代码和有限上下文进行分析，不要过度脑补不存在的代码。
@@ -48,21 +48,22 @@ ROUTER_PROMPT = """# ROLE
 
 2. 【Data_Asset_Expert】(数据与资产安全专家)
    - 负责：静态敏感资产保护与加密算法合规性。
-   - 涵盖：硬编码凭据泄露（Token/Key/Password）、弱密码学算法（MD5/SHA1等）、弱随机数、不安全哈希等。
+   - 涵盖：加密机制缺陷、硬编码凭据泄露（Token/Key/Password）、Sensitive Data Logging、弱密码学算法（MD5/SHA1等）、弱随机数、不安全哈希等。
    - 典型长尾标签：AES-ECB Cipher Mode, Predictable IV/Nonce, Sensitive Data in Logs, Insufficient Entropy, Weak Key Derivation (如使用了迭代次数过低的 PBKDF2 或直接使用普通哈希)等。
 
 3. 【Infra_Supply_Expert】(环境与供应链安全专家)
    - 负责：应用外部依赖与底层环境基线风险。
-   - 涵盖：第三方依赖组件 CVE、Dockerfile/K8s 配置风险、IaC 配置不当等。
+   - 涵盖：第三方依赖组件 CVE、Dockerfile/K8s 配置风险、启用框架 debug 模式、不安全的网络绑定、恶意 setup 脚本等。
    - 典型长尾标签：Werkzeug/Django Debug Mode Enabled, Unsafe Package Index (如 --extra-index-url 导致依赖劫持), Wildcard ALLOWED_HOSTS / Insecure Binding, Malicious setup.py, Missing .dockerignore Secrets Leak 等。
 
 4. 【Logic_Security_Expert】(业务与身份安全专家)
    - 负责：应用上下文相关的权限与业务流程缺陷。
-   - 涵盖：越权访问（IDOR）、未授权访问、鉴权绕过、支付漏洞、状态机绕过等。
+   - 涵盖：越权访问（IDOR）、未授权访问、鉴权绕过、支付漏洞、状态机绕过、异步上下文泄露、批量赋值漏洞、条件竞争漏洞等。
    - 典型长尾标签：Decorator Order Bypass (如 Flask 中 @login_required 位置错误), Pydantic/DRF Mass Assignment, Contextvars/Global State Leakage, JWT Algorithm Confusion/None Alg, Type Coercion/Confusion Bypass 等。
 
 5. 【General_Expert】(全科/兜底专家)
-   - 负责：所有无法清晰归类到上述 5 类专家的漏洞，或跨域特征极度模糊的边缘漏洞。
+   - 负责：所有无法清晰归类到上述 4 类专家的漏洞，或跨域特征极度模糊的边缘漏洞。
+   - 涵盖：拒绝服务（ReDos、内存/资源耗尽、Zip Bomb）、Python 动态特性与反射滥用、Python 魔法方法滥用与类型混淆缺陷等。
 
 # ROUTING LOGIC & REJECTION HANDLING
 在做出路由决策前，你必须严格执行以下逻辑：

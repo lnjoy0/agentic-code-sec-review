@@ -75,6 +75,7 @@ class CodeSecReviewer:
 
         except Exception as e:
             logger.error(f"Error during PR review: {e}")
+            logger.exception()
             raise ReviewerError(f"Review process failed: {e}")
 
     def close(self):
