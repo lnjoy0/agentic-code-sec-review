@@ -26,9 +26,8 @@ class LLMSemanticScanner:
         structured_llm: Any
     ):
         self.config = scanner_config
-        retrieval_max_lines = int(retrieval_config.context_max_lines)
-        self.retriever = CodeRetriever(self.config.workspace_dir, retrieval_max_lines)
-        self.analyzer = ProjectAnalyzer(self.config.workspace_dir, retrieval_max_lines)
+        self.retriever = CodeRetriever(self.config.workspace_dir, retrieval_config)
+        self.analyzer = ProjectAnalyzer(self.config.workspace_dir, retrieval_config)
 
         prompt = ChatPromptTemplate.from_messages([
             ("system", SCANNER_PROMPT),
