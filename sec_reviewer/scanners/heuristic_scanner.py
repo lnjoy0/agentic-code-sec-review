@@ -61,15 +61,14 @@ class HeuristicScanner:
         # 控制并发数量
         semaphore = asyncio.Semaphore(2)
 
+        rules = self.scanner_config.semgrep_rules
+        severity = self.scanner_config.semgrep_severity
+        rules_list = rules.split(' ')
+
         # 单个批次的执行逻辑
         async def process_chunk(file_chunk):
             async with semaphore:
-                cmd_args = ["scan"] + file_chunk + [
-                    "--config=p/default", "--config=p/security-audit", "--config=p/secrets", 
-                    "--config=p/r2c-security-audit", "--config=p/insecure-transport",
-                    "--config=p/python", "--config=p/django", "--config=p/flask", "--config=p/sql-injection", # python相关规则集
-                    "--json", "--severity=ERROR", 
-                    ]
+                cmd_args = ["scan"] + file_chunk + rules_list + ["--json", f"--severity={severity}"]
                 
                 logger.info(f"run: semgrep {cmd_args}")
                 process = await asyncio.create_subprocess_exec(
@@ -109,7 +108,7 @@ class HeuristicScanner:
             "gitleaks", "detect", self.scanner_config.workspace_dir,
             f"--log-opts={self.scanner_config.base_sha}...{self.scanner_config.head_sha}", # 只扫描从 base 到 head 之间新增的 commits
             "--no-banner", "--redact", # --redact 不输出敏感信息详情
-            "-f", "sarif",
+            "-f", "json",
             "-r", "-" # 将 JSON 报告输出到标准输出 (stdout)
         ]
         
@@ -135,10 +134,8 @@ class HeuristicScanner:
             logger.warning(f"Gitleaks Log/Error: {stderr_str.strip()}")
 
         try:
-            data = json.loads(stdout_str)
-            runs = data.get("runs", [])
-            if runs and len(runs) > 0:
-                results = runs[0].get("results", [])
+            results = json.loads(stdout_str)
+            if results and isinstance(results, list):
                 return await self._convert_to_scanned_issue(results, tool_name='gitleaks')
             return []
         
@@ -152,10 +149,11 @@ class HeuristicScanner:
         此外，其会使用内置的规则集检查配置文件的安全性(IaC 扫描)，关注Dockerfile等文件
         """
         logger.info("Trivy running...")
+        severity = self.scanner_config.trivy_severity
         cmd = [
             "trivy", "fs", self.scanner_config.workspace_dir,
-            "-f", "sarif", 
-            "--severity", "HIGH,CRITICAL",
+            "-f", "json", 
+            "--severity", severity,
             "--cache-dir", "/home/runner/.cache/trivy"
         ]
         
@@ -179,13 +177,25 @@ class HeuristicScanner:
 
         try:
             data = json.loads(stdout_str)
-            runs = data.get("runs", [])
-            if runs and len(runs) > 0:
-                results = runs[0].get("results", [])
-                cve_list = runs[0].get("tool", {}).get("driver", {}).get("rules", [])
-                filtered_results = self._filter_results(results, patched_files)
-                return await self._convert_to_scanned_issue(filtered_results, tool_name='trivy', cve_list=cve_list)
+            results = data.get("Results", [])
+            
+            all_issues = []
+            for res in results:
+                target_path = res.get("Target", "")
+                
+                for vuln in res.get("Vulnerabilities", []): # SCA 依赖包漏洞
+                    vuln["_trivy_target_path"] = target_path
+                    all_issues.append(vuln)
+                    
+                for misconf in res.get("Misconfigurations", []): # IaC 配置漏洞 
+                    misconf["_trivy_target_path"] = target_path
+                    all_issues.append(misconf)
+
+            if all_issues:
+                filtered_results = self._filter_results(all_issues, patched_files)
+                return await self._convert_to_scanned_issue(filtered_results, tool_name='trivy')
             return []
+            
         except json.JSONDecodeError as e:
             logger.error(f"json decoding failed: {str(e)}")
             return []
@@ -195,43 +205,76 @@ class HeuristicScanner:
         过滤与本次 PR 中新增或修改行无关的结果。
         """
         added_lines_by_file: Dict[str, Set[int]] = {}
+        added_hunks_by_file: Dict[str, List[str]] = {}
 
         try:
-            # 找出每个补丁文件中的新增行的行号
+            # 找出每个补丁文件中的新增行的行号和上下文
             for patched_file in patched_files:
                 file_path = patched_file.path
                 if file_path not in added_lines_by_file:
                     added_lines_by_file[file_path] = set()
+                    added_hunks_by_file[file_path] = []
 
                 for hunk in patched_file:
+                    has_added_lines = False
+                    hunk_text_lines = []
+                    
                     for line in hunk:
+                        hunk_text_lines.append(line.value.strip())
+                        
                         if line.is_added:
                             added_lines_by_file[file_path].add(line.target_line_no)
+                            has_added_lines = True
+                            
+                    if has_added_lines:
+                        added_hunks_by_file[file_path].append("\n".join(hunk_text_lines))
 
             # 通过找出的新增行号过滤results
             filtered_results = []
             for result in all_results:
+                res_path = ""
+                res_start = None
+                res_end = None
+                vuln_pkg_name = ""
+                vuln_installed_ver = ""
+
                 if "path" in result: # 解析semgrep的json结果
                     res_path = result.get("path", "")
                     res_start = result.get("start", {}).get("line")
                     res_end = result.get("end", {}).get("line")
 
-                elif "locations" in result and result["locations"]: # 解析trivy的sarif结果
-                    loc = result["locations"][0].get("physicalLocation", {})
-                    res_path = loc.get("artifactLocation", {}).get("uri")
-                    res_start = loc.get("region", {}).get("startLine")
-                    res_end = loc.get("region", {}).get("endLine")
+                elif "_trivy_target_path" in result: 
+                    res_path = result.get("_trivy_target_path", "")
+                    vuln_pkg_name = result.get("PkgName", "") # 获取包名与版本号 (针对依赖漏洞)
+                    vuln_installed_ver = result.get("InstalledVersion", "")
+
+                    cause_meta = result.get("CauseMetadata", {}) # 获取行号（针对 IaC 漏洞）
+                    if cause_meta:
+                        res_start = cause_meta.get("StartLine")
+                        res_end = cause_meta.get("EndLine")
 
                 if not res_path:
                     continue
 
-                for diff_path, changed_lines in added_lines_by_file.items():
+                for diff_path in added_lines_by_file.keys():
                     if self._is_path_match(res_path, diff_path):
-                        if not res_start:
-                            filtered_results.append(result)
-                        elif any(l in changed_lines for l in range(res_start, res_end+1)):
-                            filtered_results.append(result)
-                        break  # 找到匹配文件后停止
+                        if res_start: # 按行号过滤
+                            changed_lines = added_lines_by_file.get(diff_path, set())
+                            res_end_line = res_end if res_end else res_start
+                            if any(l in changed_lines for l in range(res_start, res_end_line + 1)):
+                                filtered_results.append(result)
+                        else:
+                            if vuln_pkg_name: # 按漏洞包名和版本号过滤
+                                modified_hunks = added_hunks_by_file.get(diff_path, [])
+                                for hunk_text in modified_hunks:
+                                    has_pkg = vuln_pkg_name in hunk_text
+                                    has_ver = vuln_installed_ver in hunk_text if vuln_installed_ver else True
+                                    if has_pkg and has_ver:
+                                        filtered_results.append(result)
+                                        break
+                            else:
+                                pass
+                        break
 
             return filtered_results
         except Exception as e:
@@ -249,13 +292,12 @@ class HeuristicScanner:
     async def _convert_to_scanned_issue(
         self, 
         raw_results: List[Dict[str, Any]], 
-        tool_name: str, 
-        cve_list: Optional[List] = None
+        tool_name: str
     ) -> List[ScannedIssue]:
         """将原始结果转换成 ScannedIssue 结构"""
         scan_results = []
         for raw_result in raw_results:
-            if tool_name == "semgrep": # semgrep 输出的是自己的 json 格式，trivy 和 gitleaks 输出的是 sarif 格式
+            if tool_name == "semgrep": # semgrep 原生 json 格式
                 path = raw_result.get("path", "")
                 message = raw_result.get("extra", {}).get("message", "")
 
@@ -268,56 +310,96 @@ class HeuristicScanner:
                     "start_column": raw_result.get("start", {}).get("col"),
                     "end_column": raw_result.get("end", {}).get("col")
                 }
-            else:
-                path = raw_result.get("locations")[0].get("physicalLocation", {}).get("artifactLocation", {}).get("uri", "")
-                message = raw_result.get("message", {}).get("text", "")
-                cwe = 'Unknown (Trivy or Gitleaks)'
 
+            elif tool_name == "trivy": # trivy 原生 json 格式
+                path = raw_result.get("_trivy_target_path", "")
+                cwe_ids = raw_result.get("CweIDs", [])
+                cwe = cwe_ids[0] if cwe_ids and isinstance(cwe_ids, list) else 'Unknown (Trivy)'
+                
+                if "VulnerabilityID" in raw_result: # SCA 依赖漏洞
+                    cve_id = raw_result.get("VulnerabilityID", "")
+                    pkg_name = raw_result.get("PkgName", "")
+                    title = raw_result.get("Title", "")
+                    desc = raw_result.get("Description", "")
+                    installed_ver = raw_result.get("InstalledVersion", "")
+                    fixed_ver = raw_result.get("FixedVersion", "")
+                    
+                    message = f"[{cve_id}] {pkg_name} ({installed_ver}): {title}\nDescription: {desc}\nFixed Version: {fixed_ver}"
+                    
+                    snippet_region = {
+                        "start_line": 1, "end_line": 1, "start_column": 1, "end_column": 1
+                    }
+                else: # IaC 配置文件问题 (如 Dockerfile)
+                    cve_id = raw_result.get("ID", "")
+                    title = raw_result.get("Title", "")
+                    desc = raw_result.get("Description", "")
+                    message = f"[{cve_id}] {title}\nDescription: {desc}"
+                    
+                    cause_meta = raw_result.get("CauseMetadata", {})
+                    start_line = cause_meta.get("StartLine", 1)
+                    snippet_region = {
+                        "start_line": start_line,
+                        "end_line": cause_meta.get("EndLine", start_line),
+                        "start_column": 1,
+                        "end_column": 1
+                    }
+
+            elif tool_name == "gitleaks": # gitleaks 原生 json 格式
+                path = raw_result.get("File", "")
+                
+                rule_description = raw_result.get("Description", "Sensitive Information Detected")
+                rule_id = raw_result.get("RuleID", "Unknown Rule")
+                match_text = raw_result.get("Match", "N/A") # 泄漏的具体内容片段
+                
+                message = f"[{rule_id}] {rule_description}\nMatched Context: {match_text}"
+                cwe = "CWE-798"
+                
                 snippet_region = {
-                    "start_line": raw_result.get("locations")[0].get("physicalLocation", {}).get("region", {}).get("startLine"),
-                    "end_line": raw_result.get("locations")[0].get("physicalLocation", {}).get("region", {}).get("endLine"),
-                    "start_column": raw_result.get("locations")[0].get("physicalLocation", {}).get("region", {}).get("startColumn"),
-                    "end_column": raw_result.get("locations")[0].get("physicalLocation", {}).get("region", {}).get("endColumn")
+                    "start_line": raw_result.get("StartLine", 1),
+                    "end_line": raw_result.get("EndLine", raw_result.get("StartLine", 1)),
+                    "start_column": raw_result.get("StartColumn", 1),
+                    "end_column": raw_result.get("EndColumn", 1)
                 }
+
+            else: 
+                logger.warning(f"Unknown tool name: {tool_name}")
+                continue
             
             # 过滤文档文件和二进制文件
             if Path(path).suffix.lower() in IGNORED_SUFFIXES:
                 logger.info(f"Skipping file: {path}")
                 continue
-            
-            # 为 trivy 的漏洞报告添加依赖相关的 CVE 详情 
-            if cve_list:
-                cve_details = ""
-                cve_id = raw_result.get("ruleId", "")
-                for cve in cve_list:
-                    if cve.get("id", "") == cve_id:
-                        cve_details = "CVE Details:\n" + cve.get('fullDescription', {}).get("text", "")
-                message = message + '\n' + cve_details
-
+        
             try: 
+                safe_start_line = snippet_region.get("start_line") or 1
+                safe_end_line = snippet_region.get("end_line") or safe_start_line
+                safe_start_col = snippet_region.get("start_column") or 1
+                safe_end_col = snippet_region.get("end_column") or safe_start_col
+
                 snippet_text = await self.analyzer.core_get_file_snippet(
                         file_path=path,
-                        start_point=(snippet_region["start_line"], snippet_region["start_column"]),
-                        end_point=(snippet_region["end_line"], snippet_region["end_column"])    
+                        start_point=(safe_start_line, safe_start_col),
+                        end_point=(safe_end_line, safe_end_col)    
                     )
                 
                 if Path(path).suffix == '.py':
                     context, _ = await self.retriever.core_get_code_context(
                         file_path=path,
-                        start_point=(snippet_region["start_line"], snippet_region["start_column"]),
-                        end_point=(snippet_region["end_line"], snippet_region["end_column"])
+                        start_point=(safe_start_line, safe_start_col),
+                        end_point=(safe_end_line, safe_end_col)
                     )
                 else:
                     context, _ = await self.analyzer.core_get_file_context(
                         file_path=path, 
-                        start_line=snippet_region["start_line"],
-                        end_line=snippet_region["end_line"]
+                        start_line=safe_start_line,
+                        end_line=safe_end_line
                     )
             except Exception as e:
                 logger.warning(f"Failed to retrieve code snippet for {tool_name} result at {path}:{snippet_region['start_line']}: {e}")
                 continue
 
             issue = ScannedIssue(
+                scanner=tool_name,
                 path=path,
                 message=message,
                 cwe=cwe,

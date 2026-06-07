@@ -1,6 +1,7 @@
 import os
 from dataclasses import dataclass
-from pydantic import BaseModel, Field, ValidationError, ConfigDict
+from typing import Literal
+from pydantic import BaseModel, Field, ValidationError, ConfigDict, field_validator
 import logging
 
 
@@ -33,6 +34,27 @@ class ScannerConfig(BaseModel):
     head_sha: str
     workspace_dir: str = '.'
     context_max_lines: int = Field(default=500, ge=1)
+    semgrep_rules: str = ' '.join([
+                    "--config=p/default", "--config=p/security-audit", "--config=p/secrets", 
+                    "--config=p/r2c-security-audit", "--config=p/insecure-transport",
+                    "--config=p/python", "--config=p/django", "--config=p/flask", "--config=p/sql-injection", # python相关规则集
+                    ])
+    semgrep_severity: Literal['ERROR', 'WARNING', 'INFO', 'Critical', 'High', 'Medium', 'Low'] = Field(default='ERROR')
+    trivy_severity: str = Field(default='HIGH,CRITICAL')
+
+    @field_validator('trivy_severity')
+    @classmethod
+    def validate_severity(cls, v: str) -> str:
+        allowed = {'CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'}
+
+        input_levels = [item.strip().upper() for item in v.split(',')]
+        invalid_levels = [item for item in input_levels if item not in allowed]
+        
+        if invalid_levels:
+            raise ValueError(f"存在无效的严重级别: {invalid_levels}. 允许范围: {allowed}")
+        
+        return ",".join(sorted(list(set(input_levels))))
+
 
 
 class RoleParams(BaseModel):
@@ -109,12 +131,22 @@ class Config:
         )
 
         # Scanner configuration
-        scanner_config = ScannerConfig(
-            base_sha=os.environ.get("BASE_SHA"),
-            head_sha=os.environ.get("HEAD_SHA"),
-            workspace_dir=os.environ.get("GITHUB_WORKSPACE", "."),
-            context_max_lines=os.environ.get("SCAN_CONTEXT_MAX_LINES", "500")
-        )
+        config_kwargs = {
+            "base_sha": os.environ.get("BASE_SHA"),
+            "head_sha": os.environ.get("HEAD_SHA"),
+        }
+        if os.environ.get("GITHUB_WORKSPACE"):
+            config_kwargs["workspace_dir"] = os.environ.get("GITHUB_WORKSPACE")
+        if os.environ.get("SCAN_CONTEXT_MAX_LINES"):
+            config_kwargs["context_max_lines"] = int(os.environ.get("SCAN_CONTEXT_MAX_LINES"))
+        if os.environ.get("SEMGREP_RULES"):
+            config_kwargs["semgrep_rules"] = os.environ.get("SEMGREP_RULES")
+        if os.environ.get("SEMGREP_SEVERITY"):
+            config_kwargs["semgrep_severity"] = os.environ.get("SEMGREP_SEVERITY")
+        if os.environ.get("TRIVY_SEVERITY"):
+            config_kwargs["trivy_severity"] = os.environ.get("TRIVY_SEVERITY")
+
+        scanner_config = ScannerConfig(**config_kwargs)
 
         try:
             # LLM configuration

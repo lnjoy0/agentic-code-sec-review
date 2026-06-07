@@ -84,6 +84,7 @@ class SnippetRegion(BaseModel):
 
 class ScannedIssue(BaseModel):
     """扫描器报告的漏洞结构"""
+    scanner: str
     id: str = Field(default_factory=lambda: str(uuid4())[:8]) # 自动生成短 id
     name: Optional[str] = None
     path: str

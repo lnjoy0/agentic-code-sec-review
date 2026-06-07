@@ -195,6 +195,7 @@ class LLMSemanticScanner:
                     context, _ = await self._get_context(file_path, issue.start_line, issue.end_line)
                     
                     scanned_issues.append(ScannedIssue(
+                        scanner="llm",
                         name=issue.name,
                         path=file_path,
                         message=issue.information,
