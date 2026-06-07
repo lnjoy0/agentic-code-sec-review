@@ -87,7 +87,7 @@ class DiffParser:
 # 要过滤的扩展名集合
 IGNORED_SUFFIXES = {
     # === 文档文件 (Document Files) ===
-    '.md', '.txt', '.rtf', '.pdf', 
+    '.md', '.rtf', '.pdf', 
     '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', 
     '.odt', '.ods', '.odp', '.csv', '.epub', '.mobi',
 
