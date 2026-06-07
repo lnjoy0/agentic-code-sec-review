@@ -238,8 +238,6 @@ class HeuristicScanner:
                 vuln_pkg_name = ""
                 vuln_installed_ver = ""
 
-                logger.info(result)
-
                 if "path" in result: # 解析semgrep的json结果
                     res_path = result.get("path", "")
                     res_start = result.get("start", {}).get("line")
@@ -257,6 +255,10 @@ class HeuristicScanner:
 
                 if not res_path:
                     continue
+
+                logger.info(result)
+                logger.info(f"added_lines_by_file: {added_lines_by_file}")
+                logger.info(f"added_hunks_by_file: {added_hunks_by_file}")
 
                 for diff_path in added_lines_by_file.keys():
                     if self._is_path_match(res_path, diff_path):
