@@ -252,13 +252,13 @@ class HeuristicScanner:
                     if cause_meta:
                         res_start = cause_meta.get("StartLine")
                         res_end = cause_meta.get("EndLine")
+                    
+                    logger.info(result)
+                    logger.info(f"added_lines_by_file: {added_lines_by_file['res_path']}")
+                    logger.info(f"added_hunks_by_file: {added_hunks_by_file['res_path']}")
 
                 if not res_path:
                     continue
-
-                logger.info(result)
-                logger.info(f"added_lines_by_file: {added_lines_by_file}")
-                logger.info(f"added_hunks_by_file: {added_hunks_by_file}")
 
                 for diff_path in added_lines_by_file.keys():
                     if self._is_path_match(res_path, diff_path):
