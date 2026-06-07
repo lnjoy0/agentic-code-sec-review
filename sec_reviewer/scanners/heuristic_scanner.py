@@ -219,11 +219,10 @@ class HeuristicScanner:
                     has_added_lines = False
                     hunk_text_lines = []
                     
-                    for line in hunk:
-                        hunk_text_lines.append(line.value.strip())
-                        
+                    for line in hunk:                       
                         if line.is_added:
                             added_lines_by_file[file_path].add(line.target_line_no)
+                            hunk_text_lines.append(line.value.strip())
                             has_added_lines = True
                             
                     if has_added_lines:

@@ -87,9 +87,7 @@ class DiffParser:
 # 要过滤的扩展名集合
 IGNORED_SUFFIXES = {
     # === 文档文件 (Document Files) ===
-    '.md', '.rtf', '.pdf', 
-    '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', 
-    '.odt', '.ods', '.odp', '.csv', '.epub', '.mobi',
+    '.md', '.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.csv',
 
     # === 编译产物/可执行二进制文件 (Compiled / Executables) ===
     '.pyc', '.pyo', '.exe', '.dll', '.so', '.dylib', 
@@ -105,6 +103,6 @@ IGNORED_SUFFIXES = {
     # === 数据库文件 (Databases) ===
     '.db', '.sqlite', '.sqlite3', '.mdb', '.frm', '.ibd',
 
-    # === 字体及其他二进制文件 (Fonts & Others) ===
-    '.ttf', '.otf', '.woff', '.woff2', '.eot', '.DS_Store'
+    # === 字体文件 (Fonts) ===
+    '.ttf', '.otf', '.woff', '.woff2'
 }
