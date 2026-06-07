@@ -254,8 +254,8 @@ class HeuristicScanner:
                         res_end = cause_meta.get("EndLine")
                     
                     logger.info(result)
-                    logger.info(f"added_lines_by_file: {added_lines_by_file['res_path']}")
-                    logger.info(f"added_hunks_by_file: {added_hunks_by_file['res_path']}")
+                    logger.info(f"added_lines_by_file: {added_lines_by_file[res_path]}")
+                    logger.info(f"added_hunks_by_file: {added_hunks_by_file[res_path]}")
 
                 if not res_path:
                     continue
