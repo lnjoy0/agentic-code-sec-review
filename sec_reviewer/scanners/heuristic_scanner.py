@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Set, Optional
+from typing import List, Dict, Any, Set
 from unidiff import PatchedFile
 from pathlib import Path
 import logging
@@ -107,7 +107,7 @@ class HeuristicScanner:
         cmd = [
             "gitleaks", "detect", self.scanner_config.workspace_dir,
             f"--log-opts={self.scanner_config.base_sha}...{self.scanner_config.head_sha}", # 只扫描从 base 到 head 之间新增的 commits
-            "--no-banner", "--redact", # --redact 不输出敏感信息详情
+            "--no-banner",
             "-f", "json",
             "-r", "-" # 将 JSON 报告输出到标准输出 (stdout)
         ]
@@ -178,7 +178,7 @@ class HeuristicScanner:
         try:
             data = json.loads(stdout_str)
             results = data.get("Results", [])
-            
+
             all_issues = []
             for res in results:
                 target_path = res.get("Target", "")
@@ -265,6 +265,8 @@ class HeuristicScanner:
                                 filtered_results.append(result)
                         else:
                             if vuln_pkg_name: # 按漏洞包名和版本号过滤
+                                logger.info(f"----------------------{vuln_pkg_name}-------------------")
+                                logger.info(f"----------------------{vuln_installed_ver}-------------------")
                                 modified_hunks = added_hunks_by_file.get(diff_path, [])
                                 for hunk_text in modified_hunks:
                                     has_pkg = vuln_pkg_name in hunk_text

@@ -222,7 +222,6 @@ INFRA_SUPPLY_EXPERT_PROMPT = """# ROLE
 
 [分支 B: 依赖与包管理供应链 (例如 Dependency Confusion / Malicious Packages / 第三方依赖组件 CVE)]
 - 研判重点：`requirements.txt`, `Pipfile`, `pyproject.toml` 或 `setup.py` 中引入的第三方包是否存在已知漏洞或投毒风险。
-- 注意：对于Trivy 扫描出来的第三方依赖组件 CVE 告警，因为 Trivy 已经验证过当前导入的包在漏洞影响范围内，所以只需要验证该 CVE 是否真实被触发即可。
 
 [分支 C: 容器与基础设施配置 (例如 Dockerfile / K8s / IaC 配置风险)]
 - 研判重点：构建应用运行环境的描述文件是否遵循了最小特权原则，是否存在凭据硬编码或容器逃逸风险。
