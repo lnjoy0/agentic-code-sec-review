@@ -238,6 +238,8 @@ class HeuristicScanner:
                 vuln_pkg_name = ""
                 vuln_installed_ver = ""
 
+                logger.info(result)
+
                 if "path" in result: # 解析semgrep的json结果
                     res_path = result.get("path", "")
                     res_start = result.get("start", {}).get("line")
@@ -265,8 +267,6 @@ class HeuristicScanner:
                                 filtered_results.append(result)
                         else:
                             if vuln_pkg_name: # 按漏洞包名和版本号过滤
-                                logger.info(f"----------------------{vuln_pkg_name}-------------------")
-                                logger.info(f"----------------------{vuln_installed_ver}-------------------")
                                 modified_hunks = added_hunks_by_file.get(diff_path, [])
                                 for hunk_text in modified_hunks:
                                     has_pkg = vuln_pkg_name in hunk_text
