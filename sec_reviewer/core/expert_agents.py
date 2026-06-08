@@ -290,7 +290,7 @@ class BaseExpertAgent():
             return {"audit_results": [state["draft_result"]]}
 
         if critic_dc.decision == "revise":
-            logger.warning(f"[{self.expert_name}]-[issue({issue.id})] 🚫 专家结论被驳回。理由：{critic_dc.critique_reason}，建议: {critic_dc.suggested_action}")
+            logger.warning(f"[{self.expert_name}]-[issue({issue.id})] 🚫 专家结论被驳回。理由：{critic_dc.critique_reason}，建议: {critic_dc.suggested_action}。\n思考过程：{results.content}")
                         
             critical_content = CriticalContent(
                 round=critical_rounds,
@@ -307,13 +307,15 @@ class BaseExpertAgent():
                 "draft_result": None
             }
         else:
-            logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 结论验证通过 (剩余审查轮数: {max_critical_rounds-critical_rounds})。")
+            logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 结论验证通过 (剩余审查轮数: {max_critical_rounds-critical_rounds})。思考过程：{results.content}")
             logger.info(f"[{self.expert_name}]-[issue({issue.id})] 最终审计结果：{str(draft)}")
             return {"audit_results": [state["draft_result"]]}
 
     def _format_output_node(self, state: AgentState):
         """格式化节点：提取 LLM 的最终研判结论，存为草稿交由 Critic 审查"""
-        tool_call = state["messages"][-1].tool_calls[0]
+        result = state["messages"][-1]
+        content = result.content
+        tool_call = result.tool_calls[0]
         issue = state['issue']
         
         raw_args = tool_call["args"] # 获取 ExpertAuditResult 的参数
@@ -332,7 +334,7 @@ class BaseExpertAgent():
                 details=audit_data
             )
             logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 专家生成初步结论，准备进入批判节点审查。")
-            logger.info(f"[{self.expert_name}]-[issue({issue.id})] 初步审计结果：{str(audit_data)}\n")
+            logger.info(f"[{self.expert_name}]-[issue({issue.id})] 初步审计结果：{str(audit_data)}\n思考过程：{content}")
             return {"draft_result": audit_result}
 
         except ValidationError as e:
