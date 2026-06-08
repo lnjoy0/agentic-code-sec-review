@@ -259,8 +259,6 @@ class BaseExpertAgent():
             "<expert_final_conclusion>\n"
             f"{draft.model_dump_json(indent=2)}\n"
             "</expert_final_conclusion>"
-
-            "【最终行动指令】：请思考并得出结论后，调用 CriticDecision 工具进行输出。"
         )
         
         llm_config = config['configurable'].get('llm_config')
