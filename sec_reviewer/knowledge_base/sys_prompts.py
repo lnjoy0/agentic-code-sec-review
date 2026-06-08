@@ -69,7 +69,7 @@ ROUTER_PROMPT = """# ROLE
    - 涵盖：第三方依赖组件 CVE、Dockerfile/K8s 配置风险、启用框架 debug 模式、不安全的网络绑定、恶意 setup 脚本等。
    - 典型长尾标签：Werkzeug/Django Debug Mode Enabled, Unsafe Package Index (如 --extra-index-url 导致依赖劫持), Wildcard ALLOWED_HOSTS / Insecure Binding, Malicious setup.py, Missing .dockerignore Secrets Leak 等。
 
-4. 【Logic_Security_Expert】(业务与身份安全专家)
+4. 【Logic_Identity_Expert】(业务与身份安全专家)
    - 负责：应用上下文相关的权限与业务流程缺陷。
    - 涵盖：越权访问（IDOR）、未授权访问、鉴权绕过、支付漏洞、状态机绕过、异步上下文泄露、批量赋值漏洞、条件竞争漏洞等。
    - 典型长尾标签：Decorator Order Bypass (如 Flask 中 @login_required 位置错误), Pydantic/DRF Mass Assignment, Contextvars/Global State Leakage, JWT Algorithm Confusion/None Alg, Type Coercion/Confusion Bypass 等。
