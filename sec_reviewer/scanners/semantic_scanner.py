@@ -226,7 +226,7 @@ class LLMSemanticScanner:
         file_path: str, # 相对路径
         chain: RunnableSerializable,
         semaphore: asyncio.Semaphore
-    ) -> tuple[Optional[LLMScanReport], str]:
+    ) -> tuple[Optional[LLMScanReport], str, Optional[str]]:
         """处理单个变更代码块的异步子任务"""
         async with semaphore:
             try:
@@ -245,7 +245,7 @@ class LLMSemanticScanner:
             except Exception as e:
                 logger.error(f"文件 {file_path} 的代码块分析或 Pydantic 结构校验失败：{e}")
                 logger.exception("error: ")
-                return None, hunk_context
+                return None, hunk_context, None
 
     def _get_added_lines(self, patched_file: PatchedFile) -> Set[int]:
         """获取文件中新增的行号集合"""
