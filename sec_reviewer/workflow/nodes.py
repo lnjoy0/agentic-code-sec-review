@@ -262,7 +262,7 @@ def get_comment_node(state: AuditState, config: RunnableConfig):
             name = result.details.name
             severity = result.details.severity.upper()
             confidence = result.details.confidence
-            reason = result.details.analysis_reasoning
+            reason = result.details.vulnerability_analysis
             defense_checks = result.details.defense_checks
             attack_scenario = result.details.attack_scenario
             remediation = result.details.remediation

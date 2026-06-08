@@ -295,7 +295,7 @@ class BaseExpertAgent():
             critical_content = CriticalContent(
                 round=critical_rounds,
                 expert_verdict=draft.verdict,
-                expert_reason=draft.analysis_reasoning,
+                expert_reason=draft.vulnerability_analysis,
                 review_decision=critic_dc.decision,
                 review_decision_reason=critic_dc.critique_reason,
                 review_suggest=critic_dc.suggested_action
