@@ -36,7 +36,10 @@ def get_model_bound_tools(
         max_tokens=max_tokens,
         seed=42
     )
-    return model.bind_tools(tools, tool_choice=tool_choice)
+    if tool_choice:
+        return model.bind_tools(tools, tool_choice=tool_choice)
+    else:
+        return model.bind_tools(tools)
 
 
 class AgentError(Exception):
