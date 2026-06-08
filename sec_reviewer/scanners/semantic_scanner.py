@@ -211,6 +211,7 @@ class LLMSemanticScanner:
                     logger.info(
                         f"成功添加文件 {file_path} 中的漏洞: {issue.name}。"
                         f"\n代码上下文 {hunk_context} -> 漏洞 {scanned_issues[-1]}"
+                        f"\n思考过程：{issue.reasoning_process}"
                     )
                 else:
                     logger.info(
