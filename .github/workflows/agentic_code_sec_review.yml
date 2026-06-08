@@ -40,3 +40,6 @@ jobs:
         uses: lnjoy0/agentic-code-sec-review@main
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          llm_model_name: ${{ secrets.LLM_MODEL_NAME }}
+          llm_base_url: ${{ secrets.LLM_BASE_URL }}
+          llm_api_key: ${{ secrets.LLM_API_KEY }}
