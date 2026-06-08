@@ -288,7 +288,7 @@ class BaseExpertAgent():
             return {"audit_results": [state["draft_result"]]}
 
         if critic_dc.decision == "revise":
-            logger.warning(f"[{self.expert_name}]-[issue({issue.id})] 🚫 专家结论被驳回。理由：{critic_dc.critique_reason}，建议: {critic_dc.suggested_action}。\n思考过程：{results.content}")
+            logger.warning(f"[{self.expert_name}]-[issue({issue.id})] 🚫 专家结论被驳回。理由：{critic_dc.critique_reason}，建议: {critic_dc.suggested_action}。")
                         
             critical_content = CriticalContent(
                 round=critical_rounds,
@@ -305,7 +305,7 @@ class BaseExpertAgent():
                 "draft_result": None
             }
         else:
-            logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 结论验证通过 (剩余审查轮数: {max_critical_rounds-critical_rounds})。思考过程：{results.content}")
+            logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 结论验证通过 (剩余审查轮数: {max_critical_rounds-critical_rounds})。")
             logger.info(f"[{self.expert_name}]-[issue({issue.id})] 最终审计结果：{str(draft)}")
             return {"audit_results": [state["draft_result"]]}
 
@@ -332,7 +332,7 @@ class BaseExpertAgent():
                 details=audit_data
             )
             logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 专家生成初步结论，准备进入批判节点审查。")
-            logger.info(f"[{self.expert_name}]-[issue({issue.id})] 初步审计结果：{str(audit_data)}\n思考过程：{content}")
+            logger.info(f"[{self.expert_name}]-[issue({issue.id})] 初步审计结果：{str(audit_data)}\n")
             return {"draft_result": audit_result}
 
         except ValidationError as e:
