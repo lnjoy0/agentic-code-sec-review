@@ -230,10 +230,10 @@ class LLMSemanticScanner:
         """处理单个变更代码块的异步子任务"""
         async with semaphore:
             try:
-                report = await chain.ainvoke({"full_context": hunk_context})
+                result = await chain.ainvoke({"full_context": hunk_context})
                 
-                tool_name = report.tool_calls[0]['name']
-                tool_args = report.tool_calls[0]['args']
+                tool_name = result.tool_calls[0]['name']
+                tool_args = result.tool_calls[0]['args']
 
                 if tool_name != "LLMScanReport":
                     logger.error(f"文件 {file_path} 的代码块分析失败，LLM 的输出未调用 LLMScanReport 工具")
