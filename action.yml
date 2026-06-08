@@ -233,3 +233,11 @@ runs:
       run: |
         echo "$(date) - Starting Agentic Code Sec Reviewer..."
         python ${{ github.action_path }}/main.py
+    
+    - name: Upload Expert Msgs
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: expert-msgs
+        path: expert_messages/
+        retention-days: 14

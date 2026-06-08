@@ -1,6 +1,7 @@
 import logging
 import json
-from typing import List, Literal, Optional
+import os
+from typing import List, Literal
 from langgraph.graph import StateGraph, START, END
 from langchain_openai import ChatOpenAI
 from langchain_core.runnables import RunnableConfig
@@ -307,12 +308,12 @@ class BaseExpertAgent():
         else:
             logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 结论验证通过 (剩余审查轮数: {max_critical_rounds-critical_rounds})。\n原始消息: {results}")
             logger.info(f"[{self.expert_name}]-[issue({issue.id})] 最终审计结果：{str(draft)}")
+            save_langgraph_messages_to_markdown(messages, f"{self.expert_name}_issue({issue.id})_msgs.md")
             return {"audit_results": [state["draft_result"]]}
 
     def _format_output_node(self, state: AgentState):
         """格式化节点：提取 LLM 的最终研判结论，存为草稿交由 Critic 审查"""
         result = state["messages"][-1]
-        content = result.content
         tool_call = result.tool_calls[0]
         issue = state['issue']
         
@@ -332,7 +333,7 @@ class BaseExpertAgent():
                 details=audit_data
             )
             logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 专家生成初步结论，准备进入批判节点审查。")
-            logger.info(f"[{self.expert_name}]-[issue({issue.id})] 初步审计结果：{str(audit_data)}\n")
+            logger.info(f"[{self.expert_name}]-[issue({issue.id})] 初步审计结果：{str(audit_data)}\n原始消息: {result}")
             return {"draft_result": audit_result}
 
         except ValidationError as e:
@@ -540,3 +541,39 @@ class GeneralExpert(BaseExpertAgent):
             system_prompt=GENERAL_EXPERT_PROMPT,
             tools=tools
         )
+
+
+def save_langgraph_messages_to_markdown(messages: list, filename="chat_history.md"):
+    log_dir = "expert_messages"
+    os.makedirs(log_dir, exist_ok=True)
+    path = f"{log_dir}/{filename}"
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("# LangGraph 对话历史记录\n\n")
+        f.write(f"--- \n\n")
+        
+        for msg in messages:
+            # 根据消息类型定制标题
+            if msg.type == "human":
+                f.write("### 👤 User\n")
+            elif msg.type == "ai":
+                f.write("### 🤖 Assistant\n")
+            elif msg.type == "system":
+                f.write("### ⚙️ System\n")
+            elif msg.type == "tool":
+                f.write(f"### 🛠️ Tool: {msg.name}\n")
+            else:
+                f.write(f"### 📝 {msg.type.capitalize()}\n")
+            
+            # 写入内容
+            f.write(f"{msg.content}\n\n")
+            
+            # 如果 AI 调用了工具，把工具参数也写进去
+            if msg.type == "ai" and getattr(msg, "tool_calls", []):
+                f.write("**Tool Calls:**\n")
+                f.write("```json\n")
+                f.write(json.dumps(msg.tool_calls, ensure_ascii=False, indent=2))
+                f.write("\n```\n\n")
+                
+            f.write("---\n\n")
+            
+    print(f"Markdown 日志已成功保存至 {filename}")
