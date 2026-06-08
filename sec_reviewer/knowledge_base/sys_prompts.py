@@ -154,7 +154,7 @@ INJECTION_EXPERT_PROMPT = """# ROLE
 - 退回任务方法：当你认定任务错配时，必须且只能调用 `Rejection` 工具，并按要求提供 reject_reason 参数。
 - 判断是否需要退回：
    - 【注意】只有你认为依靠自己可以查询的漏洞知识文档，不足以对这个漏洞做出最终判定结果（判定为误报或真实漏洞）时，才能退回该漏洞。如果已经得出研判结果，请调用 `ExpertAuditResult` 工具进行输出。
-   - 【可分配的专家类型】Router 可分配的专家类型包括 (Injection_Expert, Data_Asset_Expert, Infra_Supply_Expert, Logic_Identity_Expert, General_Expert)。如果这些专家类型中，你是最合适的专家，那么就不应该退回漏洞。
+   - 【可分配的专家类型】Router 可分配的专家类型包括 (Injection_Expert, Data_Asset_Expert, Infra_Supply_Expert, Logic_Identity_Expert, General_Expert)。如果这些专家类型中，你 (Injection_Expert) 是最合适的专家，那么就不应该退回漏洞。
 """
 
 
@@ -214,7 +214,7 @@ DATA_ASSET_EXPERT_PROMPT = """# ROLE
 - 退回任务方法：当你认定任务错配时，必须且只能调用 `Rejection` 工具，并按要求提供 reject_reason 参数。
 - 判断是否需要退回：
    - 【注意】只有你认为依靠自己可以查询的漏洞知识文档，不足以对这个漏洞做出最终判定结果（判定为误报或真实漏洞）时，才能退回该漏洞。如果已经得出研判结果，请调用 `ExpertAuditResult` 工具进行输出。
-   - 【可分配的专家类型】Router 可分配的专家类型包括 (Injection_Expert, Data_Asset_Expert, Infra_Supply_Expert, Logic_Identity_Expert, General_Expert)。如果这些专家类型中，你是最合适的专家，那么就不应该退回漏洞。
+   - 【可分配的专家类型】Router 可分配的专家类型包括 (Injection_Expert, Data_Asset_Expert, Infra_Supply_Expert, Logic_Identity_Expert, General_Expert)。如果这些专家类型中，你 (Data_Asset_Expert) 是最合适的专家，那么就不应该退回漏洞。
 """
 
 
@@ -271,7 +271,7 @@ INFRA_SUPPLY_EXPERT_PROMPT = """# ROLE
 - 退回任务方法：当你认定任务错配时，必须且只能调用 `Rejection` 工具，并按要求提供 reject_reason 参数。
 - 判断是否需要退回：
    - 【注意】只有你认为依靠自己可以查询的漏洞知识文档，不足以对这个漏洞做出最终判定结果（判定为误报或真实漏洞）时，才能退回该漏洞。如果已经得出研判结果，请调用 `ExpertAuditResult` 工具进行输出。
-   - 【可分配的专家类型】Router 可分配的专家类型包括 (Injection_Expert, Data_Asset_Expert, Infra_Supply_Expert, Logic_Identity_Expert, General_Expert)。如果这些专家类型中，你是最合适的专家，那么就不应该退回漏洞。
+   - 【可分配的专家类型】Router 可分配的专家类型包括 (Injection_Expert, Data_Asset_Expert, Infra_Supply_Expert, Logic_Identity_Expert, General_Expert)。如果这些专家类型中，你 (Infra_Supply_Expert) 是最合适的专家，那么就不应该退回漏洞。
 """
 
 
@@ -331,7 +331,7 @@ LOGIC_IDENTITY_EXPERT_PROMPT = """# ROLE
 - 退回任务方法：当你认定任务错配时，必须且只能调用 `Rejection` 工具，并按要求提供 reject_reason 参数。
 - 判断是否需要退回：
    - 【注意】只有你认为依靠自己可以查询的漏洞知识文档，不足以对这个漏洞做出最终判定结果（判定为误报或真实漏洞）时，才能退回该漏洞。如果已经得出研判结果，请调用 `ExpertAuditResult` 工具进行输出。
-   - 【可分配的专家类型】Router 可分配的专家类型包括 (Injection_Expert, Data_Asset_Expert, Infra_Supply_Expert, Logic_Identity_Expert, General_Expert)。如果这些专家类型中，你是最合适的专家，那么就不应该退回漏洞。
+   - 【可分配的专家类型】Router 可分配的专家类型包括 (Injection_Expert, Data_Asset_Expert, Infra_Supply_Expert, Logic_Identity_Expert, General_Expert)。如果这些专家类型中，你 (Logic_Identity_Expert) 是最合适的专家，那么就不应该退回漏洞。
 """
 
 

@@ -95,7 +95,7 @@ class ProjectAnalyzer:
         max_results: int = 40
     ) -> str:
         """
-        跨全量代码库的文本与正则表达式高速检索工具。
+        一个跨全量代码库的文本与正则表达式高速检索工具，基于 ripgrep 实现。
 
         【何时使用】：当需要全局查找危险函数（如 eval, os.system）、定位硬编码秘钥/弱加密算法、追踪特定路由入口与鉴权装饰器、或检索特定配置项时调用。
         
@@ -282,7 +282,7 @@ class ProjectAnalyzer:
         max_lines: int = 200,
     ) -> str:
         """
-        精准读取指定非代码文件内容的工具（支持分页读取）。
+        精准读取指定文件内容的工具（用于读取 `.py` 以外的其他文件，如配置文件等）。
         
         【何时使用】：当需要深度审查基础设施构建文件（如 Dockerfile, docker-compose.yml）、环境配置与秘钥文件（如 .env, config.yaml）、或依赖项清单（如 pyproject.toml）等非代码文件时调用。
         
@@ -470,7 +470,7 @@ class ProjectAnalyzer:
         context_lines: int = 20,
     ) -> str:
         """
-        非代码文件局部上下文提取工具。
+        非 `.py` 文件的局部上下文提取工具。
 
         【何时使用】：当通过 global_search 或漏洞告警获知了可疑敏感词或配置项的具体行号，需要局部放大审查该行前后的信息时调用。
         
