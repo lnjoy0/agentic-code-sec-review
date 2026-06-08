@@ -550,7 +550,7 @@ def save_langgraph_messages_to_markdown(messages: list, filename="message"):
     md_path = f"{log_dir}/{filename}.md"
     
     with open(raw_path, "w", encoding="utf-8") as f:
-        f.write(messages)
+        f.write(str(messages))
     with open(md_path, "w", encoding="utf-8") as f:
         f.write("# LangGraph 对话历史记录\n\n")
         f.write(f"--- \n\n")
