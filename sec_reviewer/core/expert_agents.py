@@ -332,7 +332,7 @@ class BaseExpertAgent():
                 details=audit_data
             )
             logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 专家生成初步结论，准备进入批判节点审查。")
-            logger.info(f"[{self.expert_name}]-[issue({issue.id})] 初步审计结果：{str(audit_data)}\n推理过程：{audit_obj.reasoning_process}")
+            logger.info(f"[{self.expert_name}]-[issue({issue.id})] 初步审计结果：{str(audit_data)}\n")
             return {"draft_result": audit_result}
 
         except ValidationError as e:

@@ -74,7 +74,6 @@ class CodeSecReviewer:
             return True
 
         except Exception as e:
-            # logger.error(f"Error during PR review: {e}")
             logger.exception("Error during PR review:")
             raise ReviewerError(f"Review process failed: {e}")
 
