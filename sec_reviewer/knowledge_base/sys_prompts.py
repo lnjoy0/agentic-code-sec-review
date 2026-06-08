@@ -42,7 +42,9 @@ SCANNER_PROMPT = """# ROLE
 3. 忽略左侧的 `=>` 符号和 `|` 分隔符，不要将它们视为代码语法的一部分。
 
 # STRICT OUTPUT PROTOCOL
-你的输出【必须】调用 `LLMScanReport` 工具，请按要求填写参数以完成格式化输出。
+请严格执行以下输出流程：
+1. 首先，输出一步一步思考的纯文本信息。
+2. 然后，【必须】调用 `LLMScanReport` 工具，并按要求填写参数以完成格式化输出。
 """
 
 ROUTER_PROMPT = """# ROLE
@@ -141,9 +143,9 @@ INJECTION_EXPERT_PROMPT = """# ROLE
 # STRICT OUTPUT PROTOCOL
 你有两种行为模式：
 1. 【采证阶段】：调用你的工具收集信息。
-2. 【终结阶段】：当你完成了所有分析，准备输出最终研判结果时，【必须】调用 `ExpertAuditResult` 工具。
-   - 必须严格遵循 `ExpertAuditResult` 工具的 Schema 输出格式要求进行参数填充。
-   - 一旦调用 `ExpertAuditResult`，即代表你的本次研判任务结束。
+2. 【终结阶段】：当你完成了所有分析，准备输出最终研判结果时，请严格按照以下输出流程
+   1. 输出一步一步思考的纯文本信息。
+   2. 【必须】调用 `ExpertAuditResult` 工具，并按要求填写参数以完成格式化输出。
 
 # TASK REJECTION
 前置 Router 节点在分配任务时可能发生错误。如果你通过初步阅读漏洞描述和代码片段，发现该漏洞与你的专业领域完全无关，你可以拒绝强行研判，并将任务退回。
@@ -199,9 +201,9 @@ DATA_ASSET_EXPERT_PROMPT = """# ROLE
 # STRICT OUTPUT PROTOCOL
 你有两种行为模式：
 1. 【采证阶段】：调用你的工具收集信息。
-2. 【终结阶段】：当你完成了所有分析，准备输出最终研判结果时，【必须】调用 `ExpertAuditResult` 工具。
-   - 必须严格遵循 `ExpertAuditResult` 工具的 Schema 输出格式要求进行参数填充。
-   - 一旦调用 `ExpertAuditResult`，即代表你的本次研判任务结束。
+2. 【终结阶段】：当你完成了所有分析，准备输出最终研判结果时，请严格按照以下输出流程
+   1. 输出一步一步思考的纯文本信息。
+   2. 【必须】调用 `ExpertAuditResult` 工具，并按要求填写参数以完成格式化输出。
 
 # TASK REJECTION
 前置 Router 节点在分配任务时可能发生错误。如果你通过初步阅读漏洞描述和代码片段，发现该漏洞与你的专业领域完全无关，你可以拒绝强行研判，并将任务退回。
@@ -254,9 +256,9 @@ INFRA_SUPPLY_EXPERT_PROMPT = """# ROLE
 # STRICT OUTPUT PROTOCOL
 你有两种行为模式：
 1. 【采证阶段】：调用你的工具收集信息。
-2. 【终结阶段】：当你完成了所有分析，准备输出最终研判结果时，【必须】调用 `ExpertAuditResult` 工具。
-   - 必须严格遵循 `ExpertAuditResult` 工具的 Schema 输出格式要求进行参数填充。
-   - 一旦调用 `ExpertAuditResult`，即代表你的本次研判任务结束。
+2. 【终结阶段】：当你完成了所有分析，准备输出最终研判结果时，请严格按照以下输出流程
+   1. 输出一步一步思考的纯文本信息。
+   2. 【必须】调用 `ExpertAuditResult` 工具，并按要求填写参数以完成格式化输出。
 
 # TASK REJECTION
 前置 Router 节点在分配任务时可能发生错误。如果你通过初步阅读漏洞描述和代码片段，发现该漏洞与你的专业领域完全无关，你可以拒绝强行研判，并将任务退回。
@@ -312,9 +314,9 @@ LOGIC_IDENTITY_EXPERT_PROMPT = """# ROLE
 # STRICT OUTPUT PROTOCOL
 你有两种行为模式：
 1. 【采证阶段】：调用你的工具收集信息。
-2. 【终结阶段】：当你完成了所有分析，准备输出最终研判结果时，【必须】调用 `ExpertAuditResult` 工具。
-   - 必须严格遵循 `ExpertAuditResult` 工具的 Schema 输出格式要求进行参数填充。
-   - 一旦调用 `ExpertAuditResult`，即代表你的本次研判任务结束。
+2. 【终结阶段】：当你完成了所有分析，准备输出最终研判结果时，请严格按照以下输出流程
+   1. 输出一步一步思考的纯文本信息。
+   2. 【必须】调用 `ExpertAuditResult` 工具，并按要求填写参数以完成格式化输出。
 
 # TASK REJECTION
 前置 Router 节点在分配任务时可能发生错误。如果你通过初步阅读漏洞描述和代码片段，发现该漏洞与你的专业领域完全无关，你可以拒绝强行研判，并将任务退回。
@@ -368,9 +370,9 @@ GENERAL_EXPERT_PROMPT = """# ROLE
 # STRICT OUTPUT PROTOCOL
 你有两种行为模式：
 1. 【采证阶段】：调用你的工具收集信息。
-2. 【终结阶段】：当你完成了所有分析，准备输出最终研判结果时，【必须】调用 `ExpertAuditResult` 工具。
-   - 必须严格遵循 `ExpertAuditResult` 工具的 Schema 输出格式要求进行参数填充。
-   - 一旦调用 `ExpertAuditResult`，即代表你的本次研判任务结束。
+2. 【终结阶段】：当你完成了所有分析，准备输出最终研判结果时，请严格按照以下输出流程
+   1. 输出一步一步思考的纯文本信息。
+   2. 【必须】调用 `ExpertAuditResult` 工具，并按要求填写参数以完成格式化输出。
 """
 
 
@@ -395,5 +397,7 @@ CRITIC_PROMPT = """# ROLE
 3. 专家的最终研判结论（包含判定结果、分析过程等）。
 
 # STRICT OUTPUT PROTOCOL
-你的输出【必须】调用 `CriticDecision` 工具，请按要求填写参数以完成格式化输出。
+请严格执行以下输出流程：
+1. 首先，输出一步一步思考的纯文本信息。
+2. 然后，【必须】调用 `CriticDecision` 工具，并按要求填写参数以完成格式化输出。
 """
