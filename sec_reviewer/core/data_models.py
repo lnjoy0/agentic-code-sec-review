@@ -34,17 +34,6 @@ class ReviewComment(BaseModel):
 
 
 class LLMScannedIssue(BaseModel):
-    reasoning_process: str = Field(
-        ...,
-        description=(
-            "【有机思维链】在得出最终结论前，请写下一段自然、连续的审计推理草稿（像侦探自言自语一样）。\n"
-            "在思考时，请将以下“悲观假设”心法融入你的推理流中，但【绝对不要】在输出时使用序号或列表格式：\n"
-            "- 留意当前片段新增的变量、外部输入或危险函数调用。\n"
-            "- 假设不在当前范围内的变量是恶意的，假设未知的配置是不安全的。\n"
-            "- 观察当前可见代码中是否缺少了拦截这些危险的防线（过滤、转义等）。\n"
-            "- 明确提炼出需要下游专家去追查的疑点。\n"
-            "要求：输出一段逻辑连贯的自然语言段落，展现你发现疑点、提出假设并指出防御缺失的动态思考过程。"        )
-    )
     name: str = Field(
         ...,
         description="简短的漏洞名称，例如 'SQL Injection'、'Command Injection'、'Race Condition' 等"
@@ -149,17 +138,6 @@ class RejectionRecord(TypedDict):
 
 class ExpertAuditResult(BaseModel):
     """【提交最终研判结果】当你完成漏洞研判后，【必须且只能】调用此工具提交你的最终研判定论。"""
-    reasoning_process: str = Field(
-        ...,
-        description=(
-            "【有机思维链】在得出最终结论前，请写下一段自然、连续的审计推理草稿（像侦探自言自语一样）。\n"
-            "- 证据复盘：总结你通过工具收集到的关键上下文（如数据流转路径、关键业务逻辑、配置项状态或加密算法使用情况等）。\n"
-            "- 漏洞机理核查：结合你所属领域的安全专业知识，一步步推演当前代码片段是否确实满足目标漏洞的触发条件。\n"
-            "- 防御与缓解评估：排查代码或配置中是否存在现有的安全防御措施（如数据过滤、权限校验、白名单、安全基线等），并评估其是否充分且有效。\n"
-            "- 最终推导：基于上述所有的事实与分析，明确推导出该告警是 True Positive（真实漏洞）还是 False Positive（误报）。\n"
-            "要求：输出一段逻辑连贯的自然语言段落。"
-        )
-    )
     verdict: Literal["True Positive", "False Positive"] = Field(
         ..., 
         description="最终判定结果。必须是 'True Positive'（确认存在漏洞）或 'False Positive'（确认是误报）。"
@@ -185,11 +163,11 @@ class ExpertAuditResult(BaseModel):
         le=1.0, 
         description="判定置信度。范围是 0.0 到 1.0。"
     )
-    vulnerability_analysis: str = Field(
+    analysis_reasoning: str = Field(
         ..., 
-        min_length=50,
+        min_length=100,
         description=(
-            "详细的漏洞分析报告。必须涵盖以下要点：\n"
+            "详细的研判逻辑推导过程。必须涵盖以下要点：\n"
             "1. 漏洞触发机理：简述该类漏洞成立的核心前提（如：特定的危险配置、不受信任的数据流、或不安全的函数调用）。\n"
             "2. 上下文核查：结合当前代码片段，分析是否确实满足上述触发条件（例如：是否存在防御配置、变量是否真正受控、依赖版本是否匹配）。\n"
             "3. 如果判定为误报，必须说明排除逻辑（如：已有前置校验、仅用于测试环境等）；如果判定为真实漏洞，必须给出该漏洞的可能利用方法。" 
@@ -239,24 +217,13 @@ class ExpertAuditResult(BaseModel):
 
 class CriticDecision(BaseModel):
     """【提交决策】当你完成分析后，【必须且只能】调用此工具提交你的最终决策。"""
-    reasoning_process: str = Field(
-        ...,
-        description=(
-             "【有机思维链】在得出最终结论前，请写下一段自然、连续的审计推理草稿（像侦探自言自语一样）。\n"
-            "- 证据复核：专家智能体调用的工具轨迹是否足以支撑其结论？是否有断章取义或数据遗漏等？\n"
-            "- 逻辑漏洞：专家的分析过程中是否存在未证实的假设？其推理是否符合安全常识？\n"
-            "- 误报/漏报检验：如果专家判定为漏洞，是否忽略了代码中已存在的防御机制？如果判定为误报，是否过度信任了不可靠的外部输入？\n"
-            "请严格基于上述三点进行沙盘推演，不要急于下结论。最终基于以上思考过程，明确得出应该 approve 还是 revise。" \
-            "要求：输出一段逻辑连贯的自然语言段落。"
-        )
-    )
     decision: Literal["approve", "revise"] = Field(
         ...,
         description=("如果逻辑闭环且证据充分则选择 approve；如果发现逻辑漏洞或证据缺失则选择 revise。")
     )
     critique_reason: str = Field(
         default="", 
-        description="如果不赞同专家的结论，请在这里详细地指出其存在的问题。这将直接发给专家作为驳回理由。如果 approve，则保持为空字符串。"
+        description="如果不赞同专家的结论，请在这里详细地指出其存在的问题。如果 approve，则保持为空字符串。"
     )
     suggested_action: str = Field(
         default="",
@@ -265,7 +232,7 @@ class CriticDecision(BaseModel):
 
 
 class CriticalContent(BaseModel):
-    """审查节点的决策记录"""
+    """审查节点的批判内容"""
     round: int
     expert_verdict: str
     expert_reason: str
