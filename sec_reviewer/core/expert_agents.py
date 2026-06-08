@@ -308,7 +308,7 @@ class BaseExpertAgent():
         else:
             logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 结论验证通过 (剩余审查轮数: {max_critical_rounds-critical_rounds})。\n原始消息: {results}")
             logger.info(f"[{self.expert_name}]-[issue({issue.id})] 最终审计结果：{str(draft)}")
-            save_langgraph_messages_to_markdown(messages, f"{self.expert_name}_issue({issue.id})_msgs.md")
+            save_langgraph_messages_to_markdown(messages, f"{self.expert_name}_issue({issue.id})_msgs")
             return {"audit_results": [state["draft_result"]]}
 
     def _format_output_node(self, state: AgentState):
@@ -543,11 +543,15 @@ class GeneralExpert(BaseExpertAgent):
         )
 
 
-def save_langgraph_messages_to_markdown(messages: list, filename="chat_history.md"):
+def save_langgraph_messages_to_markdown(messages: list, filename="message"):
     log_dir = "expert_messages"
     os.makedirs(log_dir, exist_ok=True)
-    path = f"{log_dir}/{filename}"
-    with open(path, "w", encoding="utf-8") as f:
+    raw_path = f"{log_dir}/{filename}.raw"
+    md_path = f"{log_dir}/{filename}.md"
+    
+    with open(raw_path, "w", encoding="utf-8") as f:
+        f.write(messages)
+    with open(md_path, "w", encoding="utf-8") as f:
         f.write("# LangGraph 对话历史记录\n\n")
         f.write(f"--- \n\n")
         
@@ -575,5 +579,3 @@ def save_langgraph_messages_to_markdown(messages: list, filename="chat_history.m
                 f.write("\n```\n\n")
                 
             f.write("---\n\n")
-            
-    print(f"Markdown 日志已成功保存至 {filename}")
