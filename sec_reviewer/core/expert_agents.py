@@ -23,7 +23,6 @@ def get_model_bound_tools(
     config: LLMConfig, 
     role_name: str, 
     tools: List, 
-    tool_choice: Optional[str] = None,
     max_tokens: int = None
 ):
     model = ChatOpenAI(
@@ -36,10 +35,7 @@ def get_model_bound_tools(
         max_tokens=max_tokens,
         seed=42
     )
-    if tool_choice:
-        return model.bind_tools(tools, tool_choice=tool_choice)
-    else:
-        return model.bind_tools(tools)
+    return model.bind_tools(tools)
 
 
 class AgentError(Exception):
@@ -268,7 +264,7 @@ class BaseExpertAgent():
         )
         
         llm_config = config['configurable'].get('llm_config')
-        structured_llm = get_model_bound_tools(llm_config, 'Critic', [CriticDecision], tool_choice='CriticDecision', max_tokens=800)
+        structured_llm = get_model_bound_tools(llm_config, 'Critic', [CriticDecision], max_tokens=800)
 
         logger.info(f"[{self.expert_name}]-[issue({issue.id})] ⚖️ 正在进行第 {critical_rounds} 轮批判节点审查...")
         results = await structured_llm.ainvoke([
