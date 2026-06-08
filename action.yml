@@ -146,7 +146,11 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github_token }}
       run: |
         echo "$(date) - Installing Trivy..."
-        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+        VERSION=$(curl -s -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/aquasecurity/trivy/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
+        echo "Found latest version: v${VERSION}"
+        wget -q https://github.com/aquasecurity/trivy/releases/download/v${VERSION}/trivy_${VERSION}_Linux-64bit.tar.gz
+        tar -zxf trivy_${VERSION}_Linux-64bit.tar.gz
+        mv trivy /usr/local/bin/
 
     - name: Install Gitleaks
       shell: bash
@@ -154,7 +158,7 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github_token }}
       run: |
         echo "$(date) - Installing Gitleaks..."
-        VERSION=$(curl -s https://api.github.com/repos/gitleaks/gitleaks/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
+        VERSION=$(curl -s -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/gitleaks/gitleaks/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
         wget -q https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz
         tar -zxf gitleaks_${VERSION}_linux_x64.tar.gz
         sudo mv gitleaks /usr/local/bin/
