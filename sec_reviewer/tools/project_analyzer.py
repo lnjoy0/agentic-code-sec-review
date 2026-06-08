@@ -26,6 +26,7 @@ class ProjectAnalyzer:
 
     async def get_project_structure(
         self, 
+        thought: str,
         max_depth: int = 3, 
         ignore_dirs: Optional[List[str]] = None
     ) -> str:
@@ -35,10 +36,11 @@ class ProjectAnalyzer:
         【何时使用】：当需要建立项目全局上下文、定位配置文件、寻找流量路由入口，或需确认特定文件是否属于测试/Mock目录时调用。
         
         Args:
+            thought (str): 【思考过程】请简述你查看目录树的目的是什么？你想从中获得什么信息或证据？
             max_depth (int, optional): 遍历最大深度。默认3。警告：非必要勿轻易增大此值，以防返回过长导致上下文溢出。
             ignore_dirs (List[str], optional): 需额外跳过的目录名列表（默认已忽略 .git, venv, __pycache__ 等构建目录），必须是列表形式，请勿传字符串。
 
-        Rerounds:
+        Returns:
             str: 项目目录结构的树状字符串。
         """
         # 忽略的目录，用于节省 Token 和过滤无关安全审计的构建产物
@@ -89,6 +91,7 @@ class ProjectAnalyzer:
 
     async def global_search(
         self, 
+        thought: str,
         pattern: str, 
         file_pattern: Optional[str] = None, 
         is_regex: bool = True,
@@ -100,12 +103,13 @@ class ProjectAnalyzer:
         【何时使用】：当需要全局查找危险函数（如 eval, os.system）、定位硬编码秘钥/弱加密算法、追踪特定路由入口与鉴权装饰器、或检索特定配置项时调用。
         
         Args:
+            thought (str): 【思考过程】请简述你进行全局搜索的目的，你想从中获得什么信息或证据。
             pattern (str): 目标检索字符串或正则表达式。
             file_pattern (str, optional): Glob风格的文件路径过滤器（如 '*.py', '*config*', 'src/**/*.py'）。强烈建议在已知上下文时传入，以大幅减少无关噪音。
             is_regex (bool, optional): pattern 是否作为正则表达式解析。默认 True。提示：若检索包含代码符号的纯文本（如 `password = "123"`），建议设为 False 以避免正则语法错误。
             max_results (int, optional): 限制返回的最大匹配行数。默认 40。警告：为防止上下文溢出，非必要请勿调大此值。
 
-        Rerounds:
+        Returns:
             str: 包含匹配文件路径、行号及对应代码片段的 Markdown 文本。
         """
         # -n: 显示行号
@@ -277,6 +281,7 @@ class ProjectAnalyzer:
 
     async def read_file_content(
         self, 
+        thought: str,
         file_path: str, 
         start_line: int = 1,
         max_lines: int = 200,
@@ -287,11 +292,12 @@ class ProjectAnalyzer:
         【何时使用】：当需要深度审查基础设施构建文件（如 Dockerfile, docker-compose.yml）、环境配置与秘钥文件（如 .env, config.yaml）、或依赖项清单（如 pyproject.toml）等非代码文件时调用。
         
         Args:
+            thought (str): 【思考过程】请说明你为什么要读取这个文件？你期望从中获得什么信息学或证据？
             file_path (str): 目标文件的相对路径。
             start_line (int, optional): 起始读取行号，默认 1。
             max_lines (int, optional): 单次读取的最大行数，默认 200。该值只能小于或等于200。
 
-        Rerounds:
+        Returns:
             str: 附带行号的 Markdown 格式文件内容片段。
         """
         try:
@@ -465,6 +471,7 @@ class ProjectAnalyzer:
 
     async def get_file_context(
         self, 
+        thought: str,
         file_path: str, 
         target_line: int, 
         context_lines: int = 20,
@@ -475,11 +482,12 @@ class ProjectAnalyzer:
         【何时使用】：当通过 global_search 或漏洞告警获知了可疑敏感词或配置项的具体行号，需要局部放大审查该行前后的信息时调用。
         
         Args:
+            thought (str): 【思考过程】请说明你要查看该行上下文的理由。你期望从中获得什么信息或证据。
             file_path (str): 目标文件的相对路径。
             target_line (int): 核心聚焦的中心行号（通常来源于搜索结果或告警信息）。工具会在返回文本中用 `=>` 明确高亮标出此行，方便快速定位。
             context_lines (int, optional): 上下文窗口的总展现行数（默认 20 行，目标行动态居中）。核心提示：仅当默认窗口未能覆盖完整的局部信息时，才适度调大此值。
 
-        Rerounds:
+        Returns:
             str: 附带行号及目标行指示符 (`=>`) 的 Markdown 代码块片段。
         """
         context_lines = max(0, min(context_lines, self.config_max_lines))

@@ -150,6 +150,18 @@ class RejectionRecord(TypedDict):
 
 class ExpertAuditResult(BaseModel):
     """【提交最终研判结果】当你完成漏洞研判后，【必须且只能】调用此工具提交你的最终研判定论。"""
+    reasoning_process: str = Field(
+        ...,
+        description=(
+            "【研判思维链】在给出最终结论前，请**分步骤详细记录**你的分析过程：\n"
+            "1. 证据复盘：总结你通过工具收集到的关键上下文（如数据流转路径、关键业务逻辑、配置项状态或加密算法使用情况等）。\n"
+            "2. 漏洞机理核查：结合你所属领域的安全专业知识，一步步推演当前代码片段是否确实满足目标漏洞的触发条件。\n"
+            "3. 防御与缓解评估：排查代码或配置中是否存在现有的安全防御措施（如数据过滤、权限校验、白名单、安全基线等），并评估其是否充分且有效。\n"
+            "4. 辩论反思：如果 Critic 节点曾驳回过你的结论，请在此处详细分析其观点是否合理，并说明你采纳或拒绝的依据。\n"
+            "5. 最终推导：基于上述所有的事实与分析，明确推导出该告警是 True Positive（真实漏洞）还是 False Positive（误报）。\n"
+            "注意：必须在这个字段完成完整的推理逻辑后，再输出后续的 verdict 等结论报告字段。"
+        )
+    )
     verdict: Literal["True Positive", "False Positive"] = Field(
         ..., 
         description="最终判定结果。必须是 'True Positive'（确认存在漏洞）或 'False Positive'（确认是误报）。"
@@ -175,11 +187,11 @@ class ExpertAuditResult(BaseModel):
         le=1.0, 
         description="判定置信度。范围是 0.0 到 1.0。"
     )
-    analysis_reasoning: str = Field(
+    vulnerability_analysis: str = Field(
         ..., 
         min_length=50,
         description=(
-            "详细的研判逻辑推导过程。必须涵盖以下要点：\n"
+            "详细的漏洞分析报告。必须涵盖以下要点：\n"
             "1. 漏洞触发机理：简述该类漏洞成立的核心前提（如：特定的危险配置、不受信任的数据流、或不安全的函数调用）。\n"
             "2. 上下文核查：结合当前代码片段，分析是否确实满足上述触发条件（例如：是否存在防御配置、变量是否真正受控、依赖版本是否匹配）。\n"
             "3. 如果判定为误报，必须说明排除逻辑（如：已有前置校验、仅用于测试环境等）；如果判定为真实漏洞，必须给出该漏洞的可能利用方法。" 
@@ -229,13 +241,23 @@ class ExpertAuditResult(BaseModel):
 
 class CriticDecision(BaseModel):
     """【提交决策】当你完成分析后，【必须且只能】调用此工具提交你的最终决策。"""
+    reasoning_process: str = Field(
+        ...,
+        description=(
+            "【审查思维链】在给出最终决策前，请在这里**分步骤详细记录**你的审查过程：\n"
+            "1. 证据复核：专家智能体调用的工具轨迹是否足以支撑其结论？是否有断章取义或数据遗漏等？\n"
+            "2. 逻辑漏洞：专家的分析过程中是否存在未证实的假设？其推理是否符合安全常识？\n"
+            "3. 误报/漏报检验：如果专家判定为漏洞，是否忽略了代码中已存在的防御机制？如果判定为误报，是否过度信任了不可靠的外部输入？\n"
+            "请严格基于上述三点进行沙盘推演，不要急于下结论。最终基于以上思考过程，明确得出应该 approve 还是 revise。"
+        )
+    )
     decision: Literal["approve", "revise"] = Field(
         ...,
         description=("如果逻辑闭环且证据充分则选择 approve；如果发现逻辑漏洞或证据缺失则选择 revise。")
     )
     critique_reason: str = Field(
         default="", 
-        description="如果不赞同专家的结论，请在这里详细地指出其存在的问题。如果 approve，则保持为空字符串。"
+        description="如果不赞同专家的结论，请在这里详细地指出其存在的问题。这将直接发给专家作为驳回理由。如果 approve，则保持为空字符串。"
     )
     suggested_action: str = Field(
         default="",
@@ -244,7 +266,7 @@ class CriticDecision(BaseModel):
 
 
 class CriticalContent(BaseModel):
-    """审查节点的批判内容"""
+    """审查节点的决策记录"""
     round: int
     expert_verdict: str
     expert_reason: str

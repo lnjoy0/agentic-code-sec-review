@@ -124,7 +124,8 @@ class CodeRetriever:
             return {}
 
     async def find_definition(
-        self, 
+        self,
+        thought: str,
         target_name: str, 
         max_lines: int = 200,
     ) -> str:
@@ -134,10 +135,11 @@ class CodeRetriever:
         【何时使用】：当遇到未知函数/类，需深挖其内部实现以研判漏洞时调用（如：验证自定义污点清洗机制、审查加解密与脱敏封装、确认鉴权装饰器或中间件底层逻辑等）。
         
         Args:
+            thought (str): 【思考过程】在调用本工具前，请简述你为什么需要查询这个函数/类？你期望在它的定义中找到什么信息或证据？
             target_name (str): 目标函数名或类名（需提供精确名称，勿带括号或模块前缀，如 "sanitize_input"）。
             max_lines (int, optional): 读取定义的最大行数，默认 200。该值只能小于或等于200。
 
-        Rerounds:
+        Returns:
             str: 包含定义所在路径、行号与代码片段的 Markdown 文本。
         """
         nodes_info = []
@@ -209,6 +211,7 @@ class CodeRetriever:
 
     async def fetch_definition_chunk(
         self, 
+        thought: str,
         target_name: str, 
         file_path: str, 
         start_line: int,
@@ -220,12 +223,13 @@ class CodeRetriever:
         【何时使用】：当前置查询出现“片段截断提示”，且**已加载的代码不足以支撑你得出最终安全结论，需要查看后续代码时**调用。若已加载的部分已提供决定性的漏洞证据或确凿的安全防御证明，请主动停止拉取以节省上下文。
         
         Args:
+            thought (str): 【思考过程】请简述上一段代码中缺失了什么关键信息？你期望在接下来的代码块中寻找到什么信息或证据？
             target_name (str): 目标函数名或类名（需与截断提示保持一致）。
             file_path (str): 目标文件路径（需与截断提示保持一致）。
             start_line (int): 继续阅读的起始行号（严格填入截断提示中给出的 `next_start_line`）。
             max_lines (int, optional): 读取后续定义的最大行数，默认 200。该值只能小于或等于200。
 
-        Rerounds:
+        Returns:
             str: 指定行号后续的代码片段。
         """
         abs_path = self.repo_path / file_path
@@ -401,6 +405,7 @@ class CodeRetriever:
 
     async def find_references(
         self, 
+        thought: str,
         target_name: str, 
         file_filters: Optional[list[str]] = None,
         start_index: int = 1,
@@ -413,6 +418,7 @@ class CodeRetriever:
         【何时使用】：当需要进行正/逆向污点追踪（验证 Source 是否触达危险 Sink）、评估某个缺陷组件/弱加密算法的全局影响面，或审查自定义鉴权/脱敏规则在系统中的覆盖率时调用。
         
         Args:
+            thought (str): 【思考过程】请说明你查找该引用记录的动机，你想从中获得什么信息或证据？
             target_name (str): 需检索的目标标识符名称。
                 ✅ 支持纯变量: 如 `user_input`, `max_lens`
                 ✅ 支持属性链: 如 `member.name`, `member.id`
@@ -425,7 +431,7 @@ class CodeRetriever:
             detail_limit (int, optional): 详细代码片段的显示上限（默认 20）。超过限制将仅显示单行摘要。
             unseen_limit (int, optional): 单行摘要的显示上限（默认 30）。超过此限制的摘要将被完全隐藏。
 
-        Rerounds:
+        Returns:
             str: 按文件分组的引用列表。包含前部“详细片段”与后部“单行摘要”。若需继续查阅，请通过调整 `start_index` 翻页。
             💡 提示：若需深挖某次特定调用的完整执行链，请利用此处获取的文件路径与行号，配合相关代码读取工具进一步探查。
         """
@@ -628,6 +634,7 @@ class CodeRetriever:
 
     async def track_variable_data_flow(
         self, 
+        thought: str,
         target_variable: str, 
         file_path: str,
         start_line: int = 1,
@@ -643,6 +650,7 @@ class CodeRetriever:
         3. [逻辑与状态] 追踪权限标识（如 `is_admin`）或核心业务变量是否在执行流中遭到意外篡改。
         
         Args:
+            thought (str): 【思考过程】请在这里说明你为什么要追踪目标变量，期望从中获得什么信息或证据？
             target_variable (str): 需追踪的变量名。
                 ✅ 支持纯变量: 如 `user_input`, `max_lens`
                 ✅ 支持属性链: 如 `member.name`, `member.id`
@@ -652,7 +660,7 @@ class CodeRetriever:
             detail_limit (int, optional): 详细代码片段的显示上限（默认 20）。超过此限制的引用将仅显示单行摘要，以防上下文溢出。
             unseen_limit (int, optional): 单行摘要的显示上限（默认 30）。超过此限制的摘要将被完全隐藏。
 
-        Rerounds:
+        Returns:
             str: 包含读写类型 `[Read]/[Write]`、所在作用域及代码片段的 Markdown 记录流。
             ⚠️ 分页策略：为防上下文溢出，返回结果由前部的“详细片段”与后部的“单行摘要”组成。若详细区尚未展现变量的最终归宿（Sink），且摘要区暗示后续有重要操作，请严格按底部提示更新 `start_line` 继续拉取；若漏洞已被证实或证伪，请立即停止以节省 Token。
         """
@@ -967,6 +975,7 @@ class CodeRetriever:
 
     async def get_code_context(
         self,
+        thought: str,
         file_path: str,
         target_line: int,
         max_lines: int = 200,
@@ -977,11 +986,12 @@ class CodeRetriever:
         【何时使用】：当你已知潜在漏洞所在的具体行号（如扫描器告警给出的 Sink 触发点、引用查询定位到的特定调用），需要快速审视该行所处的整个局部作用域时调用。        
         
         Args:
+            thought (str): 【思考过程】请简述你为什么要查看这一行的上下文？你期望从中获得什么信息或证据？
             file_path (str): 目标代码文件的相对路径。
             target_line (int): 需重点分析的中心行号（返回的代码片段中将以 `=>` 明确高亮指示该行）。
             max_lines (int, optional): 允许返回的最大上下文行数，默认 200。该值只能小于或等于200。
 
-        Rerounds:
+        Returns:
             str: 带有行号标注的 Markdown 代码块。
         """
         max_lines = max(0, min(max_lines, self.config_max_lines))
@@ -1045,7 +1055,7 @@ class CodeRetriever:
             return {}, err
         
 
-    async def get_file_imports(self, file_path: str) -> str:
+    async def get_file_imports(self, thought: str, file_path: str) -> str:
         """
         基于 AST 解析并提取目标 Python 文件的所有导入依赖 (Imports)，支持区分全局导入与局部 (函数内) 导入。
         
@@ -1055,9 +1065,10 @@ class CodeRetriever:
         3. [逻辑与注入] 确认文件是否正确引入了必要的安全防御组件（如全局鉴权装饰器、防 SSRF 库 `advocate`、安全 XML 解析器 `defusedxml`）。
         
         Args:
+            thought (str): 【思考过程】请说明你为什么想检查该文件的导入列表？你想从中获得什么信息或证据？
             file_path (str): 目标 Python 文件的相对路径。
 
-        Rerounds:
+        Returns:
             str: 按作用域（全局 `<module_level>` 与局部 `def scope_name`）分组聚合的 import 语句 Markdown 列表。
         """
         grouped_imports, err = await self._core_get_file_imports(file_path)
@@ -1095,14 +1106,6 @@ class CodeRetriever:
     ) -> List[Dict[str, Any]]:
         """
         获取与指定行数范围有交集的所有“独立代码块”的起止行号。
-        
-        Args:
-            file_path (str): 目标文件的相对路径
-            start_line (int): 起始行
-            end_line (int): 结束行
-            
-        Rerounds:
-            List[Dict]: 形如 [{"start": 10, "end": 50}, ...] 的列表
         """
         abs_path = self.repo_path / file_path
         
