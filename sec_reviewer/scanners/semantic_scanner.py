@@ -173,7 +173,7 @@ class LLMSemanticScanner:
 
     async def _convert_to_scanned_issues(
         self, 
-        results: list[tuple[LLMScanReport | None, str]], 
+        results: list[tuple[Optional[LLMScanReport], str, Optional[Any]]], 
         file_path: str, 
         patched_file: PatchedFile,
     ) -> list[ScannedIssue]:
@@ -183,7 +183,7 @@ class LLMSemanticScanner:
         scanned_issues = []
         added_lines = self._get_added_lines(patched_file)
         
-        for report, hunk_context, content in results:
+        for report, hunk_context, result in results:
             if not report or not report.issues:
                 continue
 
@@ -210,7 +210,7 @@ class LLMSemanticScanner:
                     ))
                     logger.info(
                         f"成功添加文件 {file_path} 中的漏洞: {issue.name}。"
-                        f"\n代码上下文 {hunk_context} -> 漏洞 {scanned_issues[-1]}\n思考过程：{content}"
+                        f"\n代码上下文 {hunk_context} -> 漏洞 {scanned_issues[-1]}\n原始消息：{result}"
                     )
                 else:
                     logger.info(
@@ -226,7 +226,7 @@ class LLMSemanticScanner:
         file_path: str, # 相对路径
         chain: RunnableSerializable,
         semaphore: asyncio.Semaphore
-    ) -> tuple[Optional[LLMScanReport], str, Optional[str]]:
+    ) -> tuple[Optional[LLMScanReport], str, Optional[Any]]:
         """处理单个变更代码块的异步子任务"""
         async with semaphore:
             try:
@@ -241,7 +241,7 @@ class LLMSemanticScanner:
                 
                 report = LLMScanReport(**tool_args)
 
-                return report, hunk_context, result.content
+                return report, hunk_context, result
             except Exception as e:
                 logger.error(f"文件 {file_path} 的代码块分析或 Pydantic 结构校验失败：{e}")
                 logger.exception("error: ")

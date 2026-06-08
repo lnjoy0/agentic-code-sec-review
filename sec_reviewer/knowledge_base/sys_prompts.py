@@ -86,7 +86,7 @@ ROUTER_PROMPT = """# ROLE
 - 步骤 4：如果无合适专家，选择 General_Expert。
 
 # STRICT OUTPUT PROTOCOL
-你的输出【必须且只能】是工具调用请求（Tool Call），而且【必须且只能】调用 `LLMRouteDecision`工具。绝不允许输出任何纯文本内容。
+你的输出【必须且只能】是工具调用请求（Tool Call），而且【必须且只能】调用 `LLMRouteDecision`工具。
 """
 
 

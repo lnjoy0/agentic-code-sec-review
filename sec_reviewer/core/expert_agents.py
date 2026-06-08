@@ -262,7 +262,7 @@ class BaseExpertAgent():
         )
         
         llm_config = config['configurable'].get('llm_config')
-        structured_llm = get_model_bound_tools(llm_config, 'Critic', [CriticDecision], max_tokens=800)
+        structured_llm = get_model_bound_tools(llm_config, 'Critic', [CriticDecision])
 
         logger.info(f"[{self.expert_name}]-[issue({issue.id})] ⚖️ 正在进行第 {critical_rounds} 轮批判节点审查...")
         results = await structured_llm.ainvoke([
@@ -288,7 +288,7 @@ class BaseExpertAgent():
             return {"audit_results": [state["draft_result"]]}
 
         if critic_dc.decision == "revise":
-            logger.warning(f"[{self.expert_name}]-[issue({issue.id})] 🚫 专家结论被驳回。理由：{critic_dc.critique_reason}，建议: {critic_dc.suggested_action}。")
+            logger.warning(f"[{self.expert_name}]-[issue({issue.id})] 🚫 专家结论被驳回。理由：{critic_dc.critique_reason}，建议: {critic_dc.suggested_action}。\n原始消息: {results}")
                         
             critical_content = CriticalContent(
                 round=critical_rounds,
@@ -305,7 +305,7 @@ class BaseExpertAgent():
                 "draft_result": None
             }
         else:
-            logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 结论验证通过 (剩余审查轮数: {max_critical_rounds-critical_rounds})。")
+            logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 结论验证通过 (剩余审查轮数: {max_critical_rounds-critical_rounds})。\n原始消息: {results}")
             logger.info(f"[{self.expert_name}]-[issue({issue.id})] 最终审计结果：{str(draft)}")
             return {"audit_results": [state["draft_result"]]}
 

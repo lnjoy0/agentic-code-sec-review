@@ -66,8 +66,7 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
     max_rounds = config['configurable'].get('agent_config').agent_max_rounds
     llm_config = config['configurable'].get('llm_config')
 
-    # router 正常输出只有专家名和简短原因，加上 max_tokens 以防止无限生成
-    structured_llm = get_model_bound_tools(llm_config, role_name="Router", tools=[LLMRouteDecision], max_tokens=800)
+    structured_llm = get_model_bound_tools(llm_config, role_name="Router", tools=[LLMRouteDecision])
     
     prompt = ChatPromptTemplate.from_messages([
         ("system", ROUTER_PROMPT),
@@ -201,7 +200,7 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
                             logger.error(f"  [Soft Route] LLM 决策失败，专家 {expert_name} 已在退回记录中，issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) 降级为通用专家。")
                             expert_name = "General_Expert"
                         else:
-                            logger.info(f"  [Soft Route] LLM 决策: issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) -> {expert_name} (原因: {decision.reason})")
+                            logger.info(f"  [Soft Route] LLM 决策: issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) -> {expert_name} (原因: {decision.reason})\n原始消息: {result}")
                     except ValidationError as e:
                         logger.error(f"  [Soft Route] LLM 路由失败，issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) 被分配给通用专家。错误: LLM 的输出的参数未通过 Pydantic 校验，输出内容为 {str(result)}，报错 {e}")
 
