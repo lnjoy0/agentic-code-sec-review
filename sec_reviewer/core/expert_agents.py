@@ -271,7 +271,7 @@ class BaseExpertAgent():
         ])
 
         if not hasattr(results, 'tool_calls') or not results.tool_calls:
-            logger.error(f"批判节点审查失败，LLM 未调用任何工具，返回了纯文本: {results.content}")
+            logger.error(f"批判节点审查失败，LLM 未调用任何工具，返回了纯文本: {results}")
             return {"audit_results": [state["draft_result"]]}
 
         tool_name = results.tool_calls[0]['name']
