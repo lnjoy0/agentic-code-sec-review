@@ -23,7 +23,7 @@ def get_model_bound_tools(
     config: LLMConfig, 
     role_name: str, 
     tools: List, 
-    tool_choice: Optional[str],
+    tool_choice: Optional[str] = None,
     max_tokens: int = None
 ):
     model = ChatOpenAI(
