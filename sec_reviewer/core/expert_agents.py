@@ -102,7 +102,7 @@ class BaseExpertAgent():
         action_hint = (
                 "\n\n====================\n"
                 "【系统指令】：绝不允许直接输出工具调用！\n"
-                "请务必以 `💡 研判推演：` 开头开始回复。\n"
+                "必须以 `💡 研判推演：` 开头开始回复。\n"
                 "先评估当前证据，若不足则简短说明并调用查询工具；若证据充分，则详细写出一步步思考的终局推演逻辑，最后调用 `ExpertAuditResult` 工具。"
         )
         # Message 对象不可变，所以需要重新实例化一个相同类型的
@@ -293,21 +293,19 @@ class BaseExpertAgent():
             "<expert_final_conclusion>\n"
             f"{draft.model_dump_json()}\n"
             "</expert_final_conclusion>"
-        )
 
-        action_hint = (
-                "\n\n====================\n"
-                "【系统指令】：请务必以 `💡 审查推演：` 开头开始回复。\n"
-                "先详细写出一步步思考的审查推演逻辑，最后调用 `CriticDecision` 工具。"
+            "\n\n====================\n"
+            "【系统指令】：必须以 `💡 审查推演：` 开头开始回复。\n"
+            "先详细写出一步步思考的审查推演逻辑，最后调用 `CriticDecision` 工具。"
         )
+        
         llm_config = config['configurable'].get('llm_config')
         structured_llm = get_model_bound_tools(llm_config, 'Critic', [CriticDecision])
 
         logger.info(f"[{self.expert_name}]-[issue({issue.id})] ⚖️ 正在进行第 {critical_rounds} 轮批判节点审查...")
         results = await structured_llm.ainvoke([
             SystemMessage(content=CRITIC_PROMPT),
-            HumanMessage(content=human_prompt),
-            SystemMessage(content=action_hint)
+            HumanMessage(content=human_prompt)
         ])
 
         if not hasattr(results, 'tool_calls') or not results.tool_calls:
