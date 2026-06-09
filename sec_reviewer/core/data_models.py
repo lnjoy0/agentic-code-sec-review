@@ -167,27 +167,37 @@ class ExpertAuditResult(BaseModel):
         ..., 
         min_length=500,
         description=(
-            "详细的研判逻辑推导过程，以 Markdown 格式输出。必须涵盖以下要点：\n"
+            "详细的研判逻辑推导过程，必须涵盖以下要点：\n"
             "1. 漏洞触发机理：简述该类漏洞成立的核心前提（如：特定的危险配置、不受信任的数据流、或不安全的函数调用）。\n"
             "2. 上下文核查：结合当前代码片段，分析是否确实满足上述触发条件（例如：是否存在防御配置、变量是否真正受控、依赖版本是否匹配）。\n"
-            "3. 如果判定为误报，必须说明排除逻辑（如：已有前置校验、仅用于测试环境等）；如果判定为真实漏洞，必须给出该漏洞的可能利用方法。" 
+            "3. 如果判定为误报，必须说明排除逻辑（如：已有前置校验、仅用于测试环境等）；如果判定为真实漏洞，必须给出该漏洞的可能利用方法。\n"
+            "以 Markdown 格式输出, 需要至少 500 字以上。"
         )
     )
     defense_checks: str = Field(
         default="",
-        description=("列出你排查过的所有可能的防御措施，并解释为什么它们失效。只有当 verdict 为 'True Positive' 时才提供；若为 'False Positive' 则保持为空字符串。")
+        min_length=100,
+        description=(
+            "详细列出你排查过的所有可能的防御措施，并解释为什么它们失效。只有当 verdict 为 'True Positive' 时才提供；若为 'False Positive' 则保持为空字符串。\n"
+            "以 Markdown 格式输出, 需要至少 100 字以上。"
+        )
     )
     attack_scenario: str = Field(
         default="",
         min_length=100,
         description=(
-            "漏洞的可能利用场景与攻击过程描述，以 Markdown 格式输出。只有当 verdict 为 'True Positive' 时才提供；若为 'False Positive' 则保持为空字符串。\n"
-            "- 请详细描述攻击者可能如何利用该漏洞进行攻击，包括攻击前提、攻击步骤、可能的攻击载荷，以及攻击成功后可能造成的影响等。")
+            "详细的漏洞的可能利用场景与攻击过程描述。只有当 verdict 为 'True Positive' 时才提供；若为 'False Positive' 则保持为空字符串。\n"
+            "- 请详细描述攻击者可能如何利用该漏洞进行攻击，包括攻击前提、攻击步骤、可能的攻击载荷，以及攻击成功后可能造成的影响等。\n"
+            "以 Markdown 格式输出, 需要至少 100 字以上。"
+        )
     )
     remediation: str = Field(
         default="", 
         min_length=100,
-        description="修复代码或配置建议，以 Markdown 格式输出。只有当 verdict 为 'True Positive' 时才提供；若为 'False Positive' 则保持为空字符串。"
+        description=(
+            "详细的修复代码或配置建议。只有当 verdict 为 'True Positive' 时才提供；若为 'False Positive' 则保持为空字符串。\n"
+            "以 Markdown 格式输出, 需要至少 100 字以上。"
+        )
     )
 
     @model_validator(mode='after')
