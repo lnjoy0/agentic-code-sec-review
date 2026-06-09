@@ -85,13 +85,13 @@ class LLMConfig(BaseModel):
 
 class AgentConfig(BaseModel):
     """配置Agent参数"""
-    agent_max_rounds: int = Field(default=30, ge=0) # Agent的最大行动轮数
-    max_critical_rounds: int = Field(default=2, ge=0)
+    agent_max_rounds: int = Field(default=35, ge=0) # Agent的最大行动轮数
+    max_critical_rounds: int = Field(default=3, ge=0)
 
 
 class CodeRetrievalConfig(BaseModel):
     """配置代码检索参数"""
-    context_max_lines: int = Field(default=200, ge=1) # 检索代码时的最大上下文行数
+    context_max_lines: int = Field(default=100, ge=1) # 检索代码时的最大上下文行数
     single_line_max_length: int = Field(default=500, ge=1) # 检索代码时的单行最大字符数
 
 
@@ -185,13 +185,13 @@ class Config:
 
             # Agent configuration
             agent_config = AgentConfig(
-                agent_max_rounds=os.environ.get("AGENT_MAX_ROUNDS", "30"),
-                max_critical_rounds = os.environ.get("MAX_CRITICAL_ROUNDS", "2")
+                agent_max_rounds=os.environ.get("AGENT_MAX_ROUNDS", "35"),
+                max_critical_rounds = os.environ.get("MAX_CRITICAL_ROUNDS", "3")
             )
 
             # Code retriever configuration
             code_retrieval_config = CodeRetrievalConfig(
-                context_max_lines=os.environ.get("RETRIEVAL_CONTEXT_MAX_LINES", "200")
+                context_max_lines=os.environ.get("RETRIEVAL_CONTEXT_MAX_LINES", "100")
             )
         except ValidationError as e:
             logger.error(f"参数错误：{e}")

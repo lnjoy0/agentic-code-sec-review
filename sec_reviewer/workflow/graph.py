@@ -50,7 +50,7 @@ def create_graph():
     """代码安全审计工作流主图"""
     repo_path = os.getenv("GITHUB_WORKSPACE", ".")
     retrieval_config = CodeRetrievalConfig(
-        context_max_lines=int(os.getenv("RETRIEVAL_CONTEXT_MAX_LINES", "200")),
+        context_max_lines=int(os.getenv("RETRIEVAL_CONTEXT_MAX_LINES", "100")),
         single_line_max_length=500
     )
     

@@ -126,7 +126,7 @@ class CodeRetriever:
     async def find_definition(
         self, 
         target_name: str, 
-        max_lines: int = 200,
+        max_lines: int = 100,
     ) -> str:
         """
         在当前代码库的所有 `.py` 文件中，全局检索目标类 (Class) 或函数 (Function) 的源代码定义。
@@ -135,7 +135,7 @@ class CodeRetriever:
         
         Args:
             target_name (str): 目标函数名或类名（需提供精确名称，勿带括号或模块前缀，如 "sanitize_input"）。
-            max_lines (int, optional): 读取定义的最大行数，默认 200。该值只能小于或等于200。
+            max_lines (int, optional): 读取定义的最大行数，默认 100。该值只能小于或等于100。
 
         Returns:
             str: 包含定义所在路径、行号与代码片段的 Markdown 文本。
@@ -212,7 +212,7 @@ class CodeRetriever:
         target_name: str, 
         file_path: str, 
         start_line: int,
-        max_lines: int = 200,
+        max_lines: int = 100,
     ) -> str:
         """
         分页拉取 python 长函数或类定义的后续代码片段。
@@ -223,7 +223,7 @@ class CodeRetriever:
             target_name (str): 目标函数名或类名（需与截断提示保持一致）。
             file_path (str): 目标文件路径（需与截断提示保持一致）。
             start_line (int): 继续阅读的起始行号（严格填入截断提示中给出的 `next_start_line`）。
-            max_lines (int, optional): 读取后续定义的最大行数，默认 200。该值只能小于或等于200。
+            max_lines (int, optional): 读取后续定义的最大行数，默认 100。该值只能小于或等于100。
 
         Returns:
             str: 指定行号后续的代码片段。
@@ -783,8 +783,9 @@ class CodeRetriever:
         file_path: str, # 文件相对路径
         start_point: Tuple[int, int], # 1-indexed
         end_point: Tuple[int, int],
-        max_lines: int = 200,
-        min_lines: int = 0
+        max_lines: int = 100,
+        min_lines: int = 0,
+        include_imports: bool = False
     ) -> Tuple[str, Tuple]:
         """
         根据起止坐标提取目标代码片段的上下文。
@@ -912,14 +913,15 @@ class CodeRetriever:
                 break 
 
             current_node = current_node.parent
-
+        
         # 获取全局 imports 信息
         global_imports = ""
-        grouped_imports, err = await self._core_get_file_imports(file_path)
-        if "<module_level>" in grouped_imports:
-            global_imports = "\n".join(grouped_imports["<module_level>"])
-        if err:
-            logger.error(f"文件 {file_path} 获取全局 imports 出错")
+        if include_imports:
+            grouped_imports, err = await self._core_get_file_imports(file_path)
+            if "<module_level>" in grouped_imports:
+                global_imports = "\n".join(grouped_imports["<module_level>"])
+            if err:
+                logger.error(f"文件 {file_path} 获取全局 imports 出错")
 
         # 拼接排版
         output_lines = [
@@ -969,7 +971,8 @@ class CodeRetriever:
         self,
         file_path: str,
         target_line: int,
-        max_lines: int = 200,
+        max_lines: int = 100,
+        include_imports: bool = False
     ) -> str:
         """
         基于 AST 智能提取指定 python 代码行所在的完整逻辑块（函数或类）上下文。
@@ -979,8 +982,9 @@ class CodeRetriever:
         Args:
             file_path (str): 目标代码文件的相对路径。
             target_line (int): 需重点分析的中心行号（返回的代码片段中将以 `=>` 明确高亮指示该行）。
-            max_lines (int, optional): 允许返回的最大上下文行数，默认 200。该值只能小于或等于200。
-
+            max_lines (int, optional): 允许返回的最大上下文行数，默认 100。该值只能小于或等于100。
+            include_imports (bool, optional): 是否在上下文中附带该文件的全局导入依赖（import 语句）。默认为 False。
+            
         Returns:
             str: 带有行号标注的 Markdown 代码块。
         """
@@ -991,7 +995,8 @@ class CodeRetriever:
                 file_path, 
                 (target_line, 1), 
                 (target_line, 1), 
-                max_lines
+                max_lines,
+                include_imports
             )
         except Exception as e:
             return f"❌ 提取上下文失败：{e}"

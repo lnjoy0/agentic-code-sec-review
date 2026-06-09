@@ -38,7 +38,7 @@ inputs:
   agent_max_rounds:
     description: 'Agent 最大行动轮数'
     required: false
-    default: '30'
+    default: '35'
   max_critical_rounds:
     description: '批判节点的最大审查轮数'
     required: false
@@ -50,7 +50,7 @@ inputs:
   retrieval_context_max_lines:
     description: '代码检索器的检索上下文最大行数'
     required: false
-    default: '200'
+    default: '100'
 
   # === 各角色 Temperature & Top_p 参数 ===
   scanner_temperature:

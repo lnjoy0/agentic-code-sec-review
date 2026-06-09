@@ -37,14 +37,21 @@ domain: ["Logic_Identity_Expert", "General_Expert"]
 当满足以下**全部条件**时，可判定为真实漏洞：
 1.  **污染源确认**：资源标识符（如 `id`、`user_id`、`order_no`）明确来自于用户可控的 HTTP 输入（Path, Query, Body, Header）。
 2.  **执行目标确认**：后端在处理该标识符时，执行了 ORM 数据库查询、文件读取或状态更新等敏感操作，且该对象包含非公开的用户专有数据或状态。
-3.  **权限校验缺失确认**：在数据操作的上游到下游完整执行链路中，**未发现**当前用户身份（`request.user` 等）与目标资源所有者之间的比对逻辑，且查询条件中没有将当前用户作为过滤参数。
-4.  **环境前提约束**：该接口允许普通身份的认证用户访问，且业务场景不支持跨用户共享或查看。
+3.  **权限校验缺失确认**：确认以下三点均不存在：
+    1. ORM 查询条件中没有带入当前用户身份（如缺少 `owner=request.user`）。
+    2. 函数体内没有显式的对象属主比对逻辑。
+    3. 路由入口或视图类上没有挂载用于对象级鉴权的装饰器（如 `@has_object_permission`）或权限依赖注入。
+4. **非公开属性确认**：根据变量命名、表名（如 `PrivateMessage`, `UserWallet`）或业务逻辑，确认该被操作的对象属于用户私有资产，而非全局公开或内部共享资源。
 
 #### 5. 证伪标准
 
 只要满足以下**任意一项**，即可判定为误报：
-1.  **查询条件已包含属主约束**：ORM 语句在查询时，除了传入的 ID，还显式带入了当前身份上下文（例如：`.filter(id=req_id, user_id=current_user.id)` 或使用关联模型 `current_user.items.get(...)`）。
-2.  **存在显式的鉴权屏障**：代码中存在诸如 `if target_obj.owner != request.user:` 的硬编码判断并抛出异常，或者调用了自定义的 `check_object_permission(user, obj)` 函数。
-3.  **受控的管理员端点**：该入口明确使用了依赖注入或装饰器限制了只有 Admin/Superuser 角色才能访问。
-4.  **资源公开性**：根据业务逻辑上下文或对象命名（如 `PublicArticle`, `SharedBoard`），被访问的资源被设计为公开或允许当前工作组/租户内全员共享的。
-5.  **不可控标识符**：该 ID 参数虽然在后端逻辑中使用，但其实际来源并非外部传入，而是由后端从受信任的会话（Session）中安全取出的。
+1.  **查询级属主约束**：ORM/SQL 语句在查询时，除了目标 ID，已经将当前上下文用户（如 `user_id`, `tenant_id`, `org_id`）作为过滤条件（例如：`User.orders.get(id=...`, `.filter(id=req_id, user_id=current_user.id)` 或使用关联模型 `current_user.items.get(...)`）。
+2.  **显式代码级拦截**：提取对象后，代码中存在类似于 `if obj.owner != request.user: return 403` 或 `assert_ownership(obj)` 的逻辑判断，或者调用了自定义的 `check_object_permission(user, obj)` 函数。
+3.  **框架级与装饰器鉴权**：接口使用了专门的对象级权限控制机制，例如：
+    1. 路由存在 `@require_admin`, `@roles_accepted('manager')` 等高权限约束。
+    2. 使用了诸如 `IsOwnerOrReadOnly`、`check_object_permission` 等策略类/中间件。
+    3. 依赖注入中包含了校验逻辑（如 `FastAPI` 的 `Depends(verify_ownership)`）。
+4.  **间接属主归属**：目标资源虽然没有直接关联 `user_id`，但关联了 `group_id` 或 `tenant_id`，且系统在更上层已经校验了当前用户对该 Group/Tenant 的访问权限（RBAC/ABAC 模式）。
+5.  **不可控凭据安全提取**：虽然存在 `user_id` 或 `target_id` 变量，但该变量并非来自请求体/URL，而是从受信任的 Server-Side Session、Redis 缓存或经过签名验签的 JWT Token Payload 中直接提取。
+6.  **对象公开性**：该资源接口在设计上本就是公开可读的（如博客文章详情页 `GET /article/{id}`、公开商品库查询）。

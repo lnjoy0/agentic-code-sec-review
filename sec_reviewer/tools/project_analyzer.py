@@ -279,7 +279,7 @@ class ProjectAnalyzer:
         self, 
         file_path: str, 
         start_line: int = 1,
-        max_lines: int = 200,
+        max_lines: int = 100,
     ) -> str:
         """
         精准读取指定文件内容的工具（用于读取 `.py` 以外的其他文件，如配置文件等）。
@@ -289,7 +289,7 @@ class ProjectAnalyzer:
         Args:
             file_path (str): 目标文件的相对路径。
             start_line (int, optional): 起始读取行号，默认 1。
-            max_lines (int, optional): 单次读取的最大行数，默认 200。该值只能小于或等于200。
+            max_lines (int, optional): 单次读取的最大行数，默认 100。该值只能小于或等于100。
 
         Returns:
             str: 附带行号的 Markdown 格式文件内容片段。
