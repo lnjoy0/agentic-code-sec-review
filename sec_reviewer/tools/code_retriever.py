@@ -125,7 +125,10 @@ class CodeRetriever:
 
     async def find_definition(
         self, 
-        target_name: str, 
+        target_name: str,
+        file_filters: Optional[list[str]] = None,
+        start_index: int = 1, # 1-indexed
+        result_limit: int = 5,
         max_lines: int = 100,
     ) -> str:
         """
@@ -134,33 +137,65 @@ class CodeRetriever:
         【何时使用】：当遇到未知函数/类，需深挖其内部实现以研判漏洞时调用（如：验证自定义污点清洗机制、审查加解密与脱敏封装、确认鉴权装饰器或中间件底层逻辑等）。
         
         Args:
-            target_name (str): 目标函数名或类名（需提供精确名称，勿带括号或模块前缀，如 "sanitize_input"）。
+            target_name (str): 目标函数名或类名。注意：
+                - 仅支持纯函数名或类名（如 "sanitize_input"），不支持包含点号的字符串。
+                - 若遇到带点号的调用（例如 "find.run"），应当仅搜索末尾的方法或函数名（即 "run"）。
+                - 对于类似 "find.run" 的结构，前置的 "find" 未必是类名，它也很可能是通过 import 导入的模块名或文件名。在追溯定义时需要加以甄别。
+            file_filters (list[str], optional): 文件名或路径过滤列表。如果提供，仅在匹配这些子串的路径中检索。
+            start_index (int, optional): 全局结果列表的分页起始索引（默认 1）。用于遇到截断时继续拉取后续记录。
+            result_limit (int, optional): 单次请求最多返回的详细定义节点数（默认 5）。防止因同名定义过多而浪费上下文空间。
             max_lines (int, optional): 读取定义的最大行数，默认 100。该值只能小于或等于100。
 
         Returns:
             str: 包含定义所在路径、行号与代码片段的 Markdown 文本。
         """
-        nodes_info = []
-
         candidate_files = await self._find_definition_files(target_name)
+        if not candidate_files:
+            return f"📄 未找到 `{target_name}` 的任何定义文件。"
+        
+        if file_filters:
+            filtered_files = []
+            for abs_path in candidate_files:
+                try:
+                    rel_path = str(abs_path.relative_to(self.repo_path))
+                    if any(f in rel_path for f in file_filters):
+                        filtered_files.append(abs_path)
+                except ValueError:
+                    pass
+            
+            candidate_files = filtered_files
+            if not candidate_files:
+                return f"📄 在指定的文件/路径范围 ({', '.join(file_filters)}) 中，未找到 `{target_name}` 的任何定义文件。"
+
+        nodes_info = []
         for abs_file_path in candidate_files:
             nd_info = await self._find_definition_in_file(target_name, abs_file_path)
             if nd_info:
                 nodes_info.append(nd_info)
 
         if not nodes_info:
-            return f"📄 未找到 `{target_name}` 的任何定义。"
+            return f"📄 未找到 `{target_name}` 的任何具体定义节点。"
+
+        total_results = len(nodes_info)
+        start_index_0 = start_index - 1
+        
+        if start_index_0 >= total_results:
+            return f"📄 共找到 {total_results} 处定义，但指定的起始索引 `start_index={start_index}` 已超出范围。"
+
+        paginated_nodes = nodes_info[start_index_0 : start_index_0 + result_limit]
+        end_idx = min(start_index_0 + result_limit, total_results)
 
         max_lines = max(0, min(max_lines, self.config_max_lines))
 
-        # 计算动态行数限制
-        n_defs = len(nodes_info)
+        # 计算当前分页的动态行数限制
+        n_defs = len(paginated_nodes)
         line_limit_per_def = max(1, max_lines // n_defs)
         
         # 拼接排版
         output_lines = [
-            f"### 🎯 定义查找结果: `{target_name}`",
-            f"> **总计找到**: {n_defs} 处定义",
+            f"### 🎯 定义查找结果: `{target_name}`" + (f"（已使用 {', '.join(file_filters)} 过滤）" if file_filters else ""),
+            f"> **总计找到**: {total_results} 处定义",
+            f"> **当前显示范围**: 第 {start_index} 到 {end_idx} 项详情",
             "---"
         ]
 
@@ -198,19 +233,28 @@ class CodeRetriever:
                 output_lines.append(
                     f"💡 **片段截断提示**: 代码已截断至前 {line_limit_per_def} 行。\n"
                     f"若需继续查看后续定义，请使用 `fetch_definition_chunk` 工具，并传入参数:\n"
-                    f"> `file_path='{file_path}'`\n"
                     f"> `target_name='{target_name}'`\n"
+                    f"> `file_path='{file_path}'`\n"
                     f"> `start_line={next_start_line}`"
                 )
             else:
                 output_lines.append(f"*(✅ 此为该定义的完整代码)*")
+
+        has_more_detail = total_results > end_idx
+        if has_more_detail:
+            next_start = end_idx + 1
+            output_lines.append("\n---")
+            output_lines.append(
+                f"💡 **提示**: 仍有 {total_results - end_idx} 个定义未显示。若需继续追查，"
+                f"请重新调用此工具并传入 `start_index={next_start}`。"
+            )
 
         return "\n".join(output_lines)
 
     async def fetch_definition_chunk(
         self, 
         target_name: str, 
-        file_path: str, 
+        file_path: str,  # 相对路径
         start_line: int,
         max_lines: int = 100,
     ) -> str:

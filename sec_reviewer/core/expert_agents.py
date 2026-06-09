@@ -228,8 +228,9 @@ class BaseExpertAgent():
         trace_lines = []
         for i, m in enumerate(messages[:-1]):
             if m.type == 'ai':
+                thought_str = f"  - 思考：{m.content}\n"
                 calls_str = "\n".join([f"  - 调用工具: {tc['name']}, 参数: {tc['args']}" for tc in m.tool_calls])
-                trace_lines.append(f"<turn id=\"{i}\" role=\"ai\">\n{calls_str}\n</turn>")
+                trace_lines.append(f"<turn id=\"{i}\" role=\"ai\">\n{thought_str+calls_str}\n</turn>")
             elif m.type == 'tool':
                 trace_lines.append(
                     f"<turn id=\"{i}\" role=\"tool\" tool_name=\"{m.name}\">\n"
@@ -237,6 +238,8 @@ class BaseExpertAgent():
                     f"</turn>"
                 )
         trace_str = '\n\n'.join(trace_lines)
+
+        final_thought = messages[-1].content
 
         history_str = '\n'.join([c.model_dump_json() for c in critical_history])
 
@@ -252,6 +255,10 @@ class BaseExpertAgent():
             "<expert_tool_trace>\n"
             f"{trace_str}\n"
             "</expert_tool_trace>\n\n"
+            
+            "<expert_final_thought>\n"
+            f"{final_thought}\n"
+            "</expert_final_thought>\n\n"
             
             "<review_history>\n"
             f"{history_str}\n"
