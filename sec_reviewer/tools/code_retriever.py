@@ -154,7 +154,7 @@ class CodeRetriever:
         if "." in target_name:
             target_name = target_name.split(".")[-1]
 
-        name_hint = f" *(自动从 `{original_target_name}` 提取)*" if original_target_name != target_name else ""
+        name_hint = f" *（自动从 `{original_target_name}` 提取）*" if original_target_name != target_name else ""
 
         candidate_files = await self._find_definition_files(target_name)
         if not candidate_files:
