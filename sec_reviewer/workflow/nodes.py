@@ -162,7 +162,7 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
             chain = prompt | structured_llm
             coro = asyncio.wait_for(
                 chain.ainvoke({
-                    "issue": issue.model_dump_json(indent=2),
+                    "issue": issue.model_dump_json(),
                     "rejected_by": ", ".join(rejected_by),
                     "rejection_reason": rejection_reason
                 }), 

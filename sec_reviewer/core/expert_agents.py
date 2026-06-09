@@ -78,7 +78,7 @@ class BaseExpertAgent():
         if not messages:
             logger.info(f"[{self.expert_name}] 🚀 开始全新漏洞研判: {issue.id} ({issue.name or issue.cwe})...")
             
-            issue_json = issue.model_dump_json(indent=2)
+            issue_json = issue.model_dump_json()
             human_content = f"请对以下漏洞报告进行深度研判，你可以多轮调用工具获取信息。\n【扫描报告】：\n{issue_json}"
             if issue.id in rejection_history:
                 rejection_reason = "\n【退回历史】该漏洞之前已被以下专家退回过，可以参考其退回原因，从中获取你需要的信息："
@@ -93,7 +93,7 @@ class BaseExpertAgent():
             logger.info(f"[{self.expert_name}]-[issue({state['issue'].id})] 🧠 接收反馈，继续综合推理...")
             
             if critical_history:
-                critical_msg = f"【上次研判结论与审查意见】以下是你上一次的研判结论以及审查节点对其给出的意见。\n{critical_history[-1].model_dump_json(indent=2)}"
+                critical_msg = f"【上次研判结论与审查意见】以下是你上一次的研判结论以及审查节点对其给出的意见。\n{critical_history[-1].model_dump_json()}"
                 invocation_messages = [sys_msg] + messages + [HumanMessage(content=critical_msg)]
             else:
                 invocation_messages = [sys_msg] + messages
@@ -238,7 +238,7 @@ class BaseExpertAgent():
                 )
         trace_str = '\n\n'.join(trace_lines)
 
-        history_str = '\n'.join([c.model_dump_json(indent=2) for c in critical_history])
+        history_str = '\n'.join([c.model_dump_json() for c in critical_history])
 
         # 构造提示词
         human_prompt = (
@@ -246,7 +246,7 @@ class BaseExpertAgent():
             "请严格按照系统指令，对以下专家的研判过程和最终结论进行审查：\n\n"
 
             "<vulnerability_report>\n"
-            f"{issue.model_dump_json(indent=2)}\n"
+            f"{issue.model_dump_json()}\n"
             "</vulnerability_report>\n\n"
             
             "<expert_tool_trace>\n"
@@ -258,7 +258,7 @@ class BaseExpertAgent():
             "</review_history>\n\n"
 
             "<expert_final_conclusion>\n"
-            f"{draft.model_dump_json(indent=2)}\n"
+            f"{draft.model_dump_json()}\n"
             "</expert_final_conclusion>"
         )
         
@@ -575,7 +575,7 @@ def save_langgraph_messages_to_markdown(messages: list, filename="message"):
             if msg.type == "ai" and getattr(msg, "tool_calls", []):
                 f.write("**Tool Calls:**\n")
                 f.write("```json\n")
-                f.write(json.dumps(msg.tool_calls, ensure_ascii=False, indent=2))
+                f.write(json.dumps(msg.tool_calls, ensure_ascii=False, ))
                 f.write("\n```\n\n")
                 
             f.write("---\n\n")
