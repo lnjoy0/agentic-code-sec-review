@@ -794,7 +794,7 @@ class CodeRetriever:
         """
         abs_path = self.repo_path / file_path
         if abs_path.suffix != '.py':
-            raise ValueError(f"不支持的文件类型后缀 {abs_path.suffix}，当前只支持 Python 文件分析")
+            raise ValueError(f"该工具仅支持 `.py` 文件，请调用 `get_file_context` 工具查询")
 
         try:
             async def _read_file():

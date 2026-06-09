@@ -575,7 +575,7 @@ def save_langgraph_messages_to_markdown(messages: list, filename="message"):
             if msg.type == "ai" and getattr(msg, "tool_calls", []):
                 f.write("**Tool Calls:**\n")
                 f.write("```json\n")
-                f.write(json.dumps(msg.tool_calls, ensure_ascii=False, ))
+                f.write(json.dumps(msg.tool_calls, ensure_ascii=False, indent=2))
                 f.write("\n```\n\n")
                 
             f.write("---\n\n")

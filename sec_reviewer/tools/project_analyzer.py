@@ -26,6 +26,7 @@ class ProjectAnalyzer:
 
     async def get_project_structure(
         self, 
+        sub_dir: Optional[str] = None,
         max_depth: int = 3, 
         ignore_dirs: Optional[List[str]] = None
     ) -> str:
@@ -35,12 +36,28 @@ class ProjectAnalyzer:
         【何时使用】：当需要建立项目全局上下文、定位配置文件、寻找流量路由入口，或需确认特定文件是否属于测试/Mock目录时调用。
         
         Args:
+            sub_dir (str, optional): 指定查看的子目录相对路径。如果指定，将以此子目录作为根节点向下生成树状图。
             max_depth (int, optional): 遍历最大深度。默认3。警告：非必要勿轻易增大此值，以防返回过长导致上下文溢出。
             ignore_dirs (List[str], optional): 需额外跳过的目录名列表（默认已忽略 .git, venv, __pycache__ 等构建目录），必须是列表形式，请勿传字符串。
-
+            
         Returns:
             str: 项目目录结构的树状字符串。
         """
+        if sub_dir:
+            target_path = (self.repo_path / sub_dir).resolve()
+            repo_root = self.repo_path.resolve()
+            
+            # 安全校验：确保指定的路径没有通过 '../' 逃逸出仓库根目录
+            if not str(target_path).startswith(str(repo_root)):
+                return f"⚠️ 错误：指定的子目录 '{sub_dir}' 超出了仓库范围。"
+            
+            if not target_path.exists():
+                return f"⚠️ 错误：找不到指定的子目录 '{sub_dir}'。"
+            if not target_path.is_dir():
+                return f"⚠️ 错误：'{sub_dir}' 不是一个有效的目录。"
+        else:
+            target_path = self.repo_path
+
         # 忽略的目录，用于节省 Token 和过滤无关安全审计的构建产物
         ignore_set = {
             '.git', '__pycache__', 'venv', '.venv', 'env', 
@@ -75,14 +92,15 @@ class ProjectAnalyzer:
                         
                 return tree_str
 
-            return generate_tree(self.repo_path)
+            return generate_tree(target_path)
 
         tree_content = await asyncio.to_thread(_build_tree_sync) # 放入线程池，避免读写阻塞
 
         # 拼接排版
+        display_name = f"{self.repo_path.name}/{sub_dir}" if sub_dir else self.repo_path.name
         output_lines = [
-            f"### 📦 代码仓库目录树:",
-            f"{self.repo_path.name}/",
+            f"### 📦 代码仓库目录树 (Root: {display_name}):",
+            f"{target_path.name}/",
             tree_content
         ]
         return '\n'.join(output_lines)
@@ -95,13 +113,13 @@ class ProjectAnalyzer:
         max_results: int = 40
     ) -> str:
         """
-        一个跨全量代码库的文本与正则表达式高速检索工具，基于 ripgrep 实现。
+        基于 ripgrep 实现的文本与正则表达式检索工具，可在代码库中的任意文件中查询任意字符串。
 
-        【何时使用】：当需要全局查找危险函数（如 eval, os.system）、定位硬编码秘钥/弱加密算法、追踪特定路由入口与鉴权装饰器、或检索特定配置项时调用。
+        【何时使用】：当需要全局查找危险函数（如 eval, os.system）、定位硬编码秘钥/弱加密算法、追踪特定路由入口与鉴权装饰器、或检索特定配置项时调用；此外，也可用于非 python 的代码检索。
         
         Args:
             pattern (str): 目标检索字符串或正则表达式。
-            file_pattern (str, optional): Glob风格的文件路径过滤器（如 '*.py', '*config*', 'src/**/*.py'）。强烈建议在已知上下文时传入，以大幅减少无关噪音。
+            file_pattern (str, optional): Glob风格的文件路径过滤器（如 '*.py', '*.html', '*config*', 'src/**/*.py'）。强烈建议在已知上下文时传入，以大幅减少无关噪音。
             is_regex (bool, optional): pattern 是否作为正则表达式解析。默认 True。提示：若检索包含代码符号的纯文本（如 `password = "123"`），建议设为 False 以避免正则语法错误。
             max_results (int, optional): 限制返回的最大匹配行数。默认 40。警告：为防止上下文溢出，非必要请勿调大此值。
 
