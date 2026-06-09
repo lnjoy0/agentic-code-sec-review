@@ -547,7 +547,7 @@ def save_langgraph_messages_to_markdown(messages: list, filename="message"):
     log_dir = "expert_messages"
     os.makedirs(log_dir, exist_ok=True)
     raw_path = f"{log_dir}/{filename}.raw"
-    md_path = f"{log_dir}/{filename}.md"
+    md_path = f"{log_dir}/{filename}.txt"
     
     with open(raw_path, "w", encoding="utf-8") as f:
         f.write(str(messages))
