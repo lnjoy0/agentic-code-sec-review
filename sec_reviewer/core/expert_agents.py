@@ -92,8 +92,14 @@ class BaseExpertAgent():
         else:
             logger.info(f"[{self.expert_name}]-[issue({state['issue'].id})] 🧠 接收反馈，继续综合推理...")
             
-            action_hint = SystemMessage(content=("【注意输出模式】如果你当前处于【采证阶段】，请先在常规文本中写出你的分析与下一步计划，然后再调用工具；"
-                                        "如果当前处于【终结阶段】，请先在常规文本中一步步思考，进行终局推演，根据所有线索推理出该告警是真实漏洞还是误报，然后再调用 `ExpertAuditResult` 工具。"))
+            action_hint = SystemMessage(content=("# STRICT OUTPUT PROTOCOL\n"
+                                                "你必须遵循“先思考，后行动”的模式：\n"
+                                                "1. 【自由思考阶段】：首先，在常规文本中（不使用工具），写下你的思考内容。\n"
+                                                "   - 如果处于【采证阶段】：请写出当前需要调用什么工具以达到什么目的。\n"
+                                                "   - 如果处于【终结阶段】：请一步步地思考，进行终局推演，根据所有线索推理出该告警是真实漏洞还是误报。\n"
+                                                "2. 【结构化行动阶段】：经过上述纯文本的详尽推演后，你【必须】在同一个回复的最后发起相应的工具调用（Tool Call）：\n"
+                                                "   - 需要继续收集上下文证据时：调用相应的查询辅助工具。\n"
+                                                "   - 证据充分可下定论时：【必须且只能】调用 `ExpertAuditResult` 工具提交最终研判。"))
             if critical_history:
                 critical_msg = f"【上次研判结论与审查意见】以下是你上一次的研判结论以及审查节点对其给出的意见。\n{critical_history[-1].model_dump_json()}"
                 invocation_messages = [sys_msg] + messages + [action_hint, HumanMessage(content=critical_msg)]
@@ -271,7 +277,10 @@ class BaseExpertAgent():
             "</expert_final_conclusion>"
         )
 
-        action_hint = "【注意输出模式】请先在常规文本中进行一步步思考，展开你的审查逻辑推演；然后调用 `CriticDecision` 工具提交审查结果"
+        action_hint = ("# STRICT OUTPUT PROTOCOL\n"
+                       "你必须遵循“先思考，后行动”的模式：\n"
+                       "1. 【自由思考阶段】：首先，在常规文本中（不使用工具），进行一步步地思考，展开你的审查逻辑推演。\n"
+                       "2. 【结构化行动阶段】：经过上述纯文本的详尽推演后，你【必须且只能】在同一个回复的最后调用 `CriticDecision` 工具提交你的最终审查决定。")
         
         llm_config = config['configurable'].get('llm_config')
         structured_llm = get_model_bound_tools(llm_config, 'Critic', [CriticDecision])
