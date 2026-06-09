@@ -106,7 +106,7 @@ class BaseExpertAgent():
                 "先评估当前证据，若不足则简短说明并调用查询工具；若证据充分，则详细写出一步步思考的终局推演逻辑，最后调用 `ExpertAuditResult` 工具。"
         )
         # Message 对象不可变，所以需要重新实例化一个相同类型的
-        last_message = messages[-1]
+        last_message = invocation_messages[-1]
         new_last_msg = ""
         if isinstance(last_message, HumanMessage):
             new_last_msg = HumanMessage(content=last_message.content+action_hint)
@@ -122,7 +122,7 @@ class BaseExpertAgent():
             new_last_msg = None
         
         if new_last_msg:
-            messages[-1] = new_last_msg
+            invocation_messages[-1] = new_last_msg
         
         # 获取绑定了工具的 LLM 实例
         llm_config = config['configurable'].get('llm_config')
