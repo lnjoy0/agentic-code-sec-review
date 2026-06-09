@@ -149,10 +149,18 @@ class CodeRetriever:
         Returns:
             str: 包含定义所在路径、行号与代码片段的 Markdown 文本。
         """
+        # 如果输入名称中有点号，则只取点号最后的内容
+        original_target_name = target_name
+        if "." in target_name:
+            target_name = target_name.split(".")[-1]
+
+        name_hint = f" *(自动从 `{original_target_name}` 提取)*" if original_target_name != target_name else ""
+
         candidate_files = await self._find_definition_files(target_name)
         if not candidate_files:
-            return f"📄 未找到 `{target_name}` 的任何定义文件。"
+            return f"📄 未找到 `{target_name}`{name_hint} 的任何定义文件。"
         
+        # 文件过滤
         if file_filters:
             filtered_files = []
             for abs_path in candidate_files:
@@ -165,7 +173,7 @@ class CodeRetriever:
             
             candidate_files = filtered_files
             if not candidate_files:
-                return f"📄 在指定的文件/路径范围 ({', '.join(file_filters)}) 中，未找到 `{target_name}` 的任何定义文件。"
+                return f"📄 在指定的文件/路径范围 ({', '.join(file_filters)}) 中，未找到 `{target_name}`{name_hint} 的任何定义文件。"
 
         nodes_info = []
         for abs_file_path in candidate_files:
@@ -174,7 +182,7 @@ class CodeRetriever:
                 nodes_info.append(nd_info)
 
         if not nodes_info:
-            return f"📄 未找到 `{target_name}` 的任何具体定义节点。"
+            return f"📄 未找到 `{target_name}`{name_hint} 的任何具体定义节点。"
 
         total_results = len(nodes_info)
         start_index_0 = start_index - 1
@@ -192,8 +200,9 @@ class CodeRetriever:
         line_limit_per_def = max(1, max_lines // n_defs)
         
         # 拼接排版
+        filter_hint = f"（已使用 {', '.join(file_filters)} 过滤）" if file_filters else ""
         output_lines = [
-            f"### 🎯 定义查找结果: `{target_name}`" + (f"（已使用 {', '.join(file_filters)} 过滤）" if file_filters else ""),
+            f"### 🎯 定义查找结果: `{target_name}`{name_hint}{filter_hint}",
             f"> **总计找到**: {total_results} 处定义",
             f"> **当前显示范围**: 第 {start_index} 到 {end_idx} 项详情",
             "---"
