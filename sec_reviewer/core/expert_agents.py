@@ -92,18 +92,20 @@ class BaseExpertAgent():
         else:
             logger.info(f"[{self.expert_name}]-[issue({state['issue'].id})] 🧠 接收反馈，继续综合推理...")
             
+            action_hint = SystemMessage(content=("【注意输出模式】如果你当前处于【采证阶段】，请先在常规文本中写出你的分析与下一步计划，然后再调用工具；"
+                                        "如果当前处于【终结阶段】，请先在常规文本中一步步思考，进行终局推演，根据所有线索推理出该告警是真实漏洞还是误报，然后再调用 `ExpertAuditResult` 工具。"))
             if critical_history:
                 critical_msg = f"【上次研判结论与审查意见】以下是你上一次的研判结论以及审查节点对其给出的意见。\n{critical_history[-1].model_dump_json()}"
-                invocation_messages = [sys_msg] + messages + [HumanMessage(content=critical_msg)]
+                invocation_messages = [sys_msg] + messages + [action_hint, HumanMessage(content=critical_msg)]
             else:
-                invocation_messages = [sys_msg] + messages
+                invocation_messages = [sys_msg] + messages + [action_hint]
 
         # 获取绑定了工具的 LLM 实例
         llm_config = config['configurable'].get('llm_config')
         model_with_tools = get_model_bound_tools(
             config=llm_config,
-            tools=self.tools,
-            role_name=self.expert_name
+            role_name=self.expert_name,
+            tools=self.tools
         )
 
         # 调用大模型
@@ -268,6 +270,8 @@ class BaseExpertAgent():
             f"{draft.model_dump_json()}\n"
             "</expert_final_conclusion>"
         )
+
+        action_hint = "【注意输出模式】请先在常规文本中进行一步步思考，展开你的审查逻辑推演；然后调用 `CriticDecision` 工具提交审查结果"
         
         llm_config = config['configurable'].get('llm_config')
         structured_llm = get_model_bound_tools(llm_config, 'Critic', [CriticDecision])
@@ -275,7 +279,8 @@ class BaseExpertAgent():
         logger.info(f"[{self.expert_name}]-[issue({issue.id})] ⚖️ 正在进行第 {critical_rounds} 轮批判节点审查...")
         results = await structured_llm.ainvoke([
             SystemMessage(content=CRITIC_PROMPT),
-            HumanMessage(content=human_prompt)
+            HumanMessage(content=human_prompt),
+            SystemMessage(content=action_hint)
         ])
 
         if not hasattr(results, 'tool_calls') or not results.tool_calls:
