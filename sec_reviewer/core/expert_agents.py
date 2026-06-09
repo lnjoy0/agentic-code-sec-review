@@ -5,7 +5,7 @@ from typing import List, Literal
 from langgraph.graph import StateGraph, START, END
 from langchain_openai import ChatOpenAI
 from langchain_core.runnables import RunnableConfig
-from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, RemoveMessage
+from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, RemoveMessage, AIMessage
 from pydantic import ValidationError
 
 from sec_reviewer.knowledge_base.sys_prompts import (
@@ -92,20 +92,38 @@ class BaseExpertAgent():
         else:
             logger.info(f"[{self.expert_name}]-[issue({state['issue'].id})] 🧠 接收反馈，继续综合推理...")
             
-            action_hint = SystemMessage(content=("# STRICT OUTPUT PROTOCOL\n"
-                                                "你必须遵循“先思考，后行动”的模式：\n"
-                                                "1. 【自由思考阶段】：首先，在常规文本中（不使用工具），写下你的思考内容。\n"
-                                                "   - 如果处于【采证阶段】：请写出当前需要调用什么工具以达到什么目的。\n"
-                                                "   - 如果处于【终结阶段】：请一步步地思考，进行终局推演，根据所有线索推理出该告警是真实漏洞还是误报。\n"
-                                                "2. 【结构化行动阶段】：经过上述纯文本的详尽推演后，你【必须】在同一个回复的最后发起相应的工具调用（Tool Call）：\n"
-                                                "   - 需要继续收集上下文证据时：调用相应的查询辅助工具。\n"
-                                                "   - 证据充分可下定论时：【必须且只能】调用 `ExpertAuditResult` 工具提交最终研判。"))
             if critical_history:
                 critical_msg = f"【上次研判结论与审查意见】以下是你上一次的研判结论以及审查节点对其给出的意见。\n{critical_history[-1].model_dump_json()}"
-                invocation_messages = [sys_msg] + messages + [action_hint, HumanMessage(content=critical_msg)]
+                invocation_messages = [sys_msg] + messages + [HumanMessage(content=critical_msg)]
             else:
-                invocation_messages = [sys_msg] + messages + [action_hint]
+                invocation_messages = [sys_msg] + messages
 
+        # 在最后一个消息中附加行动提示，防止系统提示词太远，导致对 AI 的输出行为约束减弱
+        action_hint = (
+                "\n\n====================\n"
+                "【系统指令】：绝不允许直接输出工具调用！\n"
+                "请务必以 `💡 研判推演：` 开头开始回复。\n"
+                "先评估当前证据，若不足则简短说明并调用查询工具；若证据充分，则详细写出一步步思考的终局推演逻辑，最后调用 `ExpertAuditResult` 工具。"
+        )
+        # Message 对象不可变，所以需要重新实例化一个相同类型的
+        last_message = messages[-1]
+        new_last_msg = ""
+        if isinstance(last_message, HumanMessage):
+            new_last_msg = HumanMessage(content=last_message.content+action_hint)
+        elif isinstance(last_message, ToolMessage):
+            new_last_msg = ToolMessage(
+                content=last_message.content+action_hint,
+                name=last_message.name,
+                tool_call_id=last_message.tool_call_id
+            )
+        elif isinstance(last_message, AIMessage): # 对于 AIMessage 可以直接在后面附加一个 HumanMessage
+            new_last_msg = HumanMessage(content=new_last_msg)
+            invocation_messages.append(new_last_msg)
+            new_last_msg = None
+        
+        if new_last_msg:
+            messages[-1] = new_last_msg
+        
         # 获取绑定了工具的 LLM 实例
         llm_config = config['configurable'].get('llm_config')
         model_with_tools = get_model_bound_tools(
@@ -277,11 +295,11 @@ class BaseExpertAgent():
             "</expert_final_conclusion>"
         )
 
-        action_hint = ("# STRICT OUTPUT PROTOCOL\n"
-                       "你必须遵循“先思考，后行动”的模式：\n"
-                       "1. 【自由思考阶段】：首先，在常规文本中（不使用工具），进行一步步地思考，展开你的审查逻辑推演。\n"
-                       "2. 【结构化行动阶段】：经过上述纯文本的详尽推演后，你【必须且只能】在同一个回复的最后调用 `CriticDecision` 工具提交你的最终审查决定。")
-        
+        action_hint = (
+                "\n\n====================\n"
+                "【系统指令】：请务必以 `💡 审查推演：` 开头开始回复。\n"
+                "先详细写出一步步思考的审查推演逻辑，最后调用 `CriticDecision` 工具。"
+        )
         llm_config = config['configurable'].get('llm_config')
         structured_llm = get_model_bound_tools(llm_config, 'Critic', [CriticDecision])
 

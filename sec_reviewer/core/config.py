@@ -72,13 +72,13 @@ class LLMConfig(BaseModel):
     api_key: str
 
     Role: dict[str, RoleParams] = Field(default={
-        'Scanner': RoleParams(temperature=0.33, top_p=0.81),
+        'Scanner': RoleParams(temperature=0.23, top_p=0.76),
         'Router': RoleParams(temperature=0.1, top_p=0.36),
         'Injection_Expert': RoleParams(temperature=0.14, top_p=0.62),
         'Data_Asset_Expert': RoleParams(temperature=0.14, top_p=0.62),
         'Infra_Supply_Expert': RoleParams(temperature=0.14, top_p=0.62),
         'Logic_Identity_Expert': RoleParams(temperature=0.2, top_p=0.7),
-        'General_Expert': RoleParams(temperature=0.4, top_p=0.87),
+        'General_Expert': RoleParams(temperature=0.25, top_p=0.75),
         'Critic': RoleParams(temperature=0.12, top_p=0.45)
     })
 
@@ -157,8 +157,8 @@ class Config:
 
                 Role={
                     'Scanner': RoleParams(
-                        temperature=os.environ.get("ROLE_SCANNER_TEMP", "0.33"), 
-                        top_p=os.environ.get("ROLE_SCANNER_TOP_P", "0.81")),
+                        temperature=os.environ.get("ROLE_SCANNER_TEMP", "0.23"), 
+                        top_p=os.environ.get("ROLE_SCANNER_TOP_P", "0.76")),
                     'Router': RoleParams(
                         temperature=os.environ.get("ROLE_ROUTER_TEMP", "0.1"), 
                         top_p=os.environ.get("ROLE_ROUTER_TOP_P", "0.36")),
@@ -175,8 +175,8 @@ class Config:
                         temperature=os.environ.get("ROLE_LOGIC_IDENTITY_TEMP", "0.2"), 
                         top_p=os.environ.get("ROLE_LOGIC_IDENTITY_TOP_P", "0.7")),
                     'General_Expert': RoleParams(
-                        temperature=os.environ.get("ROLE_GENERAL_TEMP", "0.4"), 
-                        top_p=os.environ.get("ROLE_GENERAL_TOP_P", "0.87")),
+                        temperature=os.environ.get("ROLE_GENERAL_TEMP", "0.25"), 
+                        top_p=os.environ.get("ROLE_GENERAL_TOP_P", "0.75")),
                     'Critic': RoleParams(
                         temperature=os.environ.get("ROLE_CRITIC_TEMP", "0.12"), 
                         top_p=os.environ.get("ROLE_CRITIC_TOP_P", "0.45")),

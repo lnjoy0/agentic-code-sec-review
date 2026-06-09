@@ -68,7 +68,7 @@ class LLMScannedIssue(BaseModel):
 
 
 class LLMScanReport(BaseModel):
-    """【提交漏洞扫描结果】你的输出【必须且只能】调用此工具"""
+    """【提交漏洞扫描结果】在完成分析后，你【必须且只能】调用此工具以完成结构化输出"""
     issues: List[LLMScannedIssue] = Field(
         ...,
         description="发现的潜在安全漏洞列表。**如果没有发现问题，必须返回空列表 `[]`**，绝对不能为了填充数据而捏造漏洞"
@@ -98,7 +98,7 @@ class ScannedIssue(BaseModel):
 
 
 class LLMRouteDecision(BaseModel):
-    """【提交路由决策结果】你的输出【必须且只能】调用此工具"""
+    """【提交路由决策结果】在完成分析后，你【必须且只能】调用此工具以完成结构化输出"""
     expert_name: Literal[
         "Injection_Expert",
         "Data_Asset_Expert",

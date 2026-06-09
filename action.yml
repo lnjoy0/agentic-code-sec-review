@@ -56,11 +56,11 @@ inputs:
   scanner_temperature:
     description: 'Scanner 角色的 temperature'
     required: false
-    default: '0.33'
+    default: '0.23'
   scanner_top_p:
     description: 'Scanner 角色的 top_p'
     required: false
-    default: '0.81'
+    default: '0.76'
 
   router_temperature:
     description: 'Router 角色的 temperature'
@@ -110,11 +110,11 @@ inputs:
   general_expert_temperature:
     description: 'General_Expert 角色的 temperature'
     required: false
-    default: '0.4'
+    default: '0.25'
   general_expert_top_p:
     description: 'General_Expert 角色的 top_p'
     required: false
-    default: '0.87'
+    default: '0.75'
 
   critic_temperature:
     description: 'Critic 角色的 temperature'
