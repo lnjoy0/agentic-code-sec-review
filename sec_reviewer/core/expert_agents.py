@@ -101,9 +101,10 @@ class BaseExpertAgent():
         # 在最后一个消息中附加行动提示，防止系统提示词太远，导致对 AI 的输出行为约束减弱
         action_hint = (
                 "\n\n====================\n"
-                "【系统指令】：行动时必须先使用 `<plan>` 或 `<final_verdict>` 标签进行思考，然后**必须**调用相关工具。\n"
-                "- 正在查资料时：使用 `<plan>...<plan>`，限制在 20 个字以内，写明当前调用工具的目的即可。然后调用相关工具。\n"
-                "- 准备结案时：使用 `<final_verdict>...</final_verdict>` 写出详尽推演。然后调用 `ExpertAuditResult` 工具。\n"
+                "【系统指令】：行动时必须先输出思考，然后**立即且无缝**地调用相关工具，绝不允许在调用工具前停止！\n"
+                "- 正在查资料时：以 `💡 计划：` 开头，限 20 字以内说明当前调用工具的目的。紧接着必须触发工具调用。\n"
+                "- 准备结案时：以 `⚖️ 终局研判：` 开头，写出详尽推演。紧接着必须触发 `ExpertAuditResult` 工具。\n"
+                "**警告**：严禁只输出纯文本而不调用工具！思考结束后，你的下一个动作必须是拉起工具！"
         )
         # Message 对象不可变，所以需要重新实例化一个相同类型的
         last_message = invocation_messages[-1]
@@ -400,7 +401,7 @@ class BaseExpertAgent():
         else:
             logger.warning(f"[{self.expert_name}]-[issue({state['issue'].id})] ⚠️ 检测到 LLM 仅输出了纯文本内容，进行警告\nLLM 输出内容：{state['messages'][-1]}")
             warning_content = (
-                "【系统拦截】你只能进行工具调用，禁止输出纯文本内容。\n"
+                "【系统拦截】你必须进行工具调用（tool call）。\n"
                 "请调用 `ExpertAuditResult` 工具来提交最终的研判结果，或者调用其他工具来辅助研判分析。"
             )
         
