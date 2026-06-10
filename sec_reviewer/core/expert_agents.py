@@ -87,6 +87,7 @@ class BaseExpertAgent():
                 for record in rejection_history[issue.id]:
                     rejection_reason += f"\n- 专家 [{record['expert']}]: {record['reason']}"
                 human_content += rejection_reason
+            human_content += "\n【知识文档提示】如果存在该漏洞相关的知识文档，应该先调用 `get_vulnerability_playbook` 工具查询知识文档，然后再调用其他工具。"
             human_msg = HumanMessage(content=human_content)
 
             invocation_messages = [sys_msg] + few_shot_messages + [human_msg]
