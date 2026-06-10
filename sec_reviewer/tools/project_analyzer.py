@@ -128,7 +128,10 @@ class ProjectAnalyzer:
         """
         # -n: 显示行号
         # --no-heading: 确保每行格式为 filepath:line:content
-        cmd = ["rg", "-n", "--color=never", "--no-heading", "-M", "2000"]
+        cmd = ["rg", "-n", "--color=never", "--no-heading", "-M", "5000"]
+
+        # 过滤压缩文件
+        cmd.extend(["-g", "!*.min.js", "-g", "!*.min.css", "-g", "!*min.map"])
         
         if not is_regex:
             cmd.append("-F") # 固定字符串匹配
@@ -171,6 +174,9 @@ class ProjectAnalyzer:
         for line in raw_output.splitlines():
             if not line.strip():
                 continue
+
+            if "[Omitted long matching line]" in line:
+                line = line.replace("[Omitted long matching line]", " ... [底层文件单行极长，无业务阅读价值，已被系统级强制忽略]")
                 
             # 解析格式: filepath:line_number:content
             parts = line.split(":", 2)

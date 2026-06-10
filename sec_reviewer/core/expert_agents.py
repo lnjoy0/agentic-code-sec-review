@@ -104,8 +104,8 @@ class BaseExpertAgent():
         action_hint = (
                 "\n\n====================\n"
                 "【系统指令】：行动时必须先输出思考，然后**立即且无缝**地调用相关工具，绝不允许在调用工具前停止！\n"
-                "- 正在查资料时：以 `💡 计划：` 开头，限 20 字以内说明当前调用工具的目的。紧接着必须触发工具调用。\n"
-                "- 准备结案时：以 `⚖️ 终局研判：` 开头，写出详尽推演。紧接着必须触发 `ExpertAuditResult` 工具。\n"
+                "- 正在查资料时：以 `💡 计划：` 开头，说明当前调用工具的目的。紧接着必须触发工具调用。\n"
+                "- 准备结案时：以 `⚖️ 终局研判：` 开头，一步步思考，基于所有线索进行深度的研判推演。紧接着必须触发 `ExpertAuditResult` 工具。\n"
                 "**警告**：严禁只输出纯文本而不调用工具！思考结束后，你的下一个动作必须是拉起工具！"
         )
         # Message 对象不可变，所以需要重新实例化一个相同类型的
@@ -584,41 +584,28 @@ class GeneralExpert(BaseExpertAgent):
 
 def get_few_shot_messages() -> List:
     few_shot_messages = [
-        HumanMessage(content="（系统模拟输入，触发 AI 消息样例：请研判 test/StaticAnalyzer/utils.py 第 120 行的 Command_Injection 告警，涉及函数调用 execute_user_script 及其参数 script_args）"),
+        HumanMessage(content="..."),
             
         AIMessage(
-            content="💡 计划：针对 Command_Injection 告警，首先需要获取漏洞知识手册，明确底层系统命令执行漏洞的判定标准和常见防御误区。",
-            tool_calls=[{"name": "get_vulnerability_playbook", "args": {"vuln_name": "Command_Injection"}, "id": "call_mock_cmd_1"}]
+            content="💡 计划：...",
+            tool_calls=[{"name": "...", "args": {"...": "..."}, "id": "call_mock_pwd_1"}]
         ),
-        ToolMessage(content="（系统模拟工具返回：核心要求：1. 确认是否使用了 shell=True 或直接拼接字符串执行系统命令；2. 如果调用了自定义封装函数，必须先查明该封装函数的内部实现是否安全...）", tool_call_id="call_mock_cmd_1", name="get_vulnerability_playbook"),
+        ToolMessage(content="...", tool_call_id="call_mock_pwd_1", name="..."),
         
         AIMessage(
-            content="💡 计划：遵循手册要求，告警行触发了自定义函数 `execute_user_script`。为了确认其内部是否存在危险的系统调用，需先查询该函数的具体定义。",
-            tool_calls=[{"name": "find_definition", "args": {"target_name": "execute_user_script"}, "id": "call_mock_cmd_2"}]
+            content="💡 计划：...",
+            tool_calls=[{"name": "...", "args": {"...": "..."}, "id": "call_mock_pwd_2"}]
         ),
-        ToolMessage(content="（系统模拟工具返回：`def execute_user_script(args):\n    cmd = f'bash run.sh {args}'\n    subprocess.Popen(cmd, shell=True)`）", tool_call_id="call_mock_cmd_2", name="find_definition"),
+        ToolMessage(content="...", tool_call_id="call_mock_pwd_2", name="..."),
         
         AIMessage(
-            content="💡 计划：确认 execute_user_script 内部存在危险的拼接和 shell=True。现在需调用数据流追踪工具，逆向追踪参数 `script_args` 的来源，确认其是否由外部直接控制且未经过滤。",
-            tool_calls=[{"name": "track_variable_data_flow", "args": {"target_variable": "script_args", "file_path": "test/StaticAnalyzer/utils.py"}, "id": "call_mock_cmd_3"}]
-        ),
-        ToolMessage(content="（系统模拟工具返回：[Line 80] script_args = request.GET.get('args')）", tool_call_id="call_mock_cmd_3", name="track_variable_data_flow"),
-        
-        AIMessage(
-            content="⚖️ 终局研判：综合以上信息，证据链已完全闭环。底层 `execute_user_script` 存在 shell=True 的命令拼接，且...。现在调用 ExpertAuditResult 提交研判报告。",
+            content="⚖️ 终局研判：...",
             tool_calls=[{
                 "name": "ExpertAuditResult",
                 "args": {
-                    "verdict": "True Positive",
-                    "name": "Command Injection",
-                    "severity": "critical",
-                    "confidence": 0.98,
-                    "analysis_reasoning": "...",
-                    "defense_checks": "...",
-                    "attack_scenario": "...",
-                    "remediation": "..."
+                    '...':'...'
                 },
-                "id": "call_mock_final_4"
+                "id": "call_mock_final_3"
             }]
         )
     ]
