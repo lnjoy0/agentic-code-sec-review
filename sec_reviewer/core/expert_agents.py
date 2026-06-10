@@ -75,6 +75,7 @@ class BaseExpertAgent():
         sys_msg = SystemMessage(content=self.system_prompt+"\n\n"+remaining_rounds_prompt)
 
         few_shot_messages = get_few_shot_messages()
+        few_shot_messages = []
 
         # 如果是第一轮，初始化 System Prompt 和初始输入
         if not messages:
@@ -597,6 +598,12 @@ def get_few_shot_messages() -> List:
             tool_calls=[{"name": "...", "args": {"...": "..."}, "id": "call_mock_pwd_2"}]
         ),
         ToolMessage(content="...", tool_call_id="call_mock_pwd_2", name="..."),
+
+        AIMessage(
+            content="💡 计划：...",
+            tool_calls=[{"name": "...", "args": {"...": "..."}, "id": "call_mock_pwd_3"}]
+        ),
+        ToolMessage(content="...", tool_call_id="call_mock_pwd_3", name="..."),
         
         AIMessage(
             content="⚖️ 终局研判：...",
@@ -605,7 +612,7 @@ def get_few_shot_messages() -> List:
                 "args": {
                     '...':'...'
                 },
-                "id": "call_mock_final_3"
+                "id": "call_mock_final_4"
             }]
         )
     ]
