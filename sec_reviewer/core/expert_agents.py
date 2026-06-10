@@ -102,6 +102,7 @@ class BaseExpertAgent():
         action_hint = (
                 "\n\n====================\n"
                 "【系统指令】：绝不允许直接输出工具调用！\n"
+                "请注意 STRICT OUTPUT PROTOCOL 约束。\n"
                 "你**必须且只能**以 `💡 自由思考：` 为开头开始回复。"
         )
         # Message 对象不可变，所以需要重新实例化一个相同类型的
