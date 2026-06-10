@@ -102,7 +102,7 @@ class BaseExpertAgent():
         action_hint = (
                 "\n\n====================\n"
                 "【系统指令】你必须遵循“先思考，后行动”的模式："
-                "首先，必须先使用 `<plan>` 或 `<final_verdict>` 标签进行思考；然后，必须调用相关工具（tool call）。\n"
+                "首先，**必须**先使用 `<plan>` 或 `<final_verdict>` 标签进行思考；然后，**必须**在同一个回复中调用相关工具（tool call）。\n"
                 "- 正在查资料时：使用 `<plan>...<plan>`，限制在 20 个字以内，写明当前调用工具的目的即可；然后调用相关工具。\n"
                 "- 准备结案时：使用 `<final_verdict>...</final_verdict>` 写出详尽推演；然后调用 `ExpertAuditResult` 工具。\n"
         )
