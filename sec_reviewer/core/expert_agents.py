@@ -74,6 +74,19 @@ class BaseExpertAgent():
 
         sys_msg = SystemMessage(content=self.system_prompt+"\n\n"+remaining_rounds_prompt)
 
+        few_shot_messages = [
+            ToolMessage(content="（系统模拟工具返回，触发 AI 消息样例）"),
+            AIMessage(
+                content="💡 计划：发现前文提到 api_key，需调用工具查看其在 source_tree.py 74 行的上下文逻辑。",
+                tool_calls=[{
+                    "name": "get_code_context",
+                    "args": {"file_path": "source_tree.py", "target_line": 74},
+                    "id": "call_mock_123"
+                }]
+            ),
+            ToolMessage(content="（系统模拟工具返回）")
+        ]
+
         # 如果是第一轮，初始化 System Prompt 和初始输入
         if not messages:
             logger.info(f"[{self.expert_name}] 🚀 开始全新漏洞研判: {issue.id} ({issue.name or issue.cwe})...")
@@ -87,16 +100,16 @@ class BaseExpertAgent():
                 human_content += rejection_reason
             human_msg = HumanMessage(content=human_content)
 
-            invocation_messages = [sys_msg, human_msg]
+            invocation_messages = [sys_msg] + few_shot_messages + [human_msg]
             state_update_messages = [human_msg]
         else:
             logger.info(f"[{self.expert_name}]-[issue({state['issue'].id})] 🧠 接收反馈，继续综合推理...")
             
             if critical_history:
                 critical_msg = f"【上次研判结论与审查意见】以下是你上一次的研判结论以及审查节点对其给出的意见。\n{critical_history[-1].model_dump_json()}"
-                invocation_messages = [sys_msg] + messages + [HumanMessage(content=critical_msg)]
+                invocation_messages = [sys_msg] + few_shot_messages + messages + [HumanMessage(content=critical_msg)]
             else:
-                invocation_messages = [sys_msg] + messages
+                invocation_messages = [sys_msg] + few_shot_messages + messages
 
         # 在最后一个消息中附加行动提示，防止系统提示词太远，导致对 AI 的输出行为约束减弱
         action_hint = (
