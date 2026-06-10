@@ -102,10 +102,8 @@ class BaseExpertAgent():
         action_hint = (
                 "\n\n====================\n"
                 "【系统指令】：绝不允许直接输出工具调用！\n"
-                "请务必以 `💡 自由思考：` 开头。若证据不足，简述下一步查询意图；若准备结案，必须在文本中写出详尽推演\n"
-                "调用 ExpertAuditResult 时，参数字段必须作为正式报告极其详尽地填充。"
+                "请以 `💡 自由思考：` 开头。若证据不足，简述下一步查询意图；若准备结案，必须在文本中写出详尽推演\n"
         )
-        action_hint=""
         # Message 对象不可变，所以需要重新实例化一个相同类型的
         last_message = invocation_messages[-1]
         new_last_msg = ""
