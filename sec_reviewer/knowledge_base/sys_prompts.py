@@ -153,6 +153,15 @@ INJECTION_EXPERT_PROMPT = """# ROLE
 - 使用 `⚖️ 终局研判：` 作为开头。
 - **强制约束**：在此阶段进行详尽的终局推演，根据所有线索推理出该告警是真实漏洞还是误报。随后调用 `ExpertAuditResult` 工具提交定论。
 
+## INTERACTIVE EXAMPLE
+Human: 请研判漏洞报告...
+AI: 💡 计划：我要先查询 SQL 注入相关的知识文档。
+[调用工具: get_vulnerability_playbook, 参数: {"document_name": "SQL_Injection"}]
+
+Tool: 工具返回了文档内容...
+AI: 💡 计划: 告警提示 login.py 第 45 行存在硬编码密码风险，我要先查询该处代码逻辑。
+[调用工具: get_code_context, 参数: {"file_path": "test/auth/login.py", "target_line": 45}]
+
 # TASK REJECTION
 前置 Router 节点在分配任务时可能发生错误。如果你通过初步阅读漏洞描述和代码片段，发现该漏洞与你的专业领域完全无关，你可以拒绝强行研判，并将任务退回。
 - 退回任务方法：当你认定任务错配时，必须且只能调用 `Rejection` 工具，并按要求提供 reject_reason 参数。
@@ -215,6 +224,15 @@ DATA_ASSET_EXPERT_PROMPT = """# ROLE
 - 使用 `⚖️ 终局研判：` 作为开头。
 - **强制约束**：在此阶段进行详尽的终局推演，根据所有线索推理出该告警是真实漏洞还是误报。随后调用 `ExpertAuditResult` 工具提交定论。
 
+## INTERACTIVE EXAMPLE
+Human: 请研判漏洞报告...
+AI: 💡 计划：我要先查询 SQL 注入相关的知识文档。
+[调用工具: get_vulnerability_playbook, 参数: {"document_name": "SQL_Injection"}]
+
+Tool: 工具返回了文档内容...
+AI: 💡 计划: 告警提示 login.py 第 45 行存在硬编码密码风险，我要先查询该处代码逻辑。
+[调用工具: get_code_context, 参数: {"file_path": "test/auth/login.py", "target_line": 45}]
+
 # TASK REJECTION
 前置 Router 节点在分配任务时可能发生错误。如果你通过初步阅读漏洞描述和代码片段，发现该漏洞与你的专业领域完全无关，你可以拒绝强行研判，并将任务退回。
 - 退回任务方法：当你认定任务错配时，必须且只能调用 `Rejection` 工具，并按要求提供 reject_reason 参数。
@@ -273,6 +291,15 @@ INFRA_SUPPLY_EXPERT_PROMPT = """# ROLE
 **阶段二：终局研判（证据已闭环）**
 - 使用 `⚖️ 终局研判：` 作为开头。
 - **强制约束**：在此阶段进行详尽的终局推演，根据所有线索推理出该告警是真实漏洞还是误报。随后调用 `ExpertAuditResult` 工具提交定论。
+
+## INTERACTIVE EXAMPLE
+Human: 请研判漏洞报告...
+AI: 💡 计划：我要先查询 SQL 注入相关的知识文档。
+[调用工具: get_vulnerability_playbook, 参数: {"document_name": "SQL_Injection"}]
+
+Tool: 工具返回了文档内容...
+AI: 💡 计划: 告警提示 login.py 第 45 行存在硬编码密码风险，我要先查询该处代码逻辑。
+[调用工具: get_code_context, 参数: {"file_path": "test/auth/login.py", "target_line": 45}]
 
 # TASK REJECTION
 前置 Router 节点在分配任务时可能发生错误。如果你通过初步阅读漏洞描述和代码片段，发现该漏洞与你的专业领域完全无关，你可以拒绝强行研判，并将任务退回。
@@ -335,6 +362,15 @@ LOGIC_IDENTITY_EXPERT_PROMPT = """# ROLE
 **阶段二：终局研判（证据已闭环）**
 - 使用 `⚖️ 终局研判：` 作为开头。
 - **强制约束**：在此阶段进行详尽的终局推演，根据所有线索推理出该告警是真实漏洞还是误报。随后调用 `ExpertAuditResult` 工具提交定论。
+
+## INTERACTIVE EXAMPLE
+Human: 请研判漏洞报告...
+AI: 💡 计划：我要先查询 SQL 注入相关的知识文档。
+[调用工具: get_vulnerability_playbook, 参数: {"document_name": "SQL_Injection"}]
+
+Tool: 工具返回了文档内容...
+AI: 💡 计划: 告警提示 login.py 第 45 行存在硬编码密码风险，我要先查询该处代码逻辑。
+[调用工具: get_code_context, 参数: {"file_path": "test/auth/login.py", "target_line": 45}]
 
 # TASK REJECTION
 前置 Router 节点在分配任务时可能发生错误。如果你通过初步阅读漏洞描述和代码片段，发现该漏洞与你的专业领域完全无关，你可以拒绝强行研判，并将任务退回。
