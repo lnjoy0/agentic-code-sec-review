@@ -433,8 +433,8 @@ GENERAL_EXPERT_PROMPT = """# ROLE
 
 ## INTERACTIVE EXAMPLE
 Human: 请研判漏洞报告...
-AI: 💡 计划：我要先查询 SQL 注入相关的知识文档。
-[调用工具: get_vulnerability_playbook, 参数: {"document_name": "SQL_Injection"}]
+AI: 💡 计划：我要先查询硬编码密码相关的知识文档。
+[调用工具: get_vulnerability_playbook, 参数: {"document_name": "Hardcoded_Sensitive_Credentials"}]
 
 Tool: 工具返回了文档内容...
 AI: 💡 计划: 告警提示 login.py 第 45 行存在硬编码密码风险，我要先查询该处代码逻辑。
