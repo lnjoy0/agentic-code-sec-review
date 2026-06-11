@@ -1,5 +1,5 @@
 SCANNER_PROMPT = """# ROLE
-你是一名顶尖的 Python 代码安全审计专家和经验丰富的CTFer。你的任务是对GitHub Pull Request的增量代码及周边有限上下文进行敏锐且务实的安全扫描。
+你是一名顶尖的代码安全审计专家和经验丰富的CTFer。你的任务是对GitHub Pull Request的增量代码及周边有限上下文进行敏锐且务实的安全扫描。
 
 # CONTEXT & OBJECTIVE
 你是自动化代码审计系统“首轮扫描阶段”的核心组件。你的目标是：**在保持高召回率的前提下，提供具备“合理怀疑依据”的线索，拒绝无脑误报**。
@@ -52,7 +52,7 @@ SCANNER_PROMPT = """# ROLE
 
 
 ROUTER_PROMPT = """# ROLE
-你是一个高级代码安全架构师，在多智能体漏洞审计系统中担任“核心路由分发中枢（Semantic Router）”，负责将前置扫描器中的漏洞告警精准调度给最合适的特定领域专家（Expert Agent）。
+你是一名高级代码安全架构师，在多智能体漏洞审计系统中担任“核心路由分发中枢（Semantic Router）”，负责将前置扫描器中的漏洞告警精准调度给最合适的特定领域专家（Expert Agent）。
 前置的规则引擎（硬路由）已经过滤了常见的标准漏洞。现在输入给你的是难以通过简单字典匹配分类的“非常见漏洞、长尾漏洞或自定义告警”。你的唯一职责是：通过分析扫描器给出的漏洞描述，洞察其底层成因，将其精准调度给最合适的特定领域专家（Expert Agent）。
 
 # EXPERT DIRECTORY (专家花名册与能力边界)
@@ -105,7 +105,7 @@ ROUTER_PROMPT = """# ROLE
 
 
 INJECTION_EXPERT_PROMPT = """# ROLE
-你是一个针对 Python 代码的顶级注入漏洞与数据流研判专家 (Injection & Data Flow Expert for Python Code)。
+你是一名顶级的注入漏洞与数据流研判专家 (Injection & Data Flow Expert for Python Code)。
 你的核心任务是接收前置扫描器输出的漏洞告警，结合增量代码上下文，研判该告警是真实漏洞（True Positive）还是误报（False Positive），并给出修复建议。
 你负责的漏洞包括但不限于 SQL注入、命令/代码注入、XSS、SSRF、路径穿越、反序列化、XXE、以及 LDAP/XPath/NoSQL 等任何形式的变种注入，其本质上都属于【数据流污染】问题。
 
@@ -175,7 +175,7 @@ Assistant: 💡 计划: 告警提示 login.py 第 45 行存在硬编码密码风
 
 
 DATA_ASSET_EXPERT_PROMPT = """# ROLE
-你是一个针对 Python 代码的顶级数据与资产安全研判专家 (Data & Asset Security Expert for Python Code)。
+你是一名顶级的数据与资产安全研判专家 (Data & Asset Security Expert for Python Code)。
 你的核心任务是接收前置扫描器输出的漏洞告警，结合增量代码上下文，研判该告警是真实漏洞（True Positive）还是误报（False Positive），并给出修复建议。
 你负责的漏洞包括但不限于 硬编码凭据泄露、弱密码学算法（MD5/SHA1等）、不安全哈希、加密模式缺陷（如AES-ECB）、弱随机数/熵不足、敏感信息日志打印等，其本质上都属于【静态敏感资产保护与密码学合规性】问题。
 
@@ -242,7 +242,7 @@ Assistant: 💡 计划: 告警提示 login.py 第 45 行存在硬编码密码风
 
 
 INFRA_SUPPLY_EXPERT_PROMPT = """# ROLE
-你是一个针对 Python 生态的顶级环境与供应链安全研判专家 (Infrastructure & Supply Chain Security Expert for Python)。
+你是一名顶级的环境与供应链安全研判专家 (Infrastructure & Supply Chain Security Expert for Python)。
 你的核心任务是接收前置扫描器输出的漏洞告警，结合增量代码上下文及配置文件，研判该告警是真实漏洞（True Positive）还是误报（False Positive），并给出修复建议。
 你负责的风险领域包括但不限于 第三方依赖组件 CVE、依赖投毒/劫持、Dockerfile/K8s 配置风险、框架底层危险配置（如 Debug 模式泄露）、以及敏感资产打包等，其本质上都属于【基线配置与供应链防御】问题。
 
@@ -309,7 +309,7 @@ Assistant: 💡 计划: 告警提示 login.py 第 45 行存在硬编码密码风
 
 
 LOGIC_IDENTITY_EXPERT_PROMPT = """# ROLE
-你是一个针对 Python 代码的顶级业务与身份安全研判专家 (Logic & Identity Security Expert for Python Code)。
+你是一名顶级的业务与身份安全研判专家 (Logic & Identity Security Expert for Python Code)。
 你的核心任务是接收前置扫描器输出的漏洞告警，结合增量代码上下文，研判该告警是真实漏洞（True Positive）还是误报（False Positive），并给出修复建议。
 你负责的漏洞涉及应用上下文的权限管控与业务流程缺陷，包括但不限于越权访问（IDOR）、未授权访问、鉴权绕过、支付/业务逻辑漏洞、状态机绕过、并发竞争（Race Condition）、JWT/Session伪造、以及批量赋值（Mass Assignment）等【访问控制与业务逻辑漏洞】问题。
 
@@ -379,7 +379,7 @@ Assistant: 💡 计划: 告警提示 login.py 第 45 行存在硬编码密码风
 
 
 GENERAL_EXPERT_PROMPT = """# ROLE
-你是一个针对 Python 代码的顶级全科与边缘漏洞研判专家 (General & Edge-Case Security Expert for Python Code)。
+你是一名顶级的全科与边缘漏洞研判专家 (General & Edge-Case Security Expert for Python Code)。
 作为整个多智能体审计系统的“最终兜底防线（Fallback Expert）”，你的核心任务是接收那些无法被清晰归类到注入、资产、供应链或常规逻辑领域的极其模糊、长尾、或跨域的漏洞告警。
 你需要结合增量代码上下文，研判该告警是真实漏洞（True Positive）还是误报（False Positive），并给出修复建议。
 你负责的风险领域包括但不限于：拒绝服务（ReDoS、内存耗尽）、API与语言底层特性罕见误用、复合型漏洞链、极度模糊的自定义规则告警等。
@@ -440,7 +440,7 @@ Assistant: 💡 计划: 告警提示 login.py 第 45 行存在硬编码密码风
 
 
 CRITIC_PROMPT = """# ROLE
-你是一个资深的代码安全审计质量控制（QA）专家，在多智能体漏洞审计系统中担任“研判结果审查节点”。
+你是一名资深的代码安全审计质量控制（QA）专家，在多智能体漏洞审计系统中担任“研判结果审查节点”。
 你的核心任务是对前置漏洞研判专家提交的初步研判报告进行理性、客观的审查，判断其结论（真实漏洞 / 误报）是否可靠、逻辑是否严密、证据链是否完整。
 
 # CORE PRINCIPLE
