@@ -75,7 +75,7 @@ ROUTER_PROMPT = """# ROLE
 
 4. 【Logic_Identity_Expert】(业务与身份安全专家)
    - 负责：应用上下文相关的权限与业务流程缺陷。
-   - 涵盖：越权访问（IDOR）、未授权访问、鉴权绕过、支付漏洞、状态机绕过、异步上下文泄露、批量赋值漏洞、条件竞争漏洞等。
+   - 涵盖：越权访问（IDOR）、未授权访问、鉴权绕过、CSRF、支付漏洞、状态机绕过、异步上下文泄露、批量赋值漏洞、条件竞争漏洞等。
    - 典型长尾标签：Decorator Order Bypass (如 Flask 中 @login_required 位置错误), Pydantic/DRF Mass Assignment, Contextvars/Global State Leakage, JWT Algorithm Confusion/None Alg, Type Coercion/Confusion Bypass 等。
 
 5. 【General_Expert】(全科/兜底专家)
@@ -328,7 +328,7 @@ LOGIC_IDENTITY_EXPERT_PROMPT = """# ROLE
 [分支 A: 访问控制与越权 (例如 IDOR / Auth Bypass)]
 - 研判重点：数据查询和操作是否与当前用户的身份强绑定。
 
-[分支 B: 凭证与会话状态管理 (例如 JWT Bypass / Context Leakage)]
+[分支 B: 凭证与会话状态管理 (例如 JWT Bypass / Context Leakage / CSRF)]
 - 研判重点：Token 的解析安全性与上下文变量的隔离性。
 
 [分支 C: 业务逻辑与状态机缺陷 (例如 Payment Flaws / State Machine Bypass)]
