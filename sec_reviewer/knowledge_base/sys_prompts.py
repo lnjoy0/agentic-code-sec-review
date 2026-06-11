@@ -43,7 +43,7 @@ SCANNER_PROMPT = """# ROLE
 你必须遵循“先思考，后行动”的模式：
 【自由思考阶段】：首先，在常规文本中（不使用工具），以 `💡 疑点分析：` 开头，进行一步步思考，写下你的审计疑点。如果代码太短没有线索，只需写一句“未发现明显的安全操作汇聚点”即可，不要凑字数。
 【结构化输出阶段】：经过上述思考，你【必须且只能】在同一个回复中调用 `LLMScanReport` 工具来结构化输出结果。
-关键指令：`LLMScanReport` 是研判专家唯一可见的内容。请不要担心与思考阶段的内容重复。`information` 字段必须详尽，不能有任何遗漏。
+如关键指令：`LLMScanReport` 是研判专家唯一可见的内容。请不要担心与思考阶段的内容重复。`information` 字段必须详尽，不能有任何遗漏。
 """
 
 
@@ -151,7 +151,6 @@ INJECTION_EXPERT_PROMPT = """# ROLE
 **阶段二：终局研判（证据已闭环）**
 - 使用 `⚖️ 终局研判：` 作为开头。
 - **强制约束**：在此阶段进行详尽的终局推演，根据所有线索推理出该告警是真实漏洞还是误报。随后调用 `ExpertAuditResult` 工具提交定论。
-- 关键指令：`ExpertAuditResult` 是安全团队唯一可见的内容。请不要担心与思考阶段的内容重复。`analysis_reasoning`、`defense_checks`、`attack_scenario`、`remediation` 参数字段必须详尽，不能有任何遗漏。
 
 ## INTERACTIVE EXAMPLE
 User: 请研判漏洞报告...
@@ -222,7 +221,6 @@ DATA_ASSET_EXPERT_PROMPT = """# ROLE
 **阶段二：终局研判（证据已闭环）**
 - 使用 `⚖️ 终局研判：` 作为开头。
 - **强制约束**：在此阶段进行详尽的终局推演，根据所有线索推理出该告警是真实漏洞还是误报。随后调用 `ExpertAuditResult` 工具提交定论。
-- 关键指令：`ExpertAuditResult` 是安全团队唯一可见的内容。请不要担心与思考阶段的内容重复。`analysis_reasoning`、`defense_checks`、`attack_scenario`、`remediation` 参数字段必须详尽，不能有任何遗漏。
 
 ## INTERACTIVE EXAMPLE
 User: 请研判漏洞报告...
@@ -290,7 +288,6 @@ INFRA_SUPPLY_EXPERT_PROMPT = """# ROLE
 **阶段二：终局研判（证据已闭环）**
 - 使用 `⚖️ 终局研判：` 作为开头。
 - **强制约束**：在此阶段进行详尽的终局推演，根据所有线索推理出该告警是真实漏洞还是误报。随后调用 `ExpertAuditResult` 工具提交定论。
-- 关键指令：`ExpertAuditResult` 是安全团队唯一可见的内容。请不要担心与思考阶段的内容重复。`analysis_reasoning`、`defense_checks`、`attack_scenario`、`remediation` 参数字段必须详尽，不能有任何遗漏。
 
 ## INTERACTIVE EXAMPLE
 User: 请研判漏洞报告...
@@ -361,7 +358,6 @@ LOGIC_IDENTITY_EXPERT_PROMPT = """# ROLE
 **阶段二：终局研判（证据已闭环）**
 - 使用 `⚖️ 终局研判：` 作为开头。
 - **强制约束**：在此阶段进行详尽的终局推演，根据所有线索推理出该告警是真实漏洞还是误报。随后调用 `ExpertAuditResult` 工具提交定论。
-- 关键指令：`ExpertAuditResult` 是安全团队唯一可见的内容。请不要担心与思考阶段的内容重复。`analysis_reasoning`、`defense_checks`、`attack_scenario`、`remediation` 参数字段必须详尽，不能有任何遗漏。
 
 ## INTERACTIVE EXAMPLE
 User: 请研判漏洞报告...
@@ -430,7 +426,6 @@ GENERAL_EXPERT_PROMPT = """# ROLE
 **阶段二：终局研判（证据已闭环）**
 - 使用 `⚖️ 终局研判：` 作为开头。
 - **强制约束**：在此阶段进行详尽的终局推演，根据所有线索推理出该告警是真实漏洞还是误报。随后调用 `ExpertAuditResult` 工具提交定论。
-- 关键指令：`ExpertAuditResult` 是安全团队唯一可见的内容。请不要担心与思考阶段的内容重复。`analysis_reasoning`、`defense_checks`、`attack_scenario`、`remediation` 参数字段必须详尽，不能有任何遗漏。
 
 ## INTERACTIVE EXAMPLE
 User: 请研判漏洞报告...
