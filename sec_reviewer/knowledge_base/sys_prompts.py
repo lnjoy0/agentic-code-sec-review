@@ -151,7 +151,7 @@ INJECTION_EXPERT_PROMPT = """# ROLE
 **阶段二：终局研判（证据已闭环）**
 - 使用 `⚖️ 终局研判：` 作为开头。
 - **强制约束**：在此阶段进行详尽的终局推演，根据所有线索推理出该告警是真实漏洞还是误报。随后调用 `ExpertAuditResult` 工具提交定论。
-- 关键指令：`ExpertAuditResult` 是安全团队唯一可见的内容。请不要担心与思考阶段的内容重复。其中各个参数字段必须详尽，不能有任何遗漏。
+- 关键指令：`ExpertAuditResult` 是安全团队唯一可见的内容。请不要担心与思考阶段的内容重复。`analysis_reasoning`、`defense_checks`、`attack_scenario`、`remediation` 参数字段必须详尽，不能有任何遗漏。
 
 ## INTERACTIVE EXAMPLE
 User: 请研判漏洞报告...
@@ -222,7 +222,7 @@ DATA_ASSET_EXPERT_PROMPT = """# ROLE
 **阶段二：终局研判（证据已闭环）**
 - 使用 `⚖️ 终局研判：` 作为开头。
 - **强制约束**：在此阶段进行详尽的终局推演，根据所有线索推理出该告警是真实漏洞还是误报。随后调用 `ExpertAuditResult` 工具提交定论。
-- 关键指令：`ExpertAuditResult` 是安全团队唯一可见的内容。请不要担心与思考阶段的内容重复。其中各个参数字段必须详尽，不能有任何遗漏。
+- 关键指令：`ExpertAuditResult` 是安全团队唯一可见的内容。请不要担心与思考阶段的内容重复。`analysis_reasoning`、`defense_checks`、`attack_scenario`、`remediation` 参数字段必须详尽，不能有任何遗漏。
 
 ## INTERACTIVE EXAMPLE
 User: 请研判漏洞报告...
@@ -290,7 +290,7 @@ INFRA_SUPPLY_EXPERT_PROMPT = """# ROLE
 **阶段二：终局研判（证据已闭环）**
 - 使用 `⚖️ 终局研判：` 作为开头。
 - **强制约束**：在此阶段进行详尽的终局推演，根据所有线索推理出该告警是真实漏洞还是误报。随后调用 `ExpertAuditResult` 工具提交定论。
-- 关键指令：`ExpertAuditResult` 是安全团队唯一可见的内容。请不要担心与思考阶段的内容重复。其中各个参数字段必须详尽，不能有任何遗漏。
+- 关键指令：`ExpertAuditResult` 是安全团队唯一可见的内容。请不要担心与思考阶段的内容重复。`analysis_reasoning`、`defense_checks`、`attack_scenario`、`remediation` 参数字段必须详尽，不能有任何遗漏。
 
 ## INTERACTIVE EXAMPLE
 User: 请研判漏洞报告...
@@ -361,7 +361,7 @@ LOGIC_IDENTITY_EXPERT_PROMPT = """# ROLE
 **阶段二：终局研判（证据已闭环）**
 - 使用 `⚖️ 终局研判：` 作为开头。
 - **强制约束**：在此阶段进行详尽的终局推演，根据所有线索推理出该告警是真实漏洞还是误报。随后调用 `ExpertAuditResult` 工具提交定论。
-- 关键指令：`ExpertAuditResult` 是安全团队唯一可见的内容。请不要担心与思考阶段的内容重复。其中各个参数字段必须详尽，不能有任何遗漏。
+- 关键指令：`ExpertAuditResult` 是安全团队唯一可见的内容。请不要担心与思考阶段的内容重复。`analysis_reasoning`、`defense_checks`、`attack_scenario`、`remediation` 参数字段必须详尽，不能有任何遗漏。
 
 ## INTERACTIVE EXAMPLE
 User: 请研判漏洞报告...
@@ -430,7 +430,7 @@ GENERAL_EXPERT_PROMPT = """# ROLE
 **阶段二：终局研判（证据已闭环）**
 - 使用 `⚖️ 终局研判：` 作为开头。
 - **强制约束**：在此阶段进行详尽的终局推演，根据所有线索推理出该告警是真实漏洞还是误报。随后调用 `ExpertAuditResult` 工具提交定论。
-- 关键指令：`ExpertAuditResult` 是安全团队唯一可见的内容。请不要担心与思考阶段的内容重复。其中各个参数字段必须详尽，不能有任何遗漏。
+- 关键指令：`ExpertAuditResult` 是安全团队唯一可见的内容。请不要担心与思考阶段的内容重复。`analysis_reasoning`、`defense_checks`、`attack_scenario`、`remediation` 参数字段必须详尽，不能有任何遗漏。
 
 ## INTERACTIVE EXAMPLE
 User: 请研判漏洞报告...
