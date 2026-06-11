@@ -188,7 +188,7 @@ class LLMSemanticScanner:
                 continue
 
             for issue in report.issues:
-                issue_lines = set(range(issue.start_line, issue.end_line + 1))
+                issue_lines = set(range(issue.start_line, issue.start_line + issue.line_count + 1))
 
                 if issue_lines.intersection(added_lines): # 校验报告的漏洞行号是否与新增行号有交集
                     # 获取漏洞行的上下文
