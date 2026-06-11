@@ -150,7 +150,7 @@ INJECTION_EXPERT_PROMPT = """# ROLE
 # STRICT OUTPUT PROTOCOL
 每次行动前，你都**必须且只能**在常规文本中（不使用工具）进行思考。请根据当前阶段选择不同的思考标签：
 **阶段一：信息收集（证据不足时）**
-- 使用 `💡 计划：` 作为开头。
+- 使用 `🧠 思考：` 作为开头。
 - **强制约束**：在此阶段，只需一句话说明“我要查什么信息”。随后立刻调用相关工具。
 **阶段二：终局研判（证据已闭环）**
 - 使用 `⚖️ 终局研判：` 作为开头。
@@ -158,11 +158,11 @@ INJECTION_EXPERT_PROMPT = """# ROLE
 
 ## INTERACTIVE EXAMPLE
 User: 请研判漏洞报告...
-Assistant: 💡 计划：我要先查询硬编码密码相关的知识文档。
+Assistant: 🧠 思考：我要先查询硬编码密码相关的知识文档。
 [调用工具: get_vulnerability_playbook, 参数: {"document_name": "Hardcoded_Sensitive_Credentials"}]
 
 Tool: 工具返回了文档内容...
-Assistant: 💡 计划: 告警提示 login.py 第 45 行存在硬编码密码风险，我需要查询该处代码逻辑。
+Assistant: 🧠 思考: 告警提示 login.py 第 45 行存在硬编码密码风险，我需要查询该处代码逻辑。
 [调用工具: get_code_context, 参数: {"file_path": "test/auth/login.py", "target_line": 45}]
 
 # TASK REJECTION
@@ -287,7 +287,7 @@ INFRA_SUPPLY_EXPERT_PROMPT = """# ROLE
 # STRICT OUTPUT PROTOCOL
 每次行动前，你都**必须且只能**在常规文本中（不使用工具）进行思考。请根据当前阶段选择不同的思考标签：
 **阶段一：信息收集（证据不足时）**
-- 使用 `💡 计划：` 作为开头。
+- 使用 `🧠 思考：` 作为开头。
 - **强制约束**：在此阶段，只需一句话说明“我要查什么信息”。随后立刻调用相关工具。
 **阶段二：终局研判（证据已闭环）**
 - 使用 `⚖️ 终局研判：` 作为开头。
@@ -295,11 +295,11 @@ INFRA_SUPPLY_EXPERT_PROMPT = """# ROLE
 
 ## INTERACTIVE EXAMPLE
 User: 请研判漏洞报告...
-Assistant: 💡 计划：我要先查询硬编码密码相关的知识文档。
+Assistant: 🧠 思考：我要先查询硬编码密码相关的知识文档。
 [调用工具: get_vulnerability_playbook, 参数: {"document_name": "Hardcoded_Sensitive_Credentials"}]
 
 Tool: 工具返回了文档内容...
-Assistant: 💡 计划: 告警提示 login.py 第 45 行存在硬编码密码风险，我需要查询该处代码逻辑。
+Assistant: 🧠 思考: 告警提示 login.py 第 45 行存在硬编码密码风险，我需要查询该处代码逻辑。
 [调用工具: get_code_context, 参数: {"file_path": "test/auth/login.py", "target_line": 45}]
 
 # TASK REJECTION
@@ -357,7 +357,7 @@ LOGIC_IDENTITY_EXPERT_PROMPT = """# ROLE
 # STRICT OUTPUT PROTOCOL
 每次行动前，你都**必须且只能**在常规文本中（不使用工具）进行思考。请根据当前阶段选择不同的思考标签：
 **阶段一：信息收集（证据不足时）**
-- 使用 `💡 计划：` 作为开头。
+- 使用 `🧠 思考：` 作为开头。
 - **强制约束**：在此阶段，只需一句话说明“我要查什么信息”。随后立刻调用相关工具。
 **阶段二：终局研判（证据已闭环）**
 - 使用 `⚖️ 终局研判：` 作为开头。
@@ -365,11 +365,11 @@ LOGIC_IDENTITY_EXPERT_PROMPT = """# ROLE
 
 ## INTERACTIVE EXAMPLE
 User: 请研判漏洞报告...
-Assistant: 💡 计划：我要先查询硬编码密码相关的知识文档。
+Assistant: 🧠 思考：我要先查询硬编码密码相关的知识文档。
 [调用工具: get_vulnerability_playbook, 参数: {"document_name": "Hardcoded_Sensitive_Credentials"}]
 
 Tool: 工具返回了文档内容...
-Assistant: 💡 计划: 告警提示 login.py 第 45 行存在硬编码密码风险，我需要查询该处代码逻辑。
+Assistant: 🧠 思考: 告警提示 login.py 第 45 行存在硬编码密码风险，我需要查询该处代码逻辑。
 [调用工具: get_code_context, 参数: {"file_path": "test/auth/login.py", "target_line": 45}]
 
 # TASK REJECTION
@@ -425,7 +425,7 @@ GENERAL_EXPERT_PROMPT = """# ROLE
 # STRICT OUTPUT PROTOCOL
 每次行动前，你都**必须且只能**在常规文本中（不使用工具）进行思考。请根据当前阶段选择不同的思考标签：
 **阶段一：信息收集（证据不足时）**
-- 使用 `💡 计划：` 作为开头。
+- 使用 `🧠 思考：` 作为开头。
 - **强制约束**：在此阶段，只需一句话说明“我要查什么信息”。随后立刻调用相关工具。
 **阶段二：终局研判（证据已闭环）**
 - 使用 `⚖️ 终局研判：` 作为开头。
@@ -433,11 +433,11 @@ GENERAL_EXPERT_PROMPT = """# ROLE
 
 ## INTERACTIVE EXAMPLE
 User: 请研判漏洞报告...
-Assistant: 💡 计划：我要先查询硬编码密码相关的知识文档。
+Assistant: 🧠 思考：我要先查询硬编码密码相关的知识文档。
 [调用工具: get_vulnerability_playbook, 参数: {"document_name": "Hardcoded_Sensitive_Credentials"}]
 
 Tool: 工具返回了文档内容...
-Assistant: 💡 计划: 告警提示 login.py 第 45 行存在硬编码密码风险，我需要查询该处代码逻辑。
+Assistant: 🧠 思考: 告警提示 login.py 第 45 行存在硬编码密码风险，我需要查询该处代码逻辑。
 [调用工具: get_code_context, 参数: {"file_path": "test/auth/login.py", "target_line": 45}]
 """
 
