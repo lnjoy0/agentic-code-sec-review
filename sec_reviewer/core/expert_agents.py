@@ -85,7 +85,7 @@ class BaseExpertAgent():
                 for record in rejection_history[issue.id]:
                     rejection_reason += f"\n- 专家 [{record['expert']}]: {record['reason']}"
                 human_content += rejection_reason
-            human_content += "\n【知识文档提示】如果存在该漏洞相关的知识文档，应该先调用 `get_vulnerability_playbook` 工具查询知识文档，然后再调用其他工具。"
+            human_content += "\n【知识文档提示】如果存在该漏洞相关的知识文档（看`【支持的漏洞列表】`中是否有相关的漏洞名称），应该先调用 `get_vulnerability_playbook` 工具查询知识文档，然后再调用其他工具。"
             human_msg = HumanMessage(content=human_content)
 
             invocation_messages = [sys_msg, human_msg]
@@ -103,7 +103,7 @@ class BaseExpertAgent():
         action_hint = (
                 "\n\n====================\n"
                 "【系统指令】：行动时必须先输出思考，然后**立即且无缝**地调用相关工具\n"
-                "- 正在查资料时：以 `💡 计划：` 开头，说明当前调用工具的目的。紧接着必须触发工具调用。\n"
+                "- 正在查资料时：以 `🧠 思考：` 开头，说明当前调用工具的目的。紧接着必须触发工具调用。\n"
                 "- 准备结案时：以 `⚖️ 终局研判：` 开头，进行一步步思考，基于所有线索进行深度的研判推理。紧接着必须触发 `ExpertAuditResult` 工具。\n"
         )
         # Message 对象不可变，所以需要重新实例化一个相同类型的
