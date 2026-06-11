@@ -29,7 +29,7 @@ SCANNER_PROMPT = """# ROLE
 1. 【注入与数据流污染】：所有由于输入未经过滤导致的数据流污染与执行类漏洞。
    - 涵盖：SQL注入、OS命令注入、代码注入、SSTI、XSS、XXE、SSRF、路径穿越、反序列化等。
 2. 【数据资产与密码学】：静态敏感资产保护与加密算法合规性。
-   - 涵盖：加密机制缺陷、硬编码凭据泄露（Token/Key/Password）、Sensitive Data Logging、弱密码学算法（MD5/SHA1等）、弱随机数、不安全哈希等。
+   - 涵盖：加密机制缺陷、硬编码凭据泄露（Token/Key/Password）、敏感信息泄露、弱密码学算法（MD5/SHA1等）、弱随机数、不安全哈希等。
 3. 【环境与供应链基线】：应用外部依赖与底层环境基线风险。
    - 涵盖：依赖混淆、Dockerfile/K8s 配置风险、启用框架 debug 模式、不安全的网络绑定、恶意 setup 脚本等。
 4. 【业务与身份逻辑】：应用上下文相关的权限与业务流程缺陷。
@@ -65,7 +65,7 @@ ROUTER_PROMPT = """# ROLE
 
 2. 【Data_Asset_Expert】(数据与资产安全专家)
    - 负责：静态敏感资产保护与加密算法合规性。
-   - 涵盖：加密机制缺陷、硬编码凭据泄露（Token/Key/Password）、Sensitive Data Logging、弱密码学算法（MD5/SHA1等）、弱随机数、不安全哈希等。
+   - 涵盖：加密机制缺陷、硬编码凭据泄露（Token/Key/Password）、敏感数据泄露、弱密码学算法（MD5/SHA1等）、弱随机数、不安全哈希等。
    - 典型长尾标签：AES-ECB Cipher Mode, Predictable IV/Nonce, Sensitive Data in Logs, Insufficient Entropy, Weak Key Derivation (如使用了迭代次数过低的 PBKDF2 或直接使用普通哈希)等。
 
 3. 【Infra_Supply_Expert】(环境与供应链安全专家)
@@ -188,8 +188,8 @@ DATA_ASSET_EXPERT_PROMPT = """# ROLE
 # ANALYSIS PATHS
 请根据传入的漏洞类型，自动激活以下特定的分析路径与安全基准：
 
-[分支 A: 硬编码与凭据泄露 (例如 Hardcoded Secrets / Token Leakage)]
-- 研判重点：代码中是否存在明文的高价值敏感凭据。
+[分支 A: 硬编码凭据/敏感信息泄露 (例如 Hardcoded Secrets / Token Leakage)]
+- 研判重点：是否存在泄露的高价值敏感信息。
 
 [分支 B: 弱密码学与哈希算法 (例如 MD5 / SHA1 / DES)]
 - 研判重点：过时/不安全的算法被用于何种业务场景。
@@ -199,9 +199,6 @@ DATA_ASSET_EXPERT_PROMPT = """# ROLE
 
 [分支 D: 随机数与熵不足 (例如 Weak Randomness / Insufficient Entropy)]
 - 研判重点：用于安全决策或凭据生成的随机数，是否具有密码学意义上的不可预测性。
-
-[分支 E: 敏感数据违规外带与日志记录 (例如 Sensitive Data in Logs)]
-- 研判重点：系统日志、控制台输出或异常栈追踪中，是否直接暴露了敏感资产。
 
 # TOOL USAGE GUIDELINES
 你配备了多种辅助分析工具，每个行动轮次你最多可以调用两个工具，得到工具执行结果，以辅助你的研判分析。

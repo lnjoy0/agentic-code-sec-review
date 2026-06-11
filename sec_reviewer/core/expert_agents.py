@@ -85,7 +85,10 @@ class BaseExpertAgent():
                 for record in rejection_history[issue.id]:
                     rejection_reason += f"\n- 专家 [{record['expert']}]: {record['reason']}"
                 human_content += rejection_reason
-            human_content += "\n【知识文档提示】如果存在该漏洞相关的知识文档（看`【支持的漏洞列表】`中是否有相关的漏洞名称），应该先调用 `get_vulnerability_playbook` 工具查询知识文档，然后再调用其他工具。"
+            human_content += (
+                "\n【知识文档提示】如果存在该漏洞相关的知识文档，应该先调用 `get_vulnerability_playbook` 工具查询知识文档，然后再调用其他工具。"
+                "另外，支持的漏洞文档有限，如果当前处理的漏洞与知识文档描述的漏洞并不是完全相同，应该懂得灵活变通，不能教条主义。"
+            )
             human_msg = HumanMessage(content=human_content)
 
             invocation_messages = [sys_msg, human_msg]
@@ -276,9 +279,9 @@ class BaseExpertAgent():
             f"{issue.model_dump_json()}\n"
             "</vulnerability_report>\n\n"
             
-            "<expert_tool_trace>\n"
+            "<expert_action_history>\n"
             f"{trace_str}\n"
-            "</expert_tool_trace>\n\n"
+            "</expert_action_history>\n\n"
             
             "<expert_final_thought>\n"
             f"{final_thought}\n"
@@ -324,7 +327,7 @@ class BaseExpertAgent():
             return {"audit_results": [state["draft_result"]]}
 
         if critic_dc.decision == "revise":
-            logger.warning(f"[{self.expert_name}]-[issue({issue.id})] 🚫 专家结论被驳回。理由：{critic_dc.critique_reason}，建议: {critic_dc.suggested_action}。\n原始消息: {results}")
+            logger.warning(f"[{self.expert_name}]-[issue({issue.id})] 🚫 专家结论被驳回。理由：{critic_dc.critique_reason} 建议: {critic_dc.suggested_action}。\n原始消息: {results}")
                         
             critical_content = CriticalContent(
                 round=critical_rounds,
@@ -335,8 +338,8 @@ class BaseExpertAgent():
                 review_suggest=critic_dc.suggested_action
             )
             critic_str = (
-                f"🚫【审查节点驳回】理由：{critic_dc.critique_reason}，建议: {critic_dc.suggested_action}。\n"
-                f"请自行判断审查节点的理由与建议是否正确，如果确实有道理，请做出对应的证据链补充或分析修正，只有确实需要修改审查结论 (verdict) 时，才做出修改；如果审查节点的分析或建议是错误的，你要坚持自己的结论。"
+                f"🚫【审查节点驳回】\n理由：{critic_dc.critique_reason}\n建议: {critic_dc.suggested_action}\n"
+                f"注意：请自行判断审查节点的理由与建议是否正确，如果确实有道理，请做出对应的证据链补充或分析修正，只有确实需要修改审查结论 (verdict) 时，才做出修改；如果审查节点的分析或建议是错误的，你要坚持自己的结论。"
             )
             critic_msg = ToolMessage(content=critic_str, name=tool_name, tool_call_id=results.tool_calls[0]['id'])
             
