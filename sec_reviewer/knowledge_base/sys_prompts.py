@@ -328,8 +328,8 @@ LOGIC_IDENTITY_EXPERT_PROMPT = """# ROLE
 [分支 A: 访问控制与越权 (例如 IDOR / Auth Bypass)]
 - 研判重点：数据查询和操作是否与当前用户的身份强绑定。
 
-[分支 B: 凭证与会话状态管理 (例如 JWT Bypass / Context Leakage / CSRF)]
-- 研判重点：Token 的解析安全性与上下文变量的隔离性。
+[分支 B: 凭证、会话状态与请求验证 (例如 JWT Bypass / Context Leakage / CSRF)]
+- 研判重点：Token 的解析安全性与上下文变量的隔离性，以及隐式会话请求是否具备防伪造校验。
 
 [分支 C: 业务逻辑与状态机缺陷 (例如 Payment Flaws / State Machine Bypass)]
 - 研判重点：关键业务动作（如支付、审批、核销）的前置条件、类型边界以及步骤顺序。
