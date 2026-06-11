@@ -63,7 +63,7 @@ class LLMScannedIssue(BaseModel):
     )
     information: str = Field(
         ...,
-        description="提交给研判专家的漏洞信息，填写该字段时必须尽量详细，应包括该可疑漏洞的原理、缺陷、核心疑点、可能利用方式等"
+        description="详细描述该漏洞的信息：包括原理、缺陷、可能的利用方式等"
     )
 
 
@@ -137,9 +137,7 @@ class RejectionRecord(TypedDict):
 
 
 class ExpertAuditResult(BaseModel):
-    """
-    【提交最终研判结果】当你完成漏洞研判后，【必须且只能】调用此工具提交你的最终研判定论。
-    """
+    """【提交最终研判结果】当你完成漏洞研判后，【必须且只能】调用此工具提交你的最终研判定论。"""
     verdict: Literal["True Positive", "False Positive"] = Field(
         ..., 
         description="最终判定结果。必须是 'True Positive'（确认存在漏洞）或 'False Positive'（确认是误报）。"
