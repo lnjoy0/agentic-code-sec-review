@@ -188,12 +188,11 @@ class LLMSemanticScanner:
                 continue
 
             for issue in report.issues:
-                end_line = issue.start_line + issue.line_count
-                issue_lines = set(range(issue.start_line, end_line + 1))
+                issue_lines = set(range(issue.start_line, issue.end_line + 1))
 
                 if issue_lines.intersection(added_lines): # 校验报告的漏洞行号是否与新增行号有交集
                     # 获取漏洞行的上下文
-                    context, _ = await self._get_context(file_path, issue.start_line, end_line)
+                    context, _ = await self._get_context(file_path, issue.start_line, issue.end_line)
                     
                     scanned_issues.append(ScannedIssue(
                         scanner="llm",
@@ -204,7 +203,7 @@ class LLMSemanticScanner:
                         confidence_score=issue.confidence_score,
                         snippet_region=SnippetRegion(
                             start_line=issue.start_line,
-                            end_line=end_line
+                            end_line=issue.end_line
                         ),
                         snippet_text=issue.vulnerable_code_snippet,
                         context=context

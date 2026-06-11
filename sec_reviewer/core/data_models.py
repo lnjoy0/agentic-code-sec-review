@@ -42,20 +42,19 @@ class LLMScannedIssue(BaseModel):
         ..., 
         description=("预估的漏洞严重程度，可选值：critical, high, medium, low")
     )
+    vulnerable_code_snippet: str = Field(
+        ...,
+        description="触发该漏洞的核心代码片段（最多10行），用于辅助精准定位"
+    )
     start_line: int = Field(
         ...,
         ge=1,
-        description="漏洞核心代码片段的起始行号。"
+        description="字段 `vulnerable_code_snippet` 中漏洞核心代码片段的起始行号。"
     )
-    line_count: int = Field(
+    end_line: int = Field(
         ...,
         ge=1,
-        le=10,
-        description="该漏洞代码片段包含的行数（最多不超过 10 行）。"
-    )
-    vulnerable_code_snippet: str = Field(
-        ...,
-        description="触发该漏洞的核心代码片段（仅需一到两行即可），用于辅助精准定位"
+        description="字段 `vulnerable_code_snippet` 中漏洞核心代码片段的终止行号。"
     )
     confidence_score: int = Field(
         ...,
