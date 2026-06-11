@@ -266,12 +266,19 @@ class GitHubClient:
         """Validate and sanitize a review comment."""
         try:            
             # Sanitize content (preserve markdown in body, but sanitize path)
-            sanitized_comment = {
-                'body': self._sanitize_input(comment.body, preserve_markdown=True),
-                'path': self._sanitize_input(comment.path, preserve_markdown=False),
-                'start_line': comment.start_line, # 多行代码评论
-                'line': comment.end_line
-            }
+            if comment.start_line == comment.end_line:
+                sanitized_comment = {
+                    'body': self._sanitize_input(comment.body, preserve_markdown=True),
+                    'path': self._sanitize_input(comment.path, preserve_markdown=False),
+                    'line': comment.end_line
+                }
+            else:
+                sanitized_comment = {
+                    'body': self._sanitize_input(comment.body, preserve_markdown=True),
+                    'path': self._sanitize_input(comment.path, preserve_markdown=False),
+                    'start_line': comment.start_line, # 多行代码评论
+                    'line': comment.end_line
+                }
             return sanitized_comment
             
         except Exception as e:

@@ -188,11 +188,9 @@ class LLMSemanticScanner:
                 continue
 
             for issue in report.issues:
-                issue_lines = set(range(issue.start_line, issue.end_line + 1))
-
-                if issue_lines.intersection(added_lines): # 校验报告的漏洞行号是否与新增行号有交集
+                if issue.target_line in added_lines: # 校验报告的漏洞行号是否与新增行号有交集
                     # 获取漏洞行的上下文
-                    context, _ = await self._get_context(file_path, issue.start_line, issue.end_line)
+                    context, _ = await self._get_context(file_path, issue.target_line, issue.target_line)
                     
                     scanned_issues.append(ScannedIssue(
                         scanner="llm",
@@ -202,8 +200,8 @@ class LLMSemanticScanner:
                         severity=issue.severity,
                         confidence_score=issue.confidence_score,
                         snippet_region=SnippetRegion(
-                            start_line=issue.start_line,
-                            end_line=issue.end_line
+                            start_line=issue.target_line,
+                            end_line=issue.target_line
                         ),
                         snippet_text=issue.vulnerable_code_snippet,
                         context=context
@@ -215,7 +213,7 @@ class LLMSemanticScanner:
                 else:
                     logger.info(
                         f"过滤掉文件 {file_path} 中的漏洞: {issue.name}。"
-                        f"其行号 {issue.start_line}-{issue.end_line} 不在 PR 增量范围内。"
+                        f"其行号 {issue.target_line} 不在 PR 增量范围内。"
                     )
 
         return scanned_issues
