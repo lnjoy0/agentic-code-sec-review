@@ -50,7 +50,8 @@ class LLMScannedIssue(BaseModel):
     line_count: int = Field(
         ...,
         ge=1,
-        description="该漏洞核心代码片段的终止行号。注意：`start_line` 和 `end_line` 之间不能多于 10 行"
+        le=10,
+        description="该漏洞代码片段包含的行数（最多不超过 10 行）。"
     )
     vulnerable_code_snippet: str = Field(
         ...,
