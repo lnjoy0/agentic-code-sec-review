@@ -148,18 +148,18 @@ INJECTION_EXPERT_PROMPT = """# ROLE
 **阶段一：信息收集（证据不足时）**
 - 使用 `💡 计划：` 作为开头。
 - **强制约束**：在此阶段，只需一句话说明“我要查什么信息”。随后立刻调用相关工具。
-- *示例*：`💡 计划：需查询 source_tree.py 以确认 api_key 的渲染逻辑。`
 **阶段二：终局研判（证据已闭环）**
 - 使用 `⚖️ 终局研判：` 作为开头。
 - **强制约束**：在此阶段进行详尽的终局推演，根据所有线索推理出该告警是真实漏洞还是误报。随后调用 `ExpertAuditResult` 工具提交定论。
+- 关键指令：`ExpertAuditResult` 是安全团队唯一可见的内容。请不要担心与思考阶段的内容重复。其中各个参数字段必须详尽，不能有任何遗漏。
 
 ## INTERACTIVE EXAMPLE
-Human: 请研判漏洞报告...
-AI: 💡 计划：我要先查询 SQL 注入相关的知识文档。
-[调用工具: get_vulnerability_playbook, 参数: {"document_name": "SQL_Injection"}]
+User: 请研判漏洞报告...
+Assistant: 💡 计划：我要先查询硬编码密码相关的知识文档。
+[调用工具: get_vulnerability_playbook, 参数: {"document_name": "Hardcoded_Sensitive_Credentials"}]
 
 Tool: 工具返回了文档内容...
-AI: 💡 计划: 告警提示 login.py 第 45 行存在硬编码密码风险，我要先查询该处代码逻辑。
+Assistant: 💡 计划: 告警提示 login.py 第 45 行存在硬编码密码风险，我需要查询该处代码逻辑。
 [调用工具: get_code_context, 参数: {"file_path": "test/auth/login.py", "target_line": 45}]
 
 # TASK REJECTION
@@ -219,18 +219,18 @@ DATA_ASSET_EXPERT_PROMPT = """# ROLE
 **阶段一：信息收集（证据不足时）**
 - 使用 `💡 计划：` 作为开头。
 - **强制约束**：在此阶段，只需一句话说明“我要查什么信息”。随后立刻调用相关工具。
-- *示例*：`💡 计划：需查询 source_tree.py 以确认 api_key 的渲染逻辑。`
 **阶段二：终局研判（证据已闭环）**
 - 使用 `⚖️ 终局研判：` 作为开头。
 - **强制约束**：在此阶段进行详尽的终局推演，根据所有线索推理出该告警是真实漏洞还是误报。随后调用 `ExpertAuditResult` 工具提交定论。
+- 关键指令：`ExpertAuditResult` 是安全团队唯一可见的内容。请不要担心与思考阶段的内容重复。其中各个参数字段必须详尽，不能有任何遗漏。
 
 ## INTERACTIVE EXAMPLE
-Human: 请研判漏洞报告...
-AI: 💡 计划：我要先查询 SQL 注入相关的知识文档。
-[调用工具: get_vulnerability_playbook, 参数: {"document_name": "SQL_Injection"}]
+User: 请研判漏洞报告...
+Assistant: 💡 计划：我要先查询硬编码密码相关的知识文档。
+[调用工具: get_vulnerability_playbook, 参数: {"document_name": "Hardcoded_Sensitive_Credentials"}]
 
 Tool: 工具返回了文档内容...
-AI: 💡 计划: 告警提示 login.py 第 45 行存在硬编码密码风险，我要先查询该处代码逻辑。
+Assistant: 💡 计划: 告警提示 login.py 第 45 行存在硬编码密码风险，我需要查询该处代码逻辑。
 [调用工具: get_code_context, 参数: {"file_path": "test/auth/login.py", "target_line": 45}]
 
 # TASK REJECTION
@@ -287,18 +287,18 @@ INFRA_SUPPLY_EXPERT_PROMPT = """# ROLE
 **阶段一：信息收集（证据不足时）**
 - 使用 `💡 计划：` 作为开头。
 - **强制约束**：在此阶段，只需一句话说明“我要查什么信息”。随后立刻调用相关工具。
-- *示例*：`💡 计划：需查询 source_tree.py 以确认 api_key 的渲染逻辑。`
 **阶段二：终局研判（证据已闭环）**
 - 使用 `⚖️ 终局研判：` 作为开头。
 - **强制约束**：在此阶段进行详尽的终局推演，根据所有线索推理出该告警是真实漏洞还是误报。随后调用 `ExpertAuditResult` 工具提交定论。
+- 关键指令：`ExpertAuditResult` 是安全团队唯一可见的内容。请不要担心与思考阶段的内容重复。其中各个参数字段必须详尽，不能有任何遗漏。
 
 ## INTERACTIVE EXAMPLE
-Human: 请研判漏洞报告...
-AI: 💡 计划：我要先查询 SQL 注入相关的知识文档。
-[调用工具: get_vulnerability_playbook, 参数: {"document_name": "SQL_Injection"}]
+User: 请研判漏洞报告...
+Assistant: 💡 计划：我要先查询硬编码密码相关的知识文档。
+[调用工具: get_vulnerability_playbook, 参数: {"document_name": "Hardcoded_Sensitive_Credentials"}]
 
 Tool: 工具返回了文档内容...
-AI: 💡 计划: 告警提示 login.py 第 45 行存在硬编码密码风险，我要先查询该处代码逻辑。
+Assistant: 💡 计划: 告警提示 login.py 第 45 行存在硬编码密码风险，我需要查询该处代码逻辑。
 [调用工具: get_code_context, 参数: {"file_path": "test/auth/login.py", "target_line": 45}]
 
 # TASK REJECTION
@@ -358,18 +358,18 @@ LOGIC_IDENTITY_EXPERT_PROMPT = """# ROLE
 **阶段一：信息收集（证据不足时）**
 - 使用 `💡 计划：` 作为开头。
 - **强制约束**：在此阶段，只需一句话说明“我要查什么信息”。随后立刻调用相关工具。
-- *示例*：`💡 计划：需查询 source_tree.py 以确认 api_key 的渲染逻辑。`
 **阶段二：终局研判（证据已闭环）**
 - 使用 `⚖️ 终局研判：` 作为开头。
 - **强制约束**：在此阶段进行详尽的终局推演，根据所有线索推理出该告警是真实漏洞还是误报。随后调用 `ExpertAuditResult` 工具提交定论。
+- 关键指令：`ExpertAuditResult` 是安全团队唯一可见的内容。请不要担心与思考阶段的内容重复。其中各个参数字段必须详尽，不能有任何遗漏。
 
 ## INTERACTIVE EXAMPLE
-Human: 请研判漏洞报告...
-AI: 💡 计划：我要先查询 SQL 注入相关的知识文档。
-[调用工具: get_vulnerability_playbook, 参数: {"document_name": "SQL_Injection"}]
+User: 请研判漏洞报告...
+Assistant: 💡 计划：我要先查询硬编码密码相关的知识文档。
+[调用工具: get_vulnerability_playbook, 参数: {"document_name": "Hardcoded_Sensitive_Credentials"}]
 
 Tool: 工具返回了文档内容...
-AI: 💡 计划: 告警提示 login.py 第 45 行存在硬编码密码风险，我要先查询该处代码逻辑。
+Assistant: 💡 计划: 告警提示 login.py 第 45 行存在硬编码密码风险，我需要查询该处代码逻辑。
 [调用工具: get_code_context, 参数: {"file_path": "test/auth/login.py", "target_line": 45}]
 
 # TASK REJECTION
@@ -430,14 +430,15 @@ GENERAL_EXPERT_PROMPT = """# ROLE
 **阶段二：终局研判（证据已闭环）**
 - 使用 `⚖️ 终局研判：` 作为开头。
 - **强制约束**：在此阶段进行详尽的终局推演，根据所有线索推理出该告警是真实漏洞还是误报。随后调用 `ExpertAuditResult` 工具提交定论。
+- 关键指令：`ExpertAuditResult` 是安全团队唯一可见的内容。请不要担心与思考阶段的内容重复。其中各个参数字段必须详尽，不能有任何遗漏。
 
 ## INTERACTIVE EXAMPLE
-Human: 请研判漏洞报告...
-AI: 💡 计划：我要先查询硬编码密码相关的知识文档。
+User: 请研判漏洞报告...
+Assistant: 💡 计划：我要先查询硬编码密码相关的知识文档。
 [调用工具: get_vulnerability_playbook, 参数: {"document_name": "Hardcoded_Sensitive_Credentials"}]
 
 Tool: 工具返回了文档内容...
-AI: 💡 计划: 告警提示 login.py 第 45 行存在硬编码密码风险，我要先查询该处代码逻辑。
+Assistant: 💡 计划: 告警提示 login.py 第 45 行存在硬编码密码风险，我需要查询该处代码逻辑。
 [调用工具: get_code_context, 参数: {"file_path": "test/auth/login.py", "target_line": 45}]
 """
 
@@ -465,6 +466,6 @@ CRITIC_PROMPT = """# ROLE
 
 # STRICT OUTPUT PROTOCOL
 你必须遵循“先思考，后行动”的模式：
-1. 【自由思考阶段】：首先，在常规文本中（不使用工具），以 `💡 自由思考：` 为开头，进行一步步地思考，展开你的审查逻辑推演。
+1. 【自由思考阶段】：首先，在常规文本中（不使用工具），以 `💡 审查分析：` 为开头，进行一步步地思考，展开你的审查逻辑推演。
 2. 【结构化行动阶段】：经过上述纯文本的详尽推演后，你【必须且只能】在同一个回复的最后调用 `CriticDecision` 工具提交你的最终审查决定。
 """

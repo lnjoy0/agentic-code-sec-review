@@ -74,9 +74,6 @@ class BaseExpertAgent():
 
         sys_msg = SystemMessage(content=self.system_prompt+"\n\n"+remaining_rounds_prompt)
 
-        few_shot_messages = get_few_shot_messages()
-        few_shot_messages = []
-
         # 如果是第一轮，初始化 System Prompt 和初始输入
         if not messages:
             logger.info(f"[{self.expert_name}] 🚀 开始全新漏洞研判: {issue.id} ({issue.name or issue.cwe})...")
@@ -91,16 +88,16 @@ class BaseExpertAgent():
             human_content += "\n【知识文档提示】如果存在该漏洞相关的知识文档，应该先调用 `get_vulnerability_playbook` 工具查询知识文档，然后再调用其他工具。"
             human_msg = HumanMessage(content=human_content)
 
-            invocation_messages = [sys_msg] + few_shot_messages + [human_msg]
+            invocation_messages = [sys_msg, human_msg]
             state_update_messages = [human_msg]
         else:
             logger.info(f"[{self.expert_name}]-[issue({state['issue'].id})] 🧠 接收反馈，继续综合推理...")
             
             if critical_history:
                 critical_msg = f"【上次研判结论与审查意见】以下是你上一次的研判结论以及审查节点对其给出的意见。\n{critical_history[-1].model_dump_json()}"
-                invocation_messages = [sys_msg] + few_shot_messages + messages + [HumanMessage(content=critical_msg)]
+                invocation_messages = [sys_msg] + messages + [HumanMessage(content=critical_msg)]
             else:
-                invocation_messages = [sys_msg] + few_shot_messages + messages
+                invocation_messages = [sys_msg] + messages
 
         # 在最后一个消息中附加行动提示，防止系统提示词太远，导致对 AI 的输出行为约束减弱
         action_hint = (
@@ -108,6 +105,7 @@ class BaseExpertAgent():
                 "【系统指令】：行动时必须先输出思考，然后**立即且无缝**地调用相关工具\n"
                 "- 正在查资料时：以 `💡 计划：` 开头，说明当前调用工具的目的。紧接着必须触发工具调用。\n"
                 "- 准备结案时：以 `⚖️ 终局研判：` 开头，进行一步步思考，基于所有线索进行深度的研判推理。紧接着必须触发 `ExpertAuditResult` 工具。\n"
+                "关键指令：`ExpertAuditResult` 是安全团队唯一可见的内容。请不要担心与思考阶段的内容重复。其中各个参数字段必须详尽，不能有任何遗漏。"
         )
         # Message 对象不可变，所以需要重新实例化一个相同类型的
         last_message = invocation_messages[-1]
@@ -299,7 +297,7 @@ class BaseExpertAgent():
             "</expert_final_conclusion>"
 
             "\n\n====================\n"
-            "【系统指令】：你必须以 `💡 自由思考：` 为开头开始回复。\n"
+            "【系统指令】：你必须以 `💡 审查分析：` 为开头开始回复。\n"
             "先详细写出一步步思考的审查推演逻辑，最后调用 `CriticDecision` 工具。"
         )
         
@@ -582,41 +580,6 @@ class GeneralExpert(BaseExpertAgent):
             system_prompt=GENERAL_EXPERT_PROMPT,
             tools=tools
         )
-
-def get_few_shot_messages() -> List:
-    few_shot_messages = [
-        HumanMessage(content="..."),
-            
-        AIMessage(
-            content="💡 计划：...",
-            tool_calls=[{"name": "...", "args": {"...": "..."}, "id": "call_mock_pwd_1"}]
-        ),
-        ToolMessage(content="...", tool_call_id="call_mock_pwd_1", name="..."),
-        
-        AIMessage(
-            content="💡 计划：...",
-            tool_calls=[{"name": "...", "args": {"...": "..."}, "id": "call_mock_pwd_2"}]
-        ),
-        ToolMessage(content="...", tool_call_id="call_mock_pwd_2", name="..."),
-
-        AIMessage(
-            content="💡 计划：...",
-            tool_calls=[{"name": "...", "args": {"...": "..."}, "id": "call_mock_pwd_3"}]
-        ),
-        ToolMessage(content="...", tool_call_id="call_mock_pwd_3", name="..."),
-        
-        AIMessage(
-            content="⚖️ 终局研判：...",
-            tool_calls=[{
-                "name": "ExpertAuditResult",
-                "args": {
-                    '...':'...'
-                },
-                "id": "call_mock_final_4"
-            }]
-        )
-    ]
-    return few_shot_messages
 
 def save_langgraph_messages_to_markdown(messages: list, filename="message"):
     log_dir = "expert_messages"
