@@ -45,9 +45,9 @@ class LLMScannedIssue(BaseModel):
     start_line: int = Field(
         ...,
         ge=1,
-        description="该漏洞核心代码片段的起始行号。注意：`start_line` 和 `end_line` 之间不能多于 10 行"
+        description="漏洞核心代码片段的起始行号。"
     )
-    end_line: int = Field(
+    line_count: int = Field(
         ...,
         ge=1,
         description="该漏洞核心代码片段的终止行号。注意：`start_line` 和 `end_line` 之间不能多于 10 行"
@@ -65,13 +65,6 @@ class LLMScannedIssue(BaseModel):
         ...,
         description="提交给研判专家的漏洞信息，填写该字段时必须尽量详细，应包括该可疑漏洞的原理、缺陷、核心疑点、可能利用方式等"
     )
-
-    @model_validator(mode='after')
-    def validate_lines(self) -> 'LLMScannedIssue':
-        if self.end_line - self.start_line > 10:
-            raise ValueError("校验失败：漏洞代码片段超过 10 行限制")
-                    
-        return self
 
 
 class LLMScanReport(BaseModel):

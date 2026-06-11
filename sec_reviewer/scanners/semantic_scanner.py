@@ -203,7 +203,7 @@ class LLMSemanticScanner:
                         confidence_score=issue.confidence_score,
                         snippet_region=SnippetRegion(
                             start_line=issue.start_line,
-                            end_line=issue.end_line
+                            end_line=issue.start_line + issue.line_count
                         ),
                         snippet_text=issue.vulnerable_code_snippet,
                         context=context

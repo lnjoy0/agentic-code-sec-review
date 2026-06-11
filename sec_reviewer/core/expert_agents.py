@@ -87,7 +87,6 @@ class BaseExpertAgent():
                 human_content += rejection_reason
             human_content += (
                 "\n【知识文档提示】如果存在该漏洞相关的知识文档，应该先调用 `get_vulnerability_playbook` 工具查询知识文档，然后再调用其他工具。"
-                "另外，支持的漏洞文档有限，如果当前处理的漏洞与知识文档描述的漏洞并不是完全相同，应该懂得灵活变通，不能教条主义。"
             )
             human_msg = HumanMessage(content=human_content)
 
