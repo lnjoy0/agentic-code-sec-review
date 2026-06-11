@@ -93,11 +93,11 @@ class BaseExpertAgent():
         else:
             logger.info(f"[{self.expert_name}]-[issue({state['issue'].id})] 🧠 接收反馈，继续综合推理...")
             
-            if critical_history:
-                critical_msg = f"【上次研判结论与审查意见】以下是你上一次的研判结论以及审查节点对其给出的意见。\n{critical_history[-1].model_dump_json()}"
-                invocation_messages = [sys_msg] + messages + [HumanMessage(content=critical_msg)]
-            else:
-                invocation_messages = [sys_msg] + messages
+            # if critical_history:
+            #     critical_msg = f"【上次研判结论与审查意见】以下是你上一次的研判结论以及审查节点对其给出的意见。\n{critical_history[-1].model_dump_json()}"
+            #     invocation_messages = [sys_msg] + messages + [HumanMessage(content=critical_msg)]
+            # else:
+            invocation_messages = [sys_msg] + messages
 
         # 在最后一个消息中附加行动提示，防止系统提示词太远，导致对 AI 的输出行为约束减弱
         action_hint = (
@@ -141,9 +141,6 @@ class BaseExpertAgent():
             raise
         
         state_update_messages.append(response)
-
-        if messages and messages[-1].content.startswith("【审查节点驳回】"):
-            state_update_messages.append(RemoveMessage(id=messages[-1].id))
 
         return {"messages": state_update_messages}
 
@@ -337,9 +334,14 @@ class BaseExpertAgent():
                 review_decision_reason=critic_dc.critique_reason,
                 review_suggest=critic_dc.suggested_action
             )
+            critic_str = (
+                f"🚫【审查节点驳回】理由：{critic_dc.critique_reason}，建议: {critic_dc.suggested_action}。\n"
+                f"请自行判断审查节点的理由与建议是否正确，如果确实有道理，请做出对应的证据链补充或分析修正，只有确实需要修改审查结论 (verdict) 时，才做出修改；如果审查节点的分析或建议是错误的，你要坚持自己的结论。"
+            )
+            critic_msg = ToolMessage(content=critic_str, name=tool_name, tool_call_id=results.tool_calls[0]['id'])
             
             return {
-                "messages": [RemoveMessage(id=messages[-1].id)], # 移除旧的审计结论，以节省上下文空间
+                "messages": [critic_msg],
                 "critical_history": [critical_content],
                 "draft_result": None
             }
