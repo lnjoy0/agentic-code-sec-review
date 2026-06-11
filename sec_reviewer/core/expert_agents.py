@@ -105,7 +105,7 @@ class BaseExpertAgent():
                 "【系统指令】：行动时必须先输出思考，然后**立即且无缝**地调用相关工具\n"
                 "- 正在查资料时：以 `💡 计划：` 开头，说明当前调用工具的目的。紧接着必须触发工具调用。\n"
                 "- 准备结案时：以 `⚖️ 终局研判：` 开头，进行一步步思考，基于所有线索进行深度的研判推理。紧接着必须触发 `ExpertAuditResult` 工具。\n"
-                "关键指令：`ExpertAuditResult` 是安全团队唯一可见的内容。请不要担心与思考阶段的内容重复。其中各个参数字段必须详尽，不能有任何遗漏。"
+                "关键指令：`ExpertAuditResult` 是安全团队唯一可见的内容。请不要担心与思考阶段的内容重复。`analysis_reasoning`、`defense_checks`、`attack_scenario`、`remediation` 参数字段必须详尽，不能有任何遗漏。"
         )
         # Message 对象不可变，所以需要重新实例化一个相同类型的
         last_message = invocation_messages[-1]
