@@ -63,7 +63,7 @@ class LLMScannedIssue(BaseModel):
     )
     information: str = Field(
         ...,
-        description="提交给研判专家的漏洞详细信息，根据思考阶段的分析内容总结得出"
+        description="提交给研判专家的漏洞信息，尽可能详细，应包括该可疑漏洞的原理、缺陷、核心疑点、可能利用方式等"
     )
 
 
