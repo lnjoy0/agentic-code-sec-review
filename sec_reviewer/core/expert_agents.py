@@ -95,10 +95,6 @@ class BaseExpertAgent():
         else:
             logger.info(f"[{self.expert_name}]-[issue({state['issue'].id})] 🧠 接收反馈，继续综合推理...")
             
-            # if critical_history:
-            #     critical_msg = f"【上次研判结论与审查意见】以下是你上一次的研判结论以及审查节点对其给出的意见。\n{critical_history[-1].model_dump_json()}"
-            #     invocation_messages = [sys_msg] + messages + [HumanMessage(content=critical_msg)]
-            # else:
             invocation_messages = [sys_msg] + messages
 
         # 在最后一个消息中附加行动提示，防止系统提示词太远，导致对 AI 的输出行为约束减弱
