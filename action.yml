@@ -1,5 +1,5 @@
 name: 'Agentic Code Sec Reviewer'
-description: '该Agent首先使用codeql等工具对PR中的代码进行安全扫描，然后使用多智能体系统对扫描结果进行研判，并将真正的安全问题以评论的形式反馈到PR中。'
+description: '该Agent首先使用 semgrep、trivy、gitleaks 以及 LLM 对 PR 中的代码进行安全扫描，然后使用多智能体系统对扫描结果进行研判，并将真正的安全问题以评论的形式反馈到 PR 中。'
 author: 'lnjoy'
 
 inputs:
@@ -239,5 +239,10 @@ runs:
       if: always()
       with:
         name: expert-msgs
-        path: expert_messages/
+        path: |
+          expert_messages/
+          scanner_input_messages/
+          router_input_messages/
+          expert_input_messages/
+          critic_input_messages/
         retention-days: 14
