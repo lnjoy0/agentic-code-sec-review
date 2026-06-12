@@ -139,7 +139,7 @@ class BaseExpertAgent():
             except Exception as e:
                 logger.warning(f"⚠️ 保存请求消息时发生错误: {e}")
 
-        save_task = asyncio.create_task(_save_msg)
+        save_task = asyncio.create_task(_save_msg())
 
         # 调用大模型
         try:
@@ -318,7 +318,7 @@ class BaseExpertAgent():
             except Exception as e:
                 logger.warning(f"⚠️ 保存请求消息时发生错误: {e}")
 
-        save_task = asyncio.create_task(_save_msg)
+        save_task = asyncio.create_task(_save_msg())
 
         logger.info(f"[{self.expert_name}]-[issue({issue.id})] ⚖️ 正在进行第 {critical_rounds} 轮批判节点审查...")
         try:
