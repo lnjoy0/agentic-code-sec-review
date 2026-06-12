@@ -1,7 +1,7 @@
 ---
-cwe_id: CWE-470
-name: Dynamic_Reflection_Abuse
-severity: High
+cwe_id: ['CWE-470']
+name: 'Dynamic_Reflection_Abuse'
+domain: ["Logic_Identity_Expert", "General_Expert"]
 ---
 
 #### 1. 漏洞机制

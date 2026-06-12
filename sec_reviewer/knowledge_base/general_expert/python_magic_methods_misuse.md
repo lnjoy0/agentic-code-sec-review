@@ -1,7 +1,7 @@
 ---
-cwe_id: CWE-843, CWE-697, CWE-674
-name: Python_Magic_Methods_Misuse_and_Type_Confusion
-severity: High
+cwe_id: ['CWE-843', 'CWE-697', 'CWE-674']
+name: 'Python_Magic_Methods_Misuse_and_Type_Confusion'
+domain: ["General_Expert"]
 ---
  
 #### 1. 漏洞机制

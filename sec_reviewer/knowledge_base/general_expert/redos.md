@@ -1,7 +1,7 @@
 ---
-cwe_id: CWE-1333
-name: ReDoS
-severity: High
+cwe_id: ['CWE-1333']
+name: 'ReDoS'
+domain: ["General_Expert"]
 ---
 
 #### 1. 漏洞机制

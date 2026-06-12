@@ -1,7 +1,7 @@
 ---
-cwe_id: CWE-400, CWE-409
-name: Resource_Exhaustion_and_Decompression_Bombs
-severity: critical
+cwe_id: ['CWE-400', 'CWE-409']
+name: 'Resource_Exhaustion_and_Decompression_Bombs'
+domain: ["Injection_Expert", "General_Expert"]
 ---
 
 #### 1. 漏洞机制
