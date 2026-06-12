@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from sec_reviewer.scanners.heuristic_scanner import HeuristicScanner
 from sec_reviewer.scanners.semantic_scanner import LLMSemanticScanner
-from sec_reviewer.core.expert_agents import get_model_bound_tools
+from sec_reviewer.core.expert_agents import get_model_bound_tools, save_request_messages
 from sec_reviewer.core.data_models import LLMRouteDecision, RouteTask, AuditState, ReviewComment, LLMScanReport
 from sec_reviewer.knowledge_base.sys_prompts import ROUTER_PROMPT
 from sec_reviewer.knowledge_base.cwe_category import (INJECTION_CWES, LOGIC_IDENTITY_CWES,
@@ -72,6 +72,7 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
         ("system", ROUTER_PROMPT),
         ("human", "漏洞报告:\n {issue}\nrejected_by: {rejected_by}\nrejection_reason: {rejection_reason}\n请分析并返回合适的专家名称。")
     ])
+    semaphore = asyncio.Semaphore(25)
 
     scanner_reports = state.get("scanner_reports", {})
     rejection_history = state.get("rejection_history", {})
@@ -160,14 +161,13 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
             # 软路由，先将协程任务收集起来，稍后并发执行
             logger.info(f"  [Soft Route] 准备发起大模型路由分析: issue[{id}] ({issue.name or issue.cwe})")
             chain = prompt | structured_llm
-            coro = asyncio.wait_for(
-                chain.ainvoke({
-                    "issue": issue.model_dump_json(),
-                    "rejected_by": ", ".join(rejected_by),
-                    "rejection_reason": rejection_reason
-                }), 
-                timeout=45.0 # 设置超时限制，防止 Router 持续输出无意义内容
-            )
+            inputs = {
+                "issue": issue.model_dump_json(),
+                "rejected_by": ", ".join(rejected_by),
+                "rejection_reason": rejection_reason
+            }
+
+            coro = _route_with_save(chain, prompt, inputs, id, semaphore)
             soft_route_tasks.append({
                 "id": id,
                 "issue": issue,
@@ -207,6 +207,25 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
             routing_decisions.append(_build_task(expert_name, task["issue"], max_rounds, rejection_history))
 
     return {"routing_decisions": routing_decisions, "total_target_issues": total_target_issues}
+
+async def _route_with_save(chain, prompt, inputs, issue_id, semaphore):
+    """并发执行 LLM 请求和消息保存逻辑"""
+    async with semaphore:
+        async def save_msg():
+            try:
+                prompt_value = await prompt.ainvoke(inputs)
+                raw_messages = prompt_value.to_messages()
+                await save_request_messages(raw_messages, 'router', f'issue({issue_id})_route')
+            except Exception as e:
+                logger.warning(f"⚠️ 保存 issue[{issue_id}] 请求消息时发生错误: {e}")
+
+        save_task = asyncio.create_task(save_msg())
+
+        try:
+            result = await asyncio.wait_for(chain.ainvoke(inputs), timeout=45.0)
+            return result
+        finally:
+            await save_task
 
 def _build_task(expert_name, issue, max_rounds, rejection_history):
     return {

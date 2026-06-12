@@ -1,11 +1,13 @@
 import logging
 import json
 import os
+import asyncio
+import aiofiles
 from typing import List, Literal
 from langgraph.graph import StateGraph, START, END
 from langchain_openai import ChatOpenAI
 from langchain_core.runnables import RunnableConfig
-from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, RemoveMessage, AIMessage
+from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, AIMessage
 from pydantic import ValidationError
 
 from sec_reviewer.knowledge_base.sys_prompts import (
@@ -59,7 +61,6 @@ class BaseExpertAgent():
         messages = state.get("messages", [])
         remaining_rounds = state.get('remaining_rounds')
         rejection_history = state.get('rejection_history', {})
-        critical_history = state.get('critical_history', [])
         issue = state["issue"]
         state_update_messages = []
 
@@ -131,12 +132,23 @@ class BaseExpertAgent():
             tools=self.tools
         )
 
+        async def _save_msg():
+            try:
+                name = f"{self.expert_name}_issue({state['issue'].id})_{len(messages)}"
+                await save_request_messages(invocation_messages, 'expert', name)
+            except Exception as e:
+                logger.warning(f"⚠️ 保存请求消息时发生错误: {e}")
+
+        save_task = asyncio.create_task(_save_msg)
+
         # 调用大模型
         try:
             response = await model_with_tools.ainvoke(invocation_messages)
         except Exception as e:
-            logger.error(f"LLM 调用出错：{e}。输入消息：{invocation_messages}")
+            logger.error(f"⚠️ LLM 调用出错：{e}。输入消息：{invocation_messages}")
             raise
+        finally:
+            save_task
         
         state_update_messages.append(response)
 
@@ -297,12 +309,25 @@ class BaseExpertAgent():
         
         llm_config = config['configurable'].get('llm_config')
         structured_llm = get_model_bound_tools(llm_config, 'Critic', [CriticDecision])
+        invocation_messages = [SystemMessage(content=CRITIC_PROMPT), HumanMessage(content=human_prompt)]
+
+        async def _save_msg():
+            try:
+                name = f"critic_issue({issue.id})_{critical_rounds}"
+                await save_request_messages(invocation_messages, 'critic', name)
+            except Exception as e:
+                logger.warning(f"⚠️ 保存请求消息时发生错误: {e}")
+
+        save_task = asyncio.create_task(_save_msg)
 
         logger.info(f"[{self.expert_name}]-[issue({issue.id})] ⚖️ 正在进行第 {critical_rounds} 轮批判节点审查...")
-        results = await structured_llm.ainvoke([
-            SystemMessage(content=CRITIC_PROMPT),
-            HumanMessage(content=human_prompt)
-        ])
+        try:
+            results = await structured_llm.ainvoke(invocation_messages)
+        except Exception as e:
+            logger.error(f"⚠️ LLM 调用出错：{e}。输入消息：{invocation_messages}")
+            raise
+        finally:
+            save_task
 
         if not hasattr(results, 'tool_calls') or not results.tool_calls:
             logger.error(f"批判节点审查失败，LLM 未调用任何工具，返回了纯文本: {results}")
@@ -346,7 +371,12 @@ class BaseExpertAgent():
         else:
             logger.info(f"[{self.expert_name}]-[issue({issue.id})] ✅ 结论验证通过 (剩余审查轮数: {max_critical_rounds-critical_rounds})。\n原始消息: {results}")
             logger.info(f"[{self.expert_name}]-[issue({issue.id})] 最终审计结果：{str(draft)}")
-            save_langgraph_messages_to_markdown(messages, f"{self.expert_name}_issue({issue.id})_msgs")
+
+            try:
+                await save_langgraph_messages(messages, f"{self.expert_name}_issue({issue.id})_msgs")
+            except Exception as e:
+                logger.warning(f"⚠️ 保存消息记录时发生错误: {e}")
+
             return {"audit_results": [state["draft_result"]]}
 
     def _format_output_node(self, state: AgentState):
@@ -580,39 +610,50 @@ class GeneralExpert(BaseExpertAgent):
             tools=tools
         )
 
-def save_langgraph_messages_to_markdown(messages: list, filename="message"):
-    log_dir = "expert_messages"
-    os.makedirs(log_dir, exist_ok=True)
+async def save_request_messages(messages: list, role: str, filename: str):
+    """存储所有发送给 LLM 的消息，便于调试"""
+    log_dir = f"{role}_input_messages"
+    path = f"{log_dir}/{filename}.txt"
+
+    await asyncio.to_thread(os.makedirs, log_dir, exist_ok=True)
+    
+    async with aiofiles.open(path, "w", encoding="utf-8") as f:
+        await f.write(str(messages))
+    
+async def save_langgraph_messages(messages: list, filename: str ="message"):
+    """当研判任务结束时，存储所有 message 记录，便于调试"""
+    log_dir = "expert_final_messages"
     raw_path = f"{log_dir}/{filename}.txt"
     md_path = f"{log_dir}/{filename}.md"
     
-    with open(raw_path, "w", encoding="utf-8") as f:
-        f.write(str(messages))
-    with open(md_path, "w", encoding="utf-8") as f:
-        f.write("# LangGraph 对话历史记录\n\n")
-        f.write(f"--- \n\n")
+    await asyncio.to_thread(os.makedirs, log_dir, exist_ok=True)
+
+    async with aiofiles.open(raw_path, "w", encoding="utf-8") as f:
+        await f.write(str(messages))
+    async with aiofiles.open(md_path, "w", encoding="utf-8") as f:
+        await f.write("# LangGraph 对话历史记录\n\n")
+        await f.write(f"--- \n\n")
         
         for msg in messages:
             # 根据消息类型定制标题
             if msg.type == "human":
-                f.write("### 👤 User\n")
+                await f.write("### 👤 User\n")
             elif msg.type == "ai":
-                f.write("### 🤖 Assistant\n")
+                await f.write("### 🤖 Assistant\n")
             elif msg.type == "system":
-                f.write("### ⚙️ System\n")
+                await f.write("### ⚙️ System\n")
             elif msg.type == "tool":
-                f.write(f"### 🛠️ Tool: {msg.name}\n")
+                await f.write(f"### 🛠️ Tool: {msg.name}\n")
             else:
-                f.write(f"### 📝 {msg.type.capitalize()}\n")
+                await f.write(f"### 📝 {msg.type.capitalize()}\n")
             
             # 写入内容
-            f.write(f"{msg.content}\n\n")
+            await f.write(f"{msg.content}\n\n")
             
-            # 如果 AI 调用了工具，把工具参数也写进去
             if msg.type == "ai" and getattr(msg, "tool_calls", []):
-                f.write("**Tool Calls:**\n")
-                f.write("```json\n")
-                f.write(json.dumps(msg.tool_calls, ensure_ascii=False, indent=2))
-                f.write("\n```\n\n")
+                await f.write("**Tool Calls:**\n")
+                await f.write("```json\n")
+                await f.write(json.dumps(msg.tool_calls, ensure_ascii=False, indent=2))
+                await f.write("\n```\n\n")
                 
-            f.write("---\n\n")
+            await f.write("---\n\n")

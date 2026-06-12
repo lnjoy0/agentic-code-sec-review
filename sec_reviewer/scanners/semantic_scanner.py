@@ -8,6 +8,7 @@ import asyncio
 
 from sec_reviewer.core.config import ScannerConfig, CodeRetrievalConfig
 from sec_reviewer.core.data_models import ScannedIssue, SnippetRegion, LLMScanReport
+from sec_reviewer.core.expert_agents import save_request_messages
 from sec_reviewer.tools.code_retriever import CodeRetriever
 from sec_reviewer.tools.project_analyzer import ProjectAnalyzer
 from sec_reviewer.knowledge_base.sys_prompts import SCANNER_PROMPT
@@ -29,11 +30,11 @@ class LLMSemanticScanner:
         self.retriever = CodeRetriever(self.config.workspace_dir, retrieval_config)
         self.analyzer = ProjectAnalyzer(self.config.workspace_dir, retrieval_config)
 
-        prompt = ChatPromptTemplate.from_messages([
+        self.prompt = ChatPromptTemplate.from_messages([
             ("system", SCANNER_PROMPT),
             ("human", "请分析以下增量代码是否引入了漏洞:\n{full_context}")
         ])
-        self.chain = prompt | structured_llm
+        self.chain = self.prompt | structured_llm
 
     async def get_report(self, patched_files: List[PatchedFile]) -> Dict[str, List[ScannedIssue]]:
         """获取 LLM 语义分析的扫描报告"""
@@ -43,9 +44,16 @@ class LLMSemanticScanner:
         semaphore = asyncio.Semaphore(25)
         
         tasks = [self._analyze_file(f, semaphore) for f in patched_files]
-        results = await asyncio.gather(*tasks)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        valid_results = []
+        for res in results:
+            if isinstance(res, Exception):
+                logger.error(f"某个文件分析时发生了未捕获的严重异常: {res}")
+                continue
+            valid_results.append(res)
 
-        all_issues = [issue for sublist in results for issue in sublist]
+        all_issues = [issue for sublist in valid_results for issue in sublist]
         
         logger.info(f"LLM Semantic Scanner found {len(all_issues)} potential issues")
 
@@ -100,14 +108,21 @@ class LLMSemanticScanner:
             return []
 
         tasks = [
-            self._analyze_hunk(hunk_context, file_path, self.chain, semaphore) 
-            for hunk_context in contexts
+            self._analyze_hunk(hunk_context, file_path, self.chain, semaphore, i) 
+            for i, hunk_context in enumerate(contexts)
         ]
-        results = await asyncio.gather(*tasks)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        valid_results = []
+        for res in results:
+            if isinstance(res, Exception):
+                logger.error(f"文件 {file_path} 中，某个 Hunk 分析时发生了未捕获的严重异常: {res}")
+                continue
+            valid_results.append(res)
 
         # 转为 ScannedIssue 对象
         scanned_issues = await self._convert_to_scanned_issues(
-            results, file_path, patched_file
+            valid_results, file_path, patched_file
         )
 
         if not scanned_issues:
@@ -116,6 +131,47 @@ class LLMSemanticScanner:
             logger.info(f"文件 {file_path} 中发现 {len(scanned_issues)} 个漏洞：{str([issue.name for issue in scanned_issues])}")
 
         return scanned_issues
+
+    async def _analyze_hunk(
+        self,
+        hunk_context: str,
+        file_path: str, # 相对路径
+        chain: RunnableSerializable,
+        semaphore: asyncio.Semaphore,
+        index: int
+    ) -> tuple[Optional[LLMScanReport], str, Optional[Any]]:
+        """处理单个变更代码块的异步子任务"""
+        async with semaphore:
+            inputs = {"full_context": hunk_context}
+            async def _save_msg():
+                try:
+                    prompt_value = await self.prompt.ainvoke(inputs)
+                    raw_messages = prompt_value.to_messages()
+                    await save_request_messages(raw_messages, 'scanner', f"file({file_path.split('.')[0]})_scan_{index}")
+                except Exception as e:
+                    logger.warning(f"⚠️ 保存 file({file_path.split('.')[0]})_scan_{index} 请求消息时发生错误: {e}")
+
+            save_task = asyncio.create_task(_save_msg()) # 放入事件循环后台执行，不阻塞 LLM 调用
+
+            try:
+                result = await chain.ainvoke(inputs)
+                
+                tool_name = result.tool_calls[0]['name']
+                tool_args = result.tool_calls[0]['args']
+
+                if tool_name != "LLMScanReport":
+                    logger.error(f"文件 {file_path} 的代码块分析失败，LLM 的输出未调用 LLMScanReport 工具")
+                    return None, hunk_context, None
+                
+                report = LLMScanReport(**tool_args)
+
+                return report, hunk_context, result
+            except Exception as e:
+                logger.error(f"文件 {file_path} 的代码块分析或 Pydantic 结构校验失败：{e}")
+                logger.exception("error: ")
+                return None, hunk_context, None
+            finally:
+                await save_task # 确保报错时也保存请求消息
 
     async def _split_massive_hunk(
         self, 
@@ -217,33 +273,6 @@ class LLMSemanticScanner:
                     )
 
         return scanned_issues
-
-    async def _analyze_hunk(
-        self,
-        hunk_context: str,
-        file_path: str, # 相对路径
-        chain: RunnableSerializable,
-        semaphore: asyncio.Semaphore
-    ) -> tuple[Optional[LLMScanReport], str, Optional[Any]]:
-        """处理单个变更代码块的异步子任务"""
-        async with semaphore:
-            try:
-                result = await chain.ainvoke({"full_context": hunk_context})
-                
-                tool_name = result.tool_calls[0]['name']
-                tool_args = result.tool_calls[0]['args']
-
-                if tool_name != "LLMScanReport":
-                    logger.error(f"文件 {file_path} 的代码块分析失败，LLM 的输出未调用 LLMScanReport 工具")
-                    return None, hunk_context
-                
-                report = LLMScanReport(**tool_args)
-
-                return report, hunk_context, result
-            except Exception as e:
-                logger.error(f"文件 {file_path} 的代码块分析或 Pydantic 结构校验失败：{e}")
-                logger.exception("error: ")
-                return None, hunk_context, None
 
     def _get_added_lines(self, patched_file: PatchedFile) -> Set[int]:
         """获取文件中新增的行号集合"""
