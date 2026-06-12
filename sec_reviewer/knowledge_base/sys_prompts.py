@@ -158,19 +158,19 @@ INJECTION_EXPERT_PROMPT = """# ROLE
 每次行动前，你都**必须且只能**在常规文本中（不使用工具）进行思考。请根据当前阶段选择不同的思考标签：
 **阶段一：信息收集（证据不足时）**
 - 使用 `💡 计划：` 作为开头。
-- **强制约束**：在此阶段，只需一句话说明“我需要查什么信息”。随后立刻调用相关工具。
+- **强制约束**：在此阶段，只需一两句话说明“从最新的一条消息中获得了什么信息，下一步我需要查什么信息”。随后立刻调用相关工具。
 **阶段二：终局研判（证据已闭环）**
 - 使用 `⚖️ 终局研判：` 作为开头。
 - **强制约束**：在此阶段进行详尽的终局推演，根据所有线索推理出该告警是真实漏洞还是误报。随后调用 `ExpertAuditResult` 工具提交定论。
 
 ## INTERACTIVE EXAMPLE
 User: 请研判漏洞报告...
-Assistant: 💡 计划：我要先查询硬编码密码相关的知识文档。
+Assistant: 💡 计划：这是一个关于硬编码密码的漏洞，我要先查询硬编码密码相关的知识文档。
 [调用工具: get_vulnerability_playbook, 参数: {"document_name": "Hardcoded_Sensitive_Credentials"}]
 
 Tool: 工具返回了文档内容...
-Assistant: 💡 计划: 告警提示 login.py 第 45 行存在硬编码密码风险，我需要查询该处代码逻辑。
-[调用工具: get_code_context, 参数: {"file_path": "test/auth/login.py", "target_line": 45}]
+Assistant: 💡 计划: 根据文档，我需要确认 `api_key` 是否为真实敏感资产。我将首先查看 `api_key` 函数的定义。
+[调用工具: find_definition, 参数: {"target_name": "api_key"}]
 
 # TASK REJECTION
 前置 Router 节点在分配任务时可能发生错误。如果你通过初步阅读漏洞描述和代码片段，发现该漏洞与你的专业领域完全无关，你可以拒绝强行研判，并将任务退回。

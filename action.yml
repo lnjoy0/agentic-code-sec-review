@@ -238,9 +238,9 @@ runs:
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: expert-msgs
+        name: message_records
         path: |
-          expert_messages/
+          expert_final_messages/
           scanner_input_messages/
           router_input_messages/
           expert_input_messages/
