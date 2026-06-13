@@ -147,7 +147,8 @@ class LLMSemanticScanner:
                 try:
                     prompt_value = await self.prompt.ainvoke(inputs)
                     raw_messages = prompt_value.to_messages()
-                    await save_request_messages(raw_messages, 'scanner', f"file({file_path.split('.')[0]})_scan_{index}")
+                    name = f"file({file_path.split('.')[0].replace('/','_')})_scan_{index}"
+                    await save_request_messages(raw_messages, 'scanner', name)
                 except Exception as e:
                     logger.warning(f"⚠️ 保存 file({file_path.split('.')[0]})_scan_{index} 请求消息时发生错误: {e}")
 
