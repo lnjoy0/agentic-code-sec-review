@@ -130,8 +130,9 @@ class ProjectAnalyzer:
         # --no-heading: 确保每行格式为 filepath:line:content
         cmd = ["rg", "-n", "--color=never", "--no-heading", "-M", "5000"]
 
-        # 过滤压缩文件
-        cmd.extend(["-g", "!*.min.js", "-g", "!*.min.css", "-g", "!*min.map"])
+        # 过滤压缩文件和文档文件
+        cmd.extend(["-g", "!*.min.js", "-g", "!*.min.css", "-g", "!*min.map"
+                    "-g", "!*.log", "-g", "!*.md"])
         
         if not is_regex:
             cmd.append("-F") # 固定字符串匹配
