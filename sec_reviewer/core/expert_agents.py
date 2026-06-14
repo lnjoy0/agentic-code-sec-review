@@ -569,7 +569,7 @@ class BaseExpertAgent():
         """当研判任务结束时，存储所有 message 记录，便于调试"""
         log_dir = "expert_final_messages"
         filename = f"{self.expert_name}_issue({id})_msgs"
-        raw_path = f"{log_dir}/{filename}.txt"
+        raw_path = f"{log_dir}/{filename}.log"
         md_path = f"{log_dir}/{filename}.md"
         
         try:
@@ -611,7 +611,7 @@ class BaseExpertAgent():
 async def save_request_messages(messages: list, role: str, filename: str):
     """存储所有发送给 LLM 的消息，便于调试"""
     log_dir = f"{role}_input_messages"
-    path = f"{log_dir}/{filename}.txt"
+    path = f"{log_dir}/{filename}.log"
 
     await asyncio.to_thread(os.makedirs, log_dir, exist_ok=True)
     
