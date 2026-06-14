@@ -146,6 +146,7 @@ class BaseExpertAgent():
             response = await model_with_tools.ainvoke(invocation_messages)
         except Exception as e:
             logger.error(f"⚠️ LLM 调用出错：{e}。输入消息：{invocation_messages}")
+            await self.save_langgraph_messages(messages, issue.id)
             raise
         finally:
             save_task
@@ -167,6 +168,7 @@ class BaseExpertAgent():
                 f"[{self.expert_name}]-[issue({state['issue'].id})] 🚫 LLM 在行动轮数耗尽后仍然连续三轮没有调用 ExpertAuditResult 输出最终结果",
                 f"\nLLM 行动记录：{str(state['messages'])}"
             )
+            await self.save_langgraph_messages(state["messages"], state["issue"].id)
             raise AgentError(f"{self.expert_name}故障，行动轮数耗尽，且 LLM 仍然连续三轮没有输出结果")
         elif remaining_rounds <= 0:
             logger.warning(f"[{self.expert_name}]-[issue({state['issue'].id})] 🚫 拦截工具调用：行动轮数已耗尽。")
@@ -326,6 +328,7 @@ class BaseExpertAgent():
             results = await structured_llm.ainvoke(invocation_messages)
         except Exception as e:
             logger.error(f"⚠️ LLM 调用出错：{e}。输入消息：{invocation_messages}")
+            await self.save_langgraph_messages(messages, issue.id)
             raise
         finally:
             save_task
@@ -365,7 +368,11 @@ class BaseExpertAgent():
                 f"🚫【审查节点驳回】\n理由：{critic_dc.critique_reason}\n建议: {critic_dc.suggested_action}\n"
                 f"注意：请自行判断审查节点的理由与建议是否正确，如果确实有道理，请做出对应的证据链补充或分析修正，只有确实需要修改审查结论 (verdict) 时，才做出修改；如果审查节点的分析或建议是错误的，你要坚持自己的结论。"
             )
-            critic_msg = ToolMessage(content=critic_str, name=tool_name, tool_call_id=results.tool_calls[0]['id'])
+            critic_msg = ToolMessage(
+                content=critic_str, 
+                name=messages[-1].tool_calls[0]['name'], 
+                tool_call_id=messages[-1].tool_calls[0]['id']
+            )
             
             return {
                 "messages": [critic_msg],
@@ -416,7 +423,7 @@ class BaseExpertAgent():
             )
             return {"messages": [error_msg], "remaining_rounds": state['remaining_rounds']-1}
 
-    def _retry_node(self, state: AgentState):
+    async def _retry_node(self, state: AgentState):
         """
         当模型输出纯文本而没有调用工具时，触发此节点进行警告。
         """
@@ -424,6 +431,7 @@ class BaseExpertAgent():
 
         if remaining_rounds <= -3:
             logger.error(f"[{self.expert_name}]-[issue({state['issue'].id})] ⚠️ LLM 在行动轮数耗尽后仍然连续三轮没有调用 ExpertAuditResult 输出最终结果")
+            await self.save_langgraph_messages(state["messages"], state["issue"].id)
             raise AgentError(f"{self.expert_name}故障，行动轮数耗尽，且 LLM 仍然连续三轮没有输出结果")
         elif remaining_rounds <= 0:
             logger.warning(f"[{self.expert_name}]-[issue({state['issue'].id})] ⚠️ 行动轮数已耗尽。")
