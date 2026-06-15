@@ -180,8 +180,6 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
                 "rejected_by": rejected_by
             })
 
-    raise("test")
-
     # 并发执行所有软路由请求
     if soft_route_tasks:
         logger.info(f"  [Soft Route] 正在并发处理 {len(soft_route_tasks)} 个 LLM 路由请求...")
