@@ -102,21 +102,26 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
                 
                 has_intersection = not (end_line < e_start_line or start_line > e_end_line)
                 if issue.path == existing_issue.path and has_intersection:
+                    logger.info("debug----------------------------------------")
+                    logger.info(f"path1:{issue.path} path2:{existing_issue.path}")
+                    logger.info(f"scope1:{start_line},{end_line} scope2:{e_start_line},{e_end_line}")
+                    logger.info(f"name1:{issue.name if issue.name else ""} name2:{existing_issue.name if existing_issue.name else ""}")
                     if issue.name and existing_issue.name:
                         if _is_text_similar(issue.name, existing_issue.name):
                             is_unique = False
                     elif _is_text_similar(issue.snippet_text, existing_issue.snippet_text):
                         is_unique = False
 
-                    if not is_unique and issue.message not in existing_issue.message:
-                        existing_issue.message += f"\n\n[{scanner_name} 扫描器补充报告]:\n{issue.message}"
+                    if not is_unique:
+                        if issue.message not in existing_issue.message:
+                            existing_issue.message += f"\n\n[{scanner_name} 扫描器补充报告]:\n{issue.message}"
                     
-                    logger.info(
-                        f"  [Deduplication] 漏洞 issue[{id}] ({issue.name or issue.cwe}) "
-                        f"与之前的漏洞 issue[{existing_issue.id}] ({existing_issue.name or existing_issue.cwe}) 路径相同，名称或代码片段相似。"
-                        f"将被视为重复漏洞，不再路由，同时将该漏洞的描述信息合并到之前的漏洞中。"
-                    )
-                    break
+                            logger.info(
+                                f"  [Deduplication] 漏洞 issue[{id}] ({issue.name or issue.cwe}) "
+                                f"与之前的漏洞 issue[{existing_issue.id}] ({existing_issue.name or existing_issue.cwe}) 路径相同，名称或代码片段相似。"
+                                f"将被视为重复漏洞，不再路由，同时将该漏洞的描述信息合并到之前的漏洞中。"
+                            )
+                            break
 
             if is_unique:
                 unique_issues.append((scanner_name, issue))
