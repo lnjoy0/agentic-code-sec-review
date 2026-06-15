@@ -101,17 +101,21 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
                 e_end_line = existing_issue.snippet_region.end_line
                 
                 has_intersection = not (end_line < e_start_line or start_line > e_end_line)
-                if issue.path == existing_issue.path and has_intersection and _is_snippet_similar(issue.snippet_text, existing_issue.snippet_text):
-                    if issue.message not in existing_issue.message:
+                if issue.path == existing_issue.path and has_intersection:
+                    if issue.name and existing_issue.name:
+                        if _is_text_similar(issue.name, existing_issue.name):
+                            is_unique = False
+                    elif _is_text_similar(issue.snippet_text, existing_issue.snippet_text):
+                        is_unique = False
+
+                    if not is_unique and issue.message not in existing_issue.message:
                         existing_issue.message += f"\n\n[{scanner_name} 扫描器补充报告]:\n{issue.message}"
                     
                     logger.info(
                         f"  [Deduplication] 漏洞 issue[{id}] ({issue.name or issue.cwe}) "
-                        f"与之前的漏洞 issue[{existing_issue.id}] ({existing_issue.name or existing_issue.cwe}) 路径相同，代码片段相似。"
+                        f"与之前的漏洞 issue[{existing_issue.id}] ({existing_issue.name or existing_issue.cwe}) 路径相同，名称或代码片段相似。"
                         f"将被视为重复漏洞，不再路由，同时将该漏洞的描述信息合并到之前的漏洞中。"
                     )
-
-                    is_unique = False
                     break
 
             if is_unique:
@@ -248,7 +252,7 @@ def _normalize_text(text: str) -> str:
     # 移除所有空白字符并转小写
     return re.sub(r'\s+', '', text).lower()
 
-def _is_snippet_similar(snippet1: str, snippet2: str, threshold: float = 0.6) -> bool:
+def _is_text_similar(snippet1: str, snippet2: str, threshold: float = 0.6) -> bool:
     norm_1 = _normalize_text(snippet1)
     norm_2 = _normalize_text(snippet2)
     
