@@ -123,8 +123,6 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
             else:
                 continue # 重复的漏洞不再路由
 
-    raise('test')
-
     # 去重后的待研判漏洞总数
     total_target_issues = len(unique_issues)
     
