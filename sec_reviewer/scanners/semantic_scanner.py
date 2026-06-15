@@ -57,8 +57,6 @@ class LLMSemanticScanner:
         
         logger.info(f"LLM Semantic Scanner found {len(all_issues)} potential issues")
 
-        raise("test")
-
         return {
             "llm": all_issues
         }
