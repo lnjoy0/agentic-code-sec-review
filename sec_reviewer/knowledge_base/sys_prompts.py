@@ -15,7 +15,7 @@ SCANNER_PROMPT = """# ROLE
 2. 【外部交互与网络边界 (Network Boundaries)】
    - 请求伪造 (SSRF)：代码是否主动发起了向外的网络请求或处理了 Webhook？目标 URL 是否拼接了不受信输入？是否严格执行了内网地址的黑/白名单校验以防范 SSRF 或内部探测？
    - 开放重定向 (Open Redirect)：是否基于外部输入返回了 HTTP 301/302 重定向响应，且缺乏目标域名白名单校验？
-   - 请求走私（HRS）：若存在底层 HTTP 解析或未经清洗的 Header 透传（如代理/转发），是否严格校验了 Content-Length 与 Transfer-Encoding 的一致性？是否能安全阻断畸形空格、异常尾部（Trailers）及 CRLF 注入？
+   - HTTP 请求走私（HRS）：如果代码涉及底层的 HTTP 报文解析、自定义代理逻辑或 Socket 读取（如 WSGI/ASGI 框架开发），是否严格校验了 `Content-Length` 与 `Transfer-Encoding` 的一致性？是否安全地处理或丢弃了畸形的 HTTP 尾部（Trailers）及非标准的换行符（CRLF）？
 
    3. 【组件解析与高级动态特性 (Parsing & Dynamic Execution)】
    - 不安全的反序列化与解析：是否误用了不安全的 pickle.loads() 或 yaml.load()（而非 safe_load）？使用 XML 解析时是否未禁用外部实体引用（XXE）？若重写了 __reduce__ 等魔法方法，是否在恢复状态时引入了危险操作？
