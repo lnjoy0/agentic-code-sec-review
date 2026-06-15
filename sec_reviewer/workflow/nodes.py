@@ -102,10 +102,6 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
                 
                 has_intersection = not (end_line < e_start_line or start_line > e_end_line)
                 if issue.path == existing_issue.path and has_intersection:
-                    logger.info("debug----------------------------------------")
-                    logger.info(f"path1:{issue.path} path2:{existing_issue.path}")
-                    logger.info(f"scope1:{start_line},{end_line} scope2:{e_start_line},{e_end_line}")
-                    logger.info(f"name1:{issue.name if issue.name else ''} name2:{existing_issue.name if existing_issue.name else ''}")
                     if issue.name and existing_issue.name:
                         if _is_text_similar(issue.name, existing_issue.name):
                             is_unique = False
