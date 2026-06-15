@@ -15,7 +15,8 @@ SCANNER_PROMPT = """# ROLE
 2. 【外部交互与网络边界 (Network Boundaries)】
    - 请求伪造 (SSRF)：代码是否主动发起了向外的网络请求或处理了 Webhook？目标 URL 是否拼接了不受信输入？是否严格执行了内网地址的黑/白名单校验以防范 SSRF 或内部探测？
    - 开放重定向 (Open Redirect)：是否基于外部输入返回了 HTTP 301/302 重定向响应，且缺乏目标域名白名单校验？
-
+   - 协议脱步与请求走私：如果代码涉及底层的 HTTP 报文解析、自定义代理逻辑或 Socket 读取（如 WSGI/ASGI 框架开发），是否严格校验了 `Content-Length` 与 `Transfer-Encoding` 的一致性？是否安全地处理或丢弃了畸形的 HTTP 尾部（Trailers）及非标准的换行符（CRLF）？
+   
 3. 【组件解析与高级动态特性 (Parsing & Dynamic Execution)】
    - 不安全的反序列化与解析：是否误用了不安全的 pickle.loads() 或 yaml.load()（而非 safe_load）？使用 XML 解析时是否未禁用外部实体引用（XXE）？若重写了 __reduce__ 等魔法方法，是否在恢复状态时引入了危险操作？
    - 反射越权与沙箱逃逸：是否滥用 getattr(), setattr()，且将外部输入作为属性名，导致攻击者越权读取配置或调用危险方法？是否防范了攻击者通过动态解析对象层级（如 __class__, __subclasses__(), __globals__）实现执行环境污染或沙箱逃逸？
@@ -54,7 +55,7 @@ SCANNER_PROMPT = """# ROLE
 2. 【数据资产与密码学】：静态敏感资产保护与加密算法合规性。
    - 涵盖：加密机制缺陷、硬编码凭据泄露（Token/Key/Password）、敏感信息泄露、弱密码学算法（MD5/SHA1等）、弱随机数、不安全哈希等。
 3. 【环境与供应链基线】：应用外部依赖与底层环境基线风险。
-   - 涵盖：依赖混淆、Dockerfile/K8s 配置风险、启用框架 debug 模式、不安全的网络绑定、恶意 setup 脚本等。
+   - 涵盖：依赖混淆、Dockerfile/K8s 配置风险、启用框架 debug 模式、不安全的网络绑定、底层协议脱步（如 HTTP 请求走私）、恶意 setup 脚本等。
 4. 【业务与身份逻辑】：应用上下文相关的权限与业务流程缺陷。
    - 涵盖：越权访问（IDOR）、未授权访问、鉴权绕过、支付漏洞、状态机绕过、异步上下文泄露、批量赋值漏洞、条件竞争漏洞等。
 5. 【资源耗尽与可用性破坏】：所有可能导致系统处理能力大幅下降、内存溢出或服务拒绝的无边界操作与逻辑缺陷。
@@ -95,7 +96,7 @@ ROUTER_PROMPT = """# ROLE
 
 3. 【Infra_Supply_Expert】(环境与供应链安全专家)
    - 负责：应用外部依赖与底层环境基线风险。
-   - 涵盖：第三方依赖组件 CVE、Dockerfile/K8s 配置风险、启用框架 debug 模式、不安全的网络绑定、恶意 setup 脚本等。
+   - 涵盖：第三方依赖组件 CVE、Dockerfile/K8s 配置风险、启用框架 debug 模式、不安全的网络绑定、底层协议脱步（如 HTTP 请求走私）、恶意 setup 脚本等。
    - 典型长尾标签：Werkzeug/Django Debug Mode Enabled, Unsafe Package Index (如 --extra-index-url 导致依赖劫持), Wildcard ALLOWED_HOSTS / Insecure Binding, Malicious setup.py, Missing .dockerignore Secrets Leak 等。
 
 4. 【Logic_Identity_Expert】(业务与身份安全专家)
@@ -289,8 +290,8 @@ INFRA_SUPPLY_EXPERT_PROMPT = """# ROLE
 # ANALYSIS PATHS
 请根据传入的漏洞类型，自动激活以下特定的分析路径：
 
-[分支 A: 框架底层与网络配置风险 (例如 Debug Mode / Insecure Binding)]
-- 研判重点：应用的运行状态及网络监听配置是否在生产环境中导致了信息泄露或未授权访问。
+[分支 A: 框架底层、代理与网络配置风险 (例如 Debug Mode / Insecure Binding / HTTP Request Smuggling)]
+- 研判重点：应用的运行状态及网络监听配置是否在生产环境中导致了信息泄露或未授权访问；前后端对 HTTP 报文边界的解析差异是否引发请求走私。
 
 [分支 B: 依赖与包管理供应链 (例如 Dependency Confusion / Malicious Packages / 第三方依赖组件 CVE)]
 - 研判重点：外部引入的第三方包是否存在漏洞/是否具有投毒风险，漏洞在当前环境中是否能被成功利用；内部私有包是否被外部同名包覆盖（依赖混淆）。
