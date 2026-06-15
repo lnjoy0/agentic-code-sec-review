@@ -128,12 +128,16 @@ inputs:
 runs:
   using: 'composite'
   steps:
+    - name: Prepare dependencies for cache # 复制到用户的当前工作区，便于缓存 action 依赖
+      shell: bash
+      run: cp ${{ github.action_path }}/requirements.txt ./.ac_sec_reviewer_requirements.txt
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
         cache: 'pip'
-        cache-dependency-path: ${{ github.action_path }}/requirements.txt
+        cache-dependency-path: ./.ac_sec_reviewer_requirements.txt
 
     - name: Install python dependencies
       shell: bash
