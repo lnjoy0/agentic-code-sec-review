@@ -302,7 +302,7 @@ class HeuristicScanner:
                 message = raw_result.get("extra", {}).get("message", "")
 
                 report_cwe = raw_result.get("extra", {}).get("metadata", {}).get("cwe")
-                cwe = report_cwe[0] if isinstance(report_cwe, list) else cwe
+                cwe = report_cwe[0] if isinstance(report_cwe, list) else report_cwe
 
                 snippet_region={
                     "start_line": raw_result.get("start", {}).get("line"),
