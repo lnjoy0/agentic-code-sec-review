@@ -131,7 +131,7 @@ class ProjectAnalyzer:
         cmd = ["rg", "-n", "--color=never", "--no-heading", "-M", "5000"]
 
         # 过滤压缩文件和文档文件
-        cmd.extend(["-g", "!*.min.js", "-g", "!*.min.css", "-g", "!*min.map"
+        cmd.extend(["-g", "!*.min.js", "-g", "!*.min.css", "-g", "!*min.map",
                     "-g", "!*.log", "-g", "!*.md"])
         
         if not is_regex:
