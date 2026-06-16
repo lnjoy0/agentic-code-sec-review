@@ -18,7 +18,8 @@ SCANNER_PROMPT = """# ROLE
    - HTTP 请求走私（HRS）：如果代码涉及底层的 HTTP 报文解析、自定义代理逻辑或 Socket 读取（如 WSGI/ASGI 框架开发），是否严格校验了 `Content-Length` 与 `Transfer-Encoding` 的一致性？是否安全地处理或丢弃了畸形的 HTTP 尾部（Trailers）及非标准的换行符（CRLF）？
 
 3. 【组件解析与高级动态特性 (Parsing & Dynamic Execution)】
-   - 不安全的反序列化与解析：是否误用了不安全的 pickle.loads() 或 yaml.load()（而非 safe_load）？使用 XML 解析时是否未禁用外部实体引用（XXE）？若重写了 __reduce__ 等魔法方法，是否在恢复状态时引入了危险操作？
+   - 不安全的反序列化：是否误用了不安全的 pickle.loads() 或 yaml.load()（而非 safe_load）？若重写了 __reduce__ 等魔法方法，是否在恢复状态时引入了危险操作？
+   - 危险的 XML 解析 (XXE & Billion Laughs)：处理 XML 时，是否使用了存在缺陷的 Python 原生库（如 xml.etree.ElementTree）而未替换为安全的 defusedxml？必须警惕未禁用外部实体（XXE）或未限制实体递归膨胀（Billion Laughs）导致的系统资源耗尽或信息泄露。
    - 反射越权与沙箱逃逸：是否滥用 getattr(), setattr()，且将外部输入作为属性名，导致攻击者越权读取配置或调用危险方法？是否防范了攻击者通过动态解析对象层级（如 __class__, __subclasses__(), __globals__）实现执行环境污染或沙箱逃逸？
    - 动态加载：是否将不受信输入直接传入 __import__() 或利用 globals()[class_name](kwargs) 模式，导致危险的对象注入？
 
