@@ -36,7 +36,7 @@ SCANNER_PROMPT = """# ROLE
    - 越权访问 (BOLA / IDOR)：新增的 API 端点、敏感状态更新等关键路由中，是否缺少了身份归属比对（如缺少 if input.user_id == current_user.id:）？
    - 批量赋值与隐式绑定 (Mass Assignment)：例如 Python 的字典解包滥用（Model.update(request.json)）或强类型语言的数据绑定，是否将不受信输入直接映射到了包含敏感字段（如 is_admin, balance, role）的实体对象上，且缺乏字段白名单？
    - 关键校验与频控缺失：敏感接口（如发送验证码、密码重置、资金操作）是否缺失了防暴力破解或频率限制（Rate Limiting）机制？
-   - 不充分的会话终止：登出、密码重置或权限变更时，是否仅在客户端清除凭证，而未在服务端销毁 Session（如缺少 `session.clear()` 或清理 Redis）？若使用 JWT 等无状态 Token，是否缺乏黑名单（Denylist）机制，导致未过期的旧 Token 仍可被利用？
+   - 不充分的会话终止：在注销登录、密码重置或权限变更等核心生命周期接口中，是否仅在客户端移除了凭证，而服务端未实质性销毁 Session 或拉黑无状态 Token（例如：JWT 缺乏吊销或黑名单机制）？关键安全属性被修改后，是否遗漏了对该用户所有历史活动会话的强制下线？
 
 7. 【状态安全与并发竞态 (State & Concurrency - Python 专项)】
    - 非原子操作与竞态条件：在涉及金额扣减、状态流转的核心业务中，是否出现了多步数据更新（例如：先 SELECT 检查，再 UPDATE 修改，但期间缺失了 select_for_update 等悲观/乐观锁机制）？
