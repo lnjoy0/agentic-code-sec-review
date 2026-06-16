@@ -27,7 +27,7 @@ class ProjectAnalyzer:
     async def get_project_structure(
         self, 
         sub_dir: Optional[str] = None,
-        max_depth: int = 3, 
+        max_depth: int = 2, 
         ignore_dirs: Optional[List[str]] = None
     ) -> str:
         """
@@ -37,7 +37,7 @@ class ProjectAnalyzer:
         
         Args:
             sub_dir (str, optional): 指定查看的子目录相对路径。如果指定，将以此子目录作为根节点向下生成树状图。
-            max_depth (int, optional): 遍历最大深度。默认3。警告：非必要勿轻易增大此值，以防返回过长导致上下文溢出。
+            max_depth (int, optional): 遍历最大深度。默认2。警告：非必要勿轻易增大此值，以防返回过长导致上下文溢出。可以反复调用此工具以获取子目录细节。
             ignore_dirs (List[str], optional): 需额外跳过的目录名列表（默认已忽略 .git, venv, __pycache__ 等构建目录），必须是列表形式，请勿传字符串。
             
         Returns:
