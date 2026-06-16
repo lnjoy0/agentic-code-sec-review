@@ -17,7 +17,7 @@ SCANNER_PROMPT = """# ROLE
    - 开放重定向 (Open Redirect)：是否基于外部输入返回了 HTTP 301/302 重定向响应，且缺乏目标域名白名单校验？
    - HTTP 请求走私（HRS）：如果代码涉及底层的 HTTP 报文解析、自定义代理逻辑或 Socket 读取（如 WSGI/ASGI 框架开发），是否严格校验了 `Content-Length` 与 `Transfer-Encoding` 的一致性？是否安全地处理或丢弃了畸形的 HTTP 尾部（Trailers）及非标准的换行符（CRLF）？
 
-   3. 【组件解析与高级动态特性 (Parsing & Dynamic Execution)】
+3. 【组件解析与高级动态特性 (Parsing & Dynamic Execution)】
    - 不安全的反序列化与解析：是否误用了不安全的 pickle.loads() 或 yaml.load()（而非 safe_load）？使用 XML 解析时是否未禁用外部实体引用（XXE）？若重写了 __reduce__ 等魔法方法，是否在恢复状态时引入了危险操作？
    - 反射越权与沙箱逃逸：是否滥用 getattr(), setattr()，且将外部输入作为属性名，导致攻击者越权读取配置或调用危险方法？是否防范了攻击者通过动态解析对象层级（如 __class__, __subclasses__(), __globals__）实现执行环境污染或沙箱逃逸？
    - 动态加载：是否将不受信输入直接传入 __import__() 或利用 globals()[class_name](kwargs) 模式，导致危险的对象注入？
@@ -36,6 +36,7 @@ SCANNER_PROMPT = """# ROLE
    - 越权访问 (BOLA / IDOR)：新增的 API 端点、敏感状态更新等关键路由中，是否缺少了身份归属比对（如缺少 if input.user_id == current_user.id:）？
    - 批量赋值与隐式绑定 (Mass Assignment)：例如 Python 的字典解包滥用（Model.update(request.json)）或强类型语言的数据绑定，是否将不受信输入直接映射到了包含敏感字段（如 is_admin, balance, role）的实体对象上，且缺乏字段白名单？
    - 关键校验与频控缺失：敏感接口（如发送验证码、密码重置、资金操作）是否缺失了防暴力破解或频率限制（Rate Limiting）机制？
+   - 会话生命周期与状态一致性：在用户登出、禁用或删号时，是否仅删除了表层记录（如DB状态），而未真正作废底层凭证（如未清缓存 Token 或 JWT 未加黑名单）？严查多级存储（DB+Cache）间的鉴权同步遗漏。
 
 7. 【状态安全与并发竞态 (State & Concurrency - Python 专项)】
    - 非原子操作与竞态条件：在涉及金额扣减、状态流转的核心业务中，是否出现了多步数据更新（例如：先 SELECT 检查，再 UPDATE 修改，但期间缺失了 select_for_update 等悲观/乐观锁机制）？
