@@ -31,6 +31,7 @@ domain: ["Injection_Expert", "General_Expert"]
 *   **缺乏过滤**: 在数据流向 Sinks 的过程中，未经过白名单校验或安全的转义函数（如 `shlex.quote()`）处理。
 
 #### 3. 高级绕过技巧
+
 在进行漏洞研判时，专家极易被代码中“似是而非”的保护机制欺骗。必须牢记以下红队绕过思维：
 
 ##### 1. 弱黑名单过滤
@@ -57,13 +58,16 @@ domain: ["Injection_Expert", "General_Expert"]
     * **研判标准**: 当执行此类高危二进制文件，且外部输入作为参数直接传递（即使 `shell=False`）时，若未强制使用 `--` 终止参数解析（如 `["tar", "cf", "archive.tar", "--", user_input]`），仍应考虑为高危风险。
 
 #### 4. 典型误报样例
+
 误报通常发生在使用了安全的 API 调用方式，或者对输入进行了严格限制的情况下：
+
 **误报样例 1：使用了 `shell=False`（默认值）与列表传参**
 ```python
 # 安全：输入作为单独的参数传递，不会被Shell解析元字符
 user_input = request.args.get("ip")
 subprocess.run(["ping", "-c", "4", user_input])
 ```
+
 **误报样例 2：经过了可靠的转义**
 ```python
 import shlex
@@ -72,6 +76,7 @@ user_input = request.args.get("filename")
 safe_input = shlex.quote(user_input)
 subprocess.run(f"ls -l {safe_input}", shell=True)
 ```
+
 **误报样例 3：输入来源为内部硬编码或受信任配置**
 ```python
 # 误报：虽然使用了 shell=True，但 cmd 来源并非不可信输入
@@ -80,6 +85,7 @@ subprocess.run(INTERNAL_CMD, shell=True)
 ```
 
 #### 5. 证实标准
+
 当以下所有条件均满足时，Agent应将此告警判定为**真实漏洞（True Positive）**：
 1. **输入可控:** 数据追踪源头确认为外部用户可控的数据（如 HTTP 请求参数）。
 2. **触达危险Sink:** 数据流最终进入了已知会导致命令执行的 Sink 函数（如 `os.system` 或包含 `shell=True` 参数的 `subprocess` 家族函数）。
@@ -87,6 +93,7 @@ subprocess.run(INTERNAL_CMD, shell=True)
 4. **防御缺失:** 在 Source 到 Sink 的传播路径上，不存在有效的黑/白名单校验，也没有使用 `shlex.quote()` 等标准转义库对变量进行无害化处理。
 
 #### 6. 证伪标准
+
 当满足以下任意一个条件时，Agent应将此告警判定为**误报（False Positive）**：
 1. **安全的子进程调用:** 目标调用是 `subprocess` 家族函数，并且未显式设置 `shell=True`（即默认为 `False`），且命令是以列表（List）形式传递的。
 2. **存在有效转义:** 外部输入在拼接到命令字符串之前，明确通过了 `shlex.quote()` 函数的处理。
