@@ -27,18 +27,17 @@ class ProjectAnalyzer:
     async def get_project_structure(
         self, 
         sub_dir: Optional[str] = None,
-        max_depth: int = 2, 
-        ignore_dirs: Optional[List[str]] = None
+        max_depth: int = 1
     ) -> str:
         """
-        获取代码仓库的宏观目录树结构（ASCII视图）。
+        获取代码仓库的宏观目录树结构（ASCII视图），每次调用只能查看两层目录，如需更多细节可以使用具体子目录名称再次调用。
+        （为节省 token，该工具已过滤 .git 等构建目录，以及日志和文档文件）
         
         【何时使用】：当需要建立项目全局上下文、定位配置文件、寻找流量路由入口，或需确认特定文件是否属于测试/Mock目录时调用。
         
         Args:
             sub_dir (str, optional): 指定查看的子目录相对路径。如果指定，将以此子目录作为根节点向下生成树状图。
-            max_depth (int, optional): 遍历最大深度。默认2。警告：非必要勿轻易增大此值，以防返回过长导致上下文溢出。可以反复调用此工具以获取子目录细节。
-            ignore_dirs (List[str], optional): 需额外跳过的目录名列表（默认已忽略 .git, venv, __pycache__ 等构建目录），必须是列表形式，请勿传字符串。
+            max_depth (int, optional): 遍历最大深度，默认 1。该值只能为 1 或 2。
             
         Returns:
             str: 项目目录结构的树状字符串。
@@ -59,21 +58,35 @@ class ProjectAnalyzer:
             target_path = self.repo_path
 
         # 忽略的目录，用于节省 Token 和过滤无关安全审计的构建产物
-        ignore_set = {
+        ignore_dirs = {
             '.git', '__pycache__', 'venv', '.venv', 'env', 
             '.idea', '.vscode', 'node_modules', 'dist', 'build'
         }
-        if ignore_dirs:
-            ignore_set.update(ignore_dirs)
+
+        # 忽略的日志与文档文件，用于节省token
+        ignore_exts = {
+            '.log', '.md', '.txt', '.pdf', '.doc', '.docx', 
+            '.csv', '.xlsx', '.rst', '.out'
+        }
+
+        max_depth = max(0, min(max_depth, 2)) # 每次调用的最大深度不能超过 2，防止大项目中文件太多导致上下文爆炸
 
         def _build_tree_sync() -> str:
             def generate_tree(dir_path: Path, prefix: str = '', current_depth: int = 1) -> str:
                 if current_depth > max_depth:
-                    return prefix + "└── ... (达到最大深度)\n"
+                    return prefix + "└── ...\n"
 
                 try:
-                    contents = list(dir_path.iterdir())
-                    contents = [c for c in contents if c.name not in ignore_set]
+                    all_contents = list(dir_path.iterdir())
+                    contents = []
+                    for c in all_contents:
+                        if c.name in ignore_dirs:
+                            continue
+                        if c.is_file() and c.suffix.lower() in ignore_exts:
+                            continue
+
+                        contents.append(c)
+
                     contents.sort(key=lambda x: (x.is_file(), x.name.lower()))
                 except PermissionError:
                     return prefix + "└── ... (无权限访问)\n"
@@ -110,7 +123,7 @@ class ProjectAnalyzer:
         pattern: str, 
         file_pattern: Optional[str] = None, 
         is_regex: bool = True,
-        max_results: int = 40
+        max_results: int = 30
     ) -> str:
         """
         基于 ripgrep 实现的文本与正则表达式检索工具，可在代码库中的任意文件中查询任意字符串。
@@ -121,7 +134,7 @@ class ProjectAnalyzer:
             pattern (str): 目标检索字符串或正则表达式。
             file_pattern (str, optional): Glob风格的文件路径过滤器（如 '*.py', '*.html', '*config*', 'src/**/*.py'）。强烈建议在已知上下文时传入，以大幅减少无关噪音。
             is_regex (bool, optional): pattern 是否作为正则表达式解析。默认 True。提示：若检索包含代码符号的纯文本（如 `password = "123"`），建议设为 False 以避免正则语法错误。
-            max_results (int, optional): 限制返回的最大匹配行数。默认 40。警告：为防止上下文溢出，非必要请勿调大此值。
+            max_results (int, optional): 限制返回的最大匹配数量。默认 30。警告：为防止上下文溢出，非必要请勿调大此值。
 
         Returns:
             str: 包含匹配文件路径、行号及对应代码片段的 Markdown 文本。
@@ -129,17 +142,17 @@ class ProjectAnalyzer:
         # -n: 显示行号
         # --no-heading: 确保每行格式为 filepath:line:content
         cmd = ["rg", "-n", "--color=never", "--no-heading", "-M", "5000"]
-
-        # 过滤压缩文件和文档文件
-        cmd.extend(["-g", "!*.min.js", "-g", "!*.min.css", "-g", "!*min.map",
-                    "-g", "!*.log", "-g", "!*.md"])
         
         if not is_regex:
             cmd.append("-F") # 固定字符串匹配
             
         if file_pattern:
             cmd.extend(["-g", file_pattern])
-            
+
+        # 过滤压缩文件和文档文件
+        cmd.extend(["-g", "!*.min.js", "-g", "!*.min.css", "-g", "!*min.map",
+                    "-g", "!*.log", "-g", "!*.md"])
+
         cmd.extend(["-e", pattern, str(self.repo_path)])
 
         try:
