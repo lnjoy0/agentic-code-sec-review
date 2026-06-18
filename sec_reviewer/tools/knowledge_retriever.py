@@ -160,7 +160,7 @@ class SecKnowledgeBase:
                 return f"❌ 读取文档失败: {str(e)}"
 
         get_bypass_techniques.__doc__ = get_bypass_techniques.__doc__.format(
-            supported_vulns_str=supported_bypass_tec_str
+            supported_bypass_tec_str=supported_bypass_tec_str
         )
 
         return StructuredTool.from_function(coroutine=get_bypass_techniques, name="get_bypass_techniques")
