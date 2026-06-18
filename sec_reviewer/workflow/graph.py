@@ -6,7 +6,7 @@ import os
 
 from sec_reviewer.tools.code_retriever import CodeRetriever
 from sec_reviewer.tools.project_analyzer import ProjectAnalyzer
-from sec_reviewer.tools.knowledge_retriever import VulnKnowledgeBase
+from sec_reviewer.tools.knowledge_retriever import SecKnowledgeBase
 from sec_reviewer.core.data_models import AuditState
 from sec_reviewer.core.config import CodeRetrievalConfig
 from sec_reviewer.core.expert_agents import (InjectionExpert, DataAssetExpert, InfraSupplyExpert,
@@ -57,17 +57,18 @@ def create_graph():
     # 实例化工具类
     retriever = CodeRetriever(repo_path, retrieval_config)
     analyzer = ProjectAnalyzer(repo_path, retrieval_config)
-    knowledge_base = VulnKnowledgeBase()
+    knowledge_base = SecKnowledgeBase()
     
     general_tools = [*retriever.as_tools(), *analyzer.as_tools()]
-    injection_knowledge = knowledge_base.create_expert_tool('Injection_Expert')
-    data_knowledge = knowledge_base.create_expert_tool('Data_Asset_Expert')
-    infra_knowledge = knowledge_base.create_expert_tool('Infra_Supply_Expert')
-    logic_knowledge = knowledge_base.create_expert_tool('Logic_Identity_Expert')
-    general_knowledge = knowledge_base.create_expert_tool('General_Expert')
+    injection_knowledge = knowledge_base.create_vuln_query_tool('Injection_Expert')
+    data_knowledge = knowledge_base.create_vuln_query_tool('Data_Asset_Expert')
+    infra_knowledge = knowledge_base.create_vuln_query_tool('Infra_Supply_Expert')
+    logic_knowledge = knowledge_base.create_vuln_query_tool('Logic_Identity_Expert')
+    general_knowledge = knowledge_base.create_vuln_query_tool('General_Expert')
+    bypass_knowledge = knowledge_base.create_bypass_query_tool()
 
     # 编译专家智能体子图
-    injection_expert = InjectionExpert(additional_tools=[*general_tools, injection_knowledge]).compile()
+    injection_expert = InjectionExpert(additional_tools=[*general_tools, injection_knowledge, bypass_knowledge]).compile()
     data_asset_expert = DataAssetExpert(additional_tools=[*general_tools, data_knowledge]).compile()
     infra_supply_expert = InfraSupplyExpert(additional_tools=[*general_tools, infra_knowledge]).compile()
     logic_identity_expert = LogicIdentityExpert(additional_tools=[*general_tools, logic_knowledge]).compile()
