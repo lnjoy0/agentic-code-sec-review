@@ -112,7 +112,7 @@ class SecKnowledgeBase:
 
         return StructuredTool.from_function(coroutine=get_vulnerability_playbook, name="get_vulnerability_playbook")
 
-    def create_bypass_query_tool(self) -> str:
+    def create_bypass_query_tool(self) -> StructuredTool:
         supported_bypass_tec_list = list(self.bypass_registry.keys())
         supported_bypass_tec_str = "\n".join([f"- {tec}" for tec in supported_bypass_tec_list])
 
