@@ -156,12 +156,16 @@ class LLMSemanticScanner:
 
             try:
                 result = await chain.ainvoke(inputs)
+
+                if not result.tool_calls:
+                    logger.error(f"文件 {file_path} 的代码块分析失败，LLM 的输出未调用任何工具，其响应内容为：{result}")
+                    return None, hunk_context, None
                 
                 tool_name = result.tool_calls[0]['name']
                 tool_args = result.tool_calls[0]['args']
 
                 if tool_name != "LLMScanReport":
-                    logger.error(f"文件 {file_path} 的代码块分析失败，LLM 的输出未调用 LLMScanReport 工具")
+                    logger.error(f"文件 {file_path} 的代码块分析失败，LLM 的输出未调用 LLMScanReport 工具，其响应内容为：{result}")
                     return None, hunk_context, None
                 
                 report = LLMScanReport(**tool_args)

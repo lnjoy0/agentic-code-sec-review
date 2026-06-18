@@ -85,7 +85,7 @@ class LLMConfig(BaseModel):
 
 class AgentConfig(BaseModel):
     """配置Agent参数"""
-    agent_max_rounds: int = Field(default=35, ge=0) # Agent的最大行动轮数
+    agent_max_rounds: int = Field(default=40, ge=0) # Agent的最大行动轮数
     max_critical_rounds: int = Field(default=2, ge=0)
 
 
@@ -185,7 +185,7 @@ class Config:
 
             # Agent configuration
             agent_config = AgentConfig(
-                agent_max_rounds=os.environ.get("AGENT_MAX_ROUNDS", "35"),
+                agent_max_rounds=os.environ.get("AGENT_MAX_ROUNDS", "40"),
                 max_critical_rounds = os.environ.get("MAX_CRITICAL_ROUNDS", "2")
             )
 

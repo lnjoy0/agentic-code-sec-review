@@ -38,7 +38,7 @@ inputs:
   agent_max_rounds:
     description: 'Agent 最大行动轮数'
     required: false
-    default: '35'
+    default: '40'
   max_critical_rounds:
     description: '批判节点的最大审查轮数'
     required: false
