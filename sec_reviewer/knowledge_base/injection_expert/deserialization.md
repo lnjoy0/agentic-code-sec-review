@@ -30,13 +30,13 @@ domain: ["Injection_Expert", "General_Expert"]
     *   `jsonpickle.unpickler.decode(data)`
 *   **数据科学与机器学习生态（底层封装了Pickle）：**
     *   `pandas.read_pickle(filepath_or_buffer)`
-    *   `torch.load(f, weights_only=False)` (PyTorch模型加载)
+    *   `torch.load(f, weights_only=False)` (PyTorch模型加载，通常默认就是False)
     *   `numpy.load(file, allow_pickle=True)`
 
 ##### 3. 传播路径特征
+*   **直接文件加载：** 用户通过 CLI 参数提供文件路径 -> 内部使用 `open()` 读取 -> 传递给 `torch.load()` 或 `pickle.load()`。
 *   **编码转换：** 攻击者载荷常经过 Base64 编码或 Hex 编码传输，传播路径中常出现 `base64.b64decode(user_input)` -> `pickle.loads()` 的组合。
 *   **解压缩处理：** 载荷可能被压缩，出现 `zlib.decompress(data)` -> `pickle.loads()`。
-*   **直接透传：** 框架路由函数接收参数后，未经过滤直接传递给上述 Sink 执行点。
 
 #### 3. 典型误报样例
 
@@ -74,7 +74,7 @@ def decode_cookie(cookie_data):
 
 当以下所有条件均满足时，Agent应将此告警判定为**真实漏洞（True Positive）**：
 1. **触达危险 Sink:** 数据流最终进入了已知的不安全反序列化函数（如 `pickle.loads`, `yaml.unsafe_load`, `torch.load(weights_only=False)` 等）。
-2. **源头可控（Tainted Source）:** 被反序列化的数据直接或间接来源于不受信任的外部输入（HTTP请求、外部上传的文件、未校验的数据库字段等）。
+2. **源头可控（Tainted Source）:** 被反序列化的数据直接或间接来源于不受信任的外部输入（包括 HTTP请求、CLI 参数输入的文件路径、环境变量指向的文件、外部上传的文件、未校验的数据库字段等）。
 3. **缺乏校验:** 在数据到达 Sink 之前，没有使用密码学签名（如 HMAC）验证数据的完整性和来源，也没有使用严格的白名单机制限制可反序列化的类。
 
 #### 5. 证伪标准
