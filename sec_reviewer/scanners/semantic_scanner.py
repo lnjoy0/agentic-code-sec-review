@@ -54,7 +54,7 @@ class LLMSemanticScanner:
             valid_results.append(res)
 
         all_issues = [issue for sublist in valid_results for issue in sublist]
-        
+
         logger.info(f"LLM Semantic Scanner found {len(all_issues)} potential issues")
 
         return {
@@ -94,7 +94,7 @@ class LLMSemanticScanner:
                 sub_intervals = await self._split_massive_hunk(file_path, start_line, end_line, context_max_lines)
             else:
                 sub_intervals = [(start_line, end_line)]
-            
+
             # 遍历产生的所有分析区间
             for sub_start, sub_end in sub_intervals:
                 hunk_context, scope = await self._get_context(file_path, sub_start, sub_end)

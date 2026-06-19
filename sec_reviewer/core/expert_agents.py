@@ -22,12 +22,11 @@ from .config import LLMConfig
 logger = logging.getLogger(__name__)
 
 
-def get_model_bound_tools(
+def get_model(
     config: LLMConfig, 
     role_name: str, 
-    tools: List, 
     max_tokens: int = None
-):
+) -> ChatOpenAI:
     model = ChatOpenAI(
         model=config.model_name,
         base_url=config.base_url,
@@ -38,7 +37,7 @@ def get_model_bound_tools(
         max_tokens=max_tokens,
         seed=42
     )
-    return model.bind_tools(tools)
+    return model
 
 
 class AgentError(Exception):
@@ -126,11 +125,10 @@ class BaseExpertAgent():
         
         # 获取绑定了工具的 LLM 实例
         llm_config = config['configurable'].get('llm_config')
-        model_with_tools = get_model_bound_tools(
+        model_with_tools = get_model(
             config=llm_config,
-            role_name=self.expert_name,
-            tools=self.tools
-        )
+            role_name=self.expert_name
+        ).bind_tools(self.tools)
 
         async def _save_msg():
             try:
@@ -311,7 +309,7 @@ class BaseExpertAgent():
         )
         
         llm_config = config['configurable'].get('llm_config')
-        structured_llm = get_model_bound_tools(llm_config, 'Critic', [CriticDecision])
+        structured_llm = get_model(llm_config, 'Critic').bind_tools([CriticDecision])
         invocation_messages = [SystemMessage(content=CRITIC_PROMPT), HumanMessage(content=human_prompt)]
 
         async def _save_msg():

@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from sec_reviewer.scanners.heuristic_scanner import HeuristicScanner
 from sec_reviewer.scanners.semantic_scanner import LLMSemanticScanner
-from sec_reviewer.core.expert_agents import get_model_bound_tools, save_request_messages
+from sec_reviewer.core.expert_agents import get_model, save_request_messages
 from sec_reviewer.core.data_models import LLMRouteDecision, RouteTask, AuditState, ReviewComment, LLMScanReport
 from sec_reviewer.knowledge_base.sys_prompts import ROUTER_PROMPT
 from sec_reviewer.knowledge_base.cwe_category import (INJECTION_CWES, LOGIC_IDENTITY_CWES,
@@ -41,7 +41,7 @@ async def semantic_scanner_node(state: AuditState, config: RunnableConfig) -> Di
     retrieval_config = config['configurable'].get('retrieval_config')
     patched_files = state['patched_files']
 
-    scanner_llm = get_model_bound_tools(llm_config, role_name="Scanner", tools=[LLMScanReport])
+    scanner_llm = get_model(llm_config, role_name="Scanner").with_structured_output(LLMScanReport)
     semantic_scanner = LLMSemanticScanner(scanner_config, retrieval_config, scanner_llm)
     semantic_report = await semantic_scanner.get_report(patched_files)
 
@@ -66,7 +66,7 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
     max_rounds = config['configurable'].get('agent_config').agent_max_rounds
     llm_config = config['configurable'].get('llm_config')
 
-    structured_llm = get_model_bound_tools(llm_config, role_name="Router", tools=[LLMRouteDecision])
+    structured_llm = get_model(llm_config, role_name="Router").bind_tools([LLMRouteDecision])
     
     prompt = ChatPromptTemplate.from_messages([
         ("system", ROUTER_PROMPT),
