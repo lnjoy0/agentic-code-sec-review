@@ -139,7 +139,7 @@ class LLMSemanticScanner:
         chain: RunnableSerializable,
         semaphore: asyncio.Semaphore,
         index: int
-    ) -> tuple[Optional[LLMScanReport], str, Optional[Any]]:
+    ) -> tuple[Optional[LLMScanReport], str]:
         """处理单个变更代码块的异步子任务"""
         async with semaphore:
             inputs = {"full_context": hunk_context}
@@ -155,26 +155,12 @@ class LLMSemanticScanner:
             save_task = asyncio.create_task(_save_msg()) # 放入事件循环后台执行，不阻塞 LLM 调用
 
             try:
-                result = await chain.ainvoke(inputs)
-
-                if not result.tool_calls:
-                    logger.error(f"文件 {file_path} 的代码块分析失败，LLM 的输出未调用任何工具，其响应内容为：{result}")
-                    raise RuntimeError("LLM 的输出未调用任何工具")
-                
-                tool_name = result.tool_calls[0]['name']
-                tool_args = result.tool_calls[0]['args']
-
-                if tool_name != "LLMScanReport":
-                    logger.error(f"文件 {file_path} 的代码块分析失败，LLM 的输出未调用 LLMScanReport 工具，其响应内容为：{result}")
-                    raise RuntimeError("LLM 的输出未调用任何工具")
-                
-                report = LLMScanReport(**tool_args)
-
-                return report, hunk_context, result
+                report = await chain.ainvoke(inputs)
+                return report, hunk_context
             except Exception as e:
-                logger.error(f"文件 {file_path} 的代码块分析或 Pydantic 结构校验失败：{e}")
+                logger.error(f"文件 {file_path} 的代码块分析失败：{e}")
                 logger.exception("error: ")
-                return None, hunk_context, None
+                return None, hunk_context
             finally:
                 await save_task # 确保报错时也保存请求消息
 
@@ -234,7 +220,7 @@ class LLMSemanticScanner:
 
     async def _convert_to_scanned_issues(
         self, 
-        results: list[tuple[Optional[LLMScanReport], str, Optional[Any]]], 
+        results: list[tuple[Optional[LLMScanReport], str]], 
         file_path: str, 
         patched_file: PatchedFile,
     ) -> list[ScannedIssue]:
@@ -244,7 +230,7 @@ class LLMSemanticScanner:
         scanned_issues = []
         added_lines = self._get_added_lines(patched_file)
         
-        for report, hunk_context, result in results:
+        for report, hunk_context in results:
             if not report or not report.issues:
                 continue
 
@@ -269,7 +255,7 @@ class LLMSemanticScanner:
                     ))
                     logger.info(
                         f"成功添加文件 {file_path} 中的漏洞: {issue.name}。"
-                        f"\n代码上下文 {hunk_context} -> 漏洞 {scanned_issues[-1]}\n原始消息：{result}"
+                        f"\n代码上下文 {hunk_context} -> 漏洞 {scanned_issues[-1]}\n思考过程：{report.thinking_process}"
                     )
                 else:
                     logger.info(
