@@ -157,7 +157,10 @@ class LLMSemanticScanner:
             try:
                 result = await chain.ainvoke(inputs)
 
-                if not result.tool_calls:
+                if not result.tool_calls and result.invalid_tool_calls:
+                    logger.error(f"文件 {file_path} 的代码块分析失败，LLM 的工具调用格式错误，请尝试重新运行。其响应内容为：{result}")
+                    raise RuntimeError("LLM 的工具调用格式错误，请尝试重新运行")
+                elif not result.tool_calls:
                     logger.error(f"文件 {file_path} 的代码块分析失败，LLM 的输出未调用任何工具，其响应内容为：{result}")
                     raise RuntimeError("LLM 的输出未调用任何工具")
                 
@@ -166,7 +169,7 @@ class LLMSemanticScanner:
 
                 if tool_name != "LLMScanReport":
                     logger.error(f"文件 {file_path} 的代码块分析失败，LLM 的输出未调用 LLMScanReport 工具，其响应内容为：{result}")
-                    raise RuntimeError("LLM 的输出未调用任何工具")
+                    raise RuntimeError("LLM 的输出未调用 LLMScanReport 工具")
                 
                 report = LLMScanReport(**tool_args)
 
