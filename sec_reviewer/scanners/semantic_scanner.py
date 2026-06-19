@@ -49,8 +49,8 @@ class LLMSemanticScanner:
         valid_results = []
         for res in results:
             if isinstance(res, Exception):
-                logger.error(f"某个文件分析时发生了未捕获的严重异常: {res}")
-                continue
+                logger.error(f"某个文件分析时发生了严重异常: {res}")
+                raise res.with_traceback(res.__traceback__)
             valid_results.append(res)
 
         all_issues = [issue for sublist in valid_results for issue in sublist]
@@ -116,8 +116,8 @@ class LLMSemanticScanner:
         valid_results = []
         for res in results:
             if isinstance(res, Exception):
-                logger.error(f"文件 {file_path} 中，某个 Hunk 分析时发生了未捕获的严重异常: {res}")
-                continue
+                logger.error(f"文件 {file_path} 中，某个 Hunk 分析时发生了严重异常: {res}")
+                raise res.with_traceback(res.__traceback__)
             valid_results.append(res)
 
         # 转为 ScannedIssue 对象
@@ -159,14 +159,14 @@ class LLMSemanticScanner:
 
                 if not result.tool_calls:
                     logger.error(f"文件 {file_path} 的代码块分析失败，LLM 的输出未调用任何工具，其响应内容为：{result}")
-                    return None, hunk_context, None
+                    raise RuntimeError("LLM 的输出未调用任何工具")
                 
                 tool_name = result.tool_calls[0]['name']
                 tool_args = result.tool_calls[0]['args']
 
                 if tool_name != "LLMScanReport":
                     logger.error(f"文件 {file_path} 的代码块分析失败，LLM 的输出未调用 LLMScanReport 工具，其响应内容为：{result}")
-                    return None, hunk_context, None
+                    raise RuntimeError("LLM 的输出未调用任何工具")
                 
                 report = LLMScanReport(**tool_args)
 
