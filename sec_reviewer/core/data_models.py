@@ -64,10 +64,6 @@ class LLMScannedIssue(BaseModel):
 
 class LLMScanReport(BaseModel):
     """【提交漏洞扫描结果】在完成分析后，你【必须且只能】调用此工具以完成结构化输出"""
-    thinking_process: str = Field(
-        ...,
-        description="以 `💡 疑点分析：` 开头，进行一步步思考，写下你的审计疑点。如果代码太短没有线索，只需写一句“未发现明显的安全操作汇聚点”即可，不要凑字数。"
-    )
     issues: List[LLMScannedIssue] = Field(
         ...,
         description=(
