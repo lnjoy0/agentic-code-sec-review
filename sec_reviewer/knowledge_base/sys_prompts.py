@@ -15,8 +15,8 @@ SCANNER_PROMPT = """# ROLE
 2. 【外部交互与网络边界 (Network Boundaries)】
    - 请求伪造 (SSRF)：代码是否主动发起了向外的网络请求或处理了 Webhook？目标 URL 是否拼接了不受信输入？是否严格执行了内网地址的黑/白名单校验以防范 SSRF 或内部探测？
    - 开放重定向 (Open Redirect)：是否基于外部输入返回了 HTTP 301/302 重定向响应，且缺乏目标域名白名单校验？
-   - HTTP 请求走私（HRS）：如果代码涉及底层的 HTTP 报文解析、自定义代理逻辑或 Socket 读取（如 WSGI/ASGI 框架开发），是否严格校验了 `Content-Length` 与 `Transfer-Encoding` 的一致性？是否安全地处理或丢弃了畸形的 HTTP 尾部（Trailers）及非标准的换行符（CRLF）？
-
+   - HTTP 请求走私（HRS）：底层 HTTP 解析或 Socket 读取时，是否严格防范了 Content-Length 与 Transfer-Encoding 冲突？若代码处理分块传输（Chunked）遇结束标志（如 0\r\n）后直接返回，未彻底清空长连接缓冲区残留的尾部字段（Trailers），必须上报。
+   
 3. 【组件解析与高级动态特性 (Parsing & Dynamic Execution)】
    - 不安全的反序列化：是否将未经完整性校验（如签名）的不受信数据，传入了原生反序列化函数（如 pickle.loads、不安全的 yaml.load）或带有静默降级/隐式执行逻辑的第三方组件（如 jsonpickle）？若代码重写了 __reduce__ 等魔法方法，是否在状态恢复时触发了危险操作？
    - 危险的 XML 解析 (XXE & Billion Laughs)：处理 XML 时，是否使用了存在缺陷的 Python 原生库（如 xml.etree.ElementTree）而未替换为安全的 defusedxml？必须警惕未禁用外部实体（XXE）或未限制实体递归膨胀（Billion Laughs）导致的系统资源耗尽或信息泄露。
