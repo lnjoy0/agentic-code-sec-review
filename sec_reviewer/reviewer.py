@@ -1,8 +1,6 @@
 import logging
-from typing import List
 
 from sec_reviewer.core.config import Config
-from sec_reviewer.core.data_models import ReviewComment
 from sec_reviewer.core.github_client import GitHubClient
 from sec_reviewer.core.diff_parser import DiffParser
 from sec_reviewer.workflow.graph import app

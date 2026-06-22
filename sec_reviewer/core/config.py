@@ -56,7 +56,6 @@ class ScannerConfig(BaseModel):
         return ",".join(sorted(list(set(input_levels))))
 
 
-
 class RoleParams(BaseModel):
     """定义每个角色的温度和top_p参数范围"""
     temperature: float = Field(ge=0, le=2.0)
@@ -191,7 +190,8 @@ class Config:
 
             # Code retriever configuration
             code_retrieval_config = CodeRetrievalConfig(
-                context_max_lines=os.environ.get("RETRIEVAL_CONTEXT_MAX_LINES", "100")
+                context_max_lines=os.environ.get("RETRIEVAL_CONTEXT_MAX_LINES", "100"),
+                single_line_max_length=os.environ.get("SCAN_CONTEXT_MAX_LINES", "500")
             )
         except ValidationError as e:
             logger.error(f"参数错误：{e}")

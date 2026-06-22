@@ -1,10 +1,8 @@
 import logging
 import frontmatter
-import asyncio
 import aiofiles
 from pathlib import Path
 from langchain_core.tools import StructuredTool
-from typing import Optional
 
 
 logger = logging.getLogger(__name__)

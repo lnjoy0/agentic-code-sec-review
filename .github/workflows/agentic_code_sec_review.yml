@@ -9,13 +9,7 @@ on:
           - '**/*.yml'
           - '**/*.yaml'
           - 'docs/**'
-  workflow_dispatch: # 允许手动触发
-    inputs:
-      debug_mode:
-        description: '是否开启调试模式'
-        required: false
-        type: boolean
-        default: false
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -41,6 +35,6 @@ jobs:
         uses: lnjoy0/agentic-code-sec-review@main
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          llm_model_name: ${{ secrets.LLM_MODEL_NAME }}
-          llm_base_url: ${{ secrets.LLM_BASE_URL }}
           llm_api_key: ${{ secrets.LLM_API_KEY }}
+          llm_base_url: https://api.deepseek.com
+          llm_model_name: deepseek-v4-flash

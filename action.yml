@@ -1,5 +1,5 @@
 name: 'Agentic Code Sec Reviewer'
-description: '该Agent首先使用 semgrep、trivy、gitleaks 以及 LLM 对 PR 中的代码进行安全扫描，然后使用多智能体系统对扫描结果进行研判，并将真正的安全问题以评论的形式反馈到 PR 中。'
+description: '用于 Python 项目的 PR 增量代码审计系统，首先通过传统扫描器以及 LLM 扫描器扫描出漏洞告警，然后使用多智能体进行漏洞研判，最终将真正的安全问题以评论的形式反馈到 PR 中。'
 author: 'lnjoy'
 
 inputs:
@@ -23,16 +23,13 @@ inputs:
   # === 大模型基础配置 ===
   llm_model_name:
     description: '大语言模型名称'
-    required: false
-    default: 'Qwen3-Coder-30B-A3B-Instruct-FP8'
+    required: true
   llm_base_url:
     description: '大语言模型 API 基础路径'
-    required: false
-    default: 'http://i-1.gpushare.com:6250/v1'
+    required: true
   llm_api_key:
     description: '大语言模型 API Key'
-    required: false
-    default: 'token-is-not-needed'
+    required: true
 
   # === Agent 与 Context 配置 ===
   agent_max_rounds:
@@ -51,6 +48,29 @@ inputs:
     description: '代码检索器的检索上下文最大行数'
     required: false
     default: '100'
+
+  # === 启发式扫描器配置 ===
+  semgrep_rules:
+    description: 'Semgrep 的扫描规则'
+    required: false
+    default: >
+        --config=p/default
+        --config=p/security-audit
+        --config=p/secrets
+        --config=p/r2c-security-audit
+        --config=p/insecure-transport
+        --config=p/python
+        --config=p/django
+        --config=p/flask
+        --config=p/sql-injection
+  semgrep_severity:
+    description: "Semgrep 过滤等级"
+    required: false
+    default: "ERROR"
+  trivy_severity:
+    description: "Trivy 过滤等级"
+    required: false
+    default: "HIGH,CRITICAL"
 
   # === 各角色 Temperature & Top_p 参数 ===
   scanner_temperature:
@@ -216,6 +236,9 @@ runs:
         MAX_CRITICAL_ROUNDS: ${{ inputs.max_critical_rounds }}
         SCAN_CONTEXT_MAX_LINES: ${{ inputs.scan_context_max_lines }}
         RETRIEVAL_CONTEXT_MAX_LINES: ${{ inputs.retrieval_context_max_lines }}
+        SEMGREP_RULES: ${{ inputs.semgrep_rules }}
+        SEMGREP_SEVERITY: ${{ inputs.semgrep_severity }}
+        TRIVY_SEVERITY: ${{ inputs.trivy_severity }}
 
         # 各角色配置同步
         ROLE_SCANNER_TEMP: ${{ inputs.scanner_temperature }}

@@ -69,7 +69,7 @@ class DiffParser:
                     logger.debug(f"⚠️ Skipping renamed file: {patched_file.source_file} -> {patched_file.target_file}")
                     continue
 
-                if Path(patched_file.path).suffix.lower() in IGNORED_SUFFIXES:
+                if Path(patched_file.path).suffix.lower() in IGNORED_SUFFIXES: # 按文件后缀过滤
                     logger.debug(f"⚠️ Skipping file: {patched_file.path}")
                     continue
                 

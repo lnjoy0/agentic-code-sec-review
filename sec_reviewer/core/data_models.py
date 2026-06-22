@@ -1,7 +1,3 @@
-"""
-Modified from [truongnh1992/gemini-ai-code-reviewer]
-"""
-
 from uuid import uuid4
 from typing import List, Dict, Any, Optional, TypedDict, Annotated
 from unidiff import PatchedFile
