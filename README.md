@@ -1,10 +1,10 @@
 # Agentic-Code-Sec-Review
-用于 Python 项目的 PR 增量代码多智能体审计系统。
+基于多智能体的 Python 项目 PR 增量代码安全审计系统。
 
 ## Setup
-1. 在 Github 的 Actions secrets 中，使用 `LLM_API_KEY` 作为名称添加 LLM API 密钥。
-2. 在代码库中添加 `.github/workflows/agentic_code_sec_review.yml`，并修改其中的 `llm_base_url` 为您的 LLM 基础 url，修改 `llm_model_name` 为您的 LLM 名称。
-3. 将代码提交到您的仓库，并创建 Pull Requests，该 Action 会自动运行。（可修改 yml 中的 pull_request types，以调整触发条件）
+1. 在 Github 的 Actions secrets 中，添加您的 LLM API 密钥，并将其命名为 `LLM_API_KEY`。
+2. 在项目代码库中添加工作流文件 `.github/workflows/agentic_code_sec_review.yml`，并将其中的 `llm_base_url` 替换为您的 LLM 基础 URL，`llm_model_name` 替换为您使用的 LLM 模型名称。
+3. 将代码提交到您的仓库并创建 Pull Request，该 Action 即会自动运行。（您可以通过修改 YAML 文件中的 `pull_request` types 来调整触发条件）。
 
 <details>
 <summary>点击展开查看完整的 agentic_code_sec_review.yml 配置文件</summary>
@@ -56,33 +56,32 @@ jobs:
 
 ## Structure
 该系统的整体架构如下图所示，主要组件包括扫描器、路由器、研判专家智能体与审查节点。
-- **扫描器 (Scanner)**：分为启发式扫描器（Semgrep、Trivy、Gitleaks）和语义扫描器（LLM）两类。用于对 PR 中的增量代码进行快速、敏锐的安全扫描，寻找有可能是漏洞的安全疑点，并发出告警。
-- **路由器 (Router)**：包括基于规则的硬路由与基于 LLM 的软路由。用于将扫描器的告警进行分类，并路由到不同专业领域的专家智能体处。其中，硬路由是指基于 CWE 或扫描器名称进行确定性的规则分类；软路由是使用 LLM 对语义扫描器告警或非常见 CWE 类型告警进行的语义分类。
-- **研判专家智能体 (Expert Agent)**：用于对漏洞告警进行研判，判断是真实漏洞还是误报，在研判过程中可以查询漏洞知识文档、调用代码检索、项目结构查询等工具。其中按照不同安全领域划分为四类领域专家（注入与数据流专家、数据与资产专家、环境与供应链专家、业务与身份专家），以及一位用于处理长尾与模糊告警的通用专家。不同专家被分配有不同的系统提示词、漏洞文档集以及工具。
-  - 当前的工具包括：
-    1. 代码检索工具（包括查询函数或类的定义/引用，查询单文件内的数据流等）
-    2. 项目分析工具（包括查询目录树、全局搜索等）
-    3. 漏洞知识文档检索工具（查询目标漏洞类型的知识文档）
-    4. 绕过技巧查询工具（专用于数据流专家，在遇到清洗或过滤时调用）
-  - 其中，代码检索工具基于 tree-sitter 和 ripgrep，因此能够以极快的速度进行检索。
+- **扫描器 (Scanner)**：分为启发式扫描器（Semgrep、Trivy、Gitleaks）和语义扫描器（LLM）两类。用于对 PR 中的增量代码进行快速且敏锐的安全扫描，捕捉潜在的漏洞与安全隐患，并发出告警。
+- **路由器 (Router)**：包含基于规则的硬路由与基于 LLM 的软路由，负责对扫描器的告警进行分类，并将其分发至对应领域的专家智能体。
+  - **硬路由**：基于 CWE 编号或扫描器类型进行确定性的规则匹配与分发。
+  - **软路由**：使用 LLM 对语义扫描器告警或不常见的 CWE 类型告警进行智能语义分类。
+- **研判专家智能体 (Expert Agent)**：负责对漏洞告警进行深度研判，甄别真实漏洞（True Positive）与误报 (False Positive)。智能体可自主调用漏洞知识库查询、代码检索、项目结构查询等工具。系统按安全领域划分了四类领域专家（注入与数据流专家、数据与资产专家、环境与供应链专家、业务与身份专家），以及一个处理长尾与模糊告警的通用专家。不同专家被分配有不同的系统提示词、漏洞文档集以及工具。
+  - 当前集成的工具包括：
+    1. **代码检索工具**：查询函数/类的定义与引用、单文件内的数据流等。底层基于 tree-sitter 和 ripgrep 实现，具备极高的检索效率。
+    2. **项目分析工具**：获取项目目录树结构、进行全局字符串搜索等。
+    3. **漏洞知识文档检索工具**：查询目标漏洞类型的知识文档。
+    4. **绕过技巧查询工具**：专供注入与数据流专家使用，在遇到数据清洗或过滤逻辑时调用，用于辅助研判是否存在绕过可能。
 - **审查节点 (Critic)**：用于对专家智能体给出的研判结论进行审查，判断其证据链的完整性、逻辑的严密性以及结论的正确性。
 
 ![architecture](assets/img/architecture.png)
 
-## Expirement
-使用存在真实 CVE 漏洞的代码进行实验，以验证该系统的检测能力。
+## Experiment
+使用存在真实 CVE 漏洞的项目代码进行测试，以验证该系统的安全审计能力。
 
 ### 实验方法
 
-LLM 使用 deepseek-v4-flash，样本包括开源 Python 项目中的 35 个 CVE 漏洞。
+LLM 选用 `deepseek-v4-flash`，测试样本包括开源 Python 项目中的 35 个真实 CVE 漏洞。
 
-具体实验方法是按照 CVE 的补丁 commit，将漏洞涉及的代码或函数重新提交，并创建一个 PR，触发此 Action 进行检测。
+具体实验方法为：根据 CVE 的补丁 commit，还原漏洞修补前的代码状态，并将包含漏洞的代码片段或函数作为增量提交，然后创建 PR 以触发该 Action 进行自动化代码审计。
 
 ### 实验结果
 
-如下表所示，该系统成功检测出了 28 个 CVE 漏洞，其中 `Review Comment Link` 列为系统生成评论的链接。
-
-由于研判专家 Agent 可以通过反复调用工具，来获得函数/类定义、变量数据流以及框架配置等信息，这有利于其对漏洞进行深入的分析与研判，因此该系统对于常规漏洞有着较高的召回率。而受限于 LLM 能力、项目业务信息的缺失，在面对多步复杂漏洞或业务逻辑漏洞时，可能会出现幻觉或对相关安全知识不敏感的现象。
+如下表所示，该系统成功检测出了 28 个 CVE 漏洞，其中 `Review Comment Link` 列为系统在 PR 中自动生成研判评论的链接。
 
 <details>
 <summary>点击展开查看完整的实验结果表格</summary>
@@ -125,6 +124,12 @@ LLM 使用 deepseek-v4-flash，样本包括开源 Python 项目中的 35 个 CVE
 | protocolbuffers/protobuf                   | 递归深度无限制-DOS                     | ['CVE-2025-4565']  | √        | [Comment](https://github.com/lnjoy0/protobuf/pull/1#discussion_r3432861465)                              | [Commit](https://github.com/protocolbuffers/protobuf/commit/17838beda2943d08b8a9d4df5b68f5f04f26d901)                                                                                    |
 | FunAudioLLM/FunMusic                       | 反序列化（torch.load ）                | ['CVE-2025-5148']  | √        | [Comment](https://github.com/lnjoy0/FunMusic/pull/2#discussion_r3442988935)                              | [Commit](https://github.com/FunAudioLLM/FunMusic/commit/784cbf8dde2cf1456ff808aeba23177e1810e7a9)                                                                                        |
 </details>
+
+### 结果分析
+
+由于研判专家 Agent 能够进行多轮工具调用，从而获取函数/类定义、变量数据流以及框架配置等丰富的上下文信息，这有利于其对漏洞进行深入的分析与研判，因此该系统对于常规漏洞有着较高的召回率。
+
+而受限于 LLM 的基础推理能力以及项目业务信息的缺失，在面对多步复杂漏洞或业务逻辑漏洞时，可能会出现幻觉或对相关安全知识不敏感的现象。
 
 ## Optimization Methods
 可以采取的进一步优化方法，包括：
