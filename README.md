@@ -1,5 +1,5 @@
 # Agentic-Code-Sec-Review
-基于多智能体的 Python 项目 PR 增量代码安全审计系统。
+一款专为 Python 项目打造的自动化代码安全审计系统，由智能体工作流（Agentic Workflow）驱动，以 GitHub Action 的形式无缝集成于 PR 流程中。
 
 ## Setup
 1. 在 Github 的 Actions secrets 中，添加您的 LLM API 密钥，并将其命名为 `LLM_API_KEY`。
