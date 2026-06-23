@@ -3,7 +3,7 @@
 
 ## Setup
 1. 在 Github 的 Actions secrets 中，添加您的 LLM API 密钥，并将其命名为 `LLM_API_KEY`。
-2. 在项目代码库中添加工作流文件 `.github/workflows/agentic_code_sec_review.yml`，并将其中的 `llm_base_url` 替换为您的 LLM 基础 URL，`llm_model_name` 替换为您使用的 LLM 模型名称。
+2. 在项目代码库中添加工作流文件 `.github/workflows/agentic_code_sec_review.yml`，并将其中的 `llm_base_url` 值替换为您的 LLM 基础 URL，`llm_model_name` 值替换为您使用的 LLM 模型名称。
 3. 将代码提交到您的仓库并创建 Pull Request，该 Action 将自动运行。（您可以通过修改 YAML 文件中 `pull_request` 的 `types` 来调整触发条件）。
 
 <details>
