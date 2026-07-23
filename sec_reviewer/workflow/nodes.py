@@ -41,6 +41,7 @@ async def semantic_scanner_node(state: AuditState, config: RunnableConfig) -> Di
     retrieval_config = config['configurable'].get('retrieval_config')
     patched_files = state['patched_files']
 
+    # structed_output 与 deepseek api 不兼容，因此这里用工具调用的方法进行输出
     scanner_llm = get_model(llm_config, role_name="Scanner").bind_tools([LLMScanReport])
     semantic_scanner = LLMSemanticScanner(scanner_config, retrieval_config, scanner_llm)
     semantic_report = await semantic_scanner.get_report(patched_files)
@@ -86,7 +87,7 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
     soft_route_tasks = []
     unique_issues = []
     
-    # 漏洞去重
+    # 漏洞去重，防止同一漏洞被重复路由与研判，浪费资源
     ordered_scanners = sorted(scanner_reports.keys(), key=lambda k: 0 if k.lower() == 'llm' else 1) # 先处理 LLM 扫描器的结果
     for scanner_name in ordered_scanners:
         issues = scanner_reports[scanner_name]
@@ -100,6 +101,7 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
                 e_start_line = existing_issue.snippet_region.start_line
                 e_end_line = existing_issue.snippet_region.end_line
                 
+                # 如果两个漏洞的文件路径相同且代码片段区间有交集，并且漏洞名称或目标代码片段相似，则认为是重复漏洞
                 has_intersection = not (end_line < e_start_line or start_line > e_end_line)
                 if issue.path == existing_issue.path and has_intersection:
                     if issue.name and existing_issue.name:

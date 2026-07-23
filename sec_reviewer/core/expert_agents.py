@@ -259,7 +259,7 @@ class BaseExpertAgent():
             await self.save_langgraph_messages(messages, issue.id)
             return {"audit_results": [state["draft_result"]]}
 
-        # 构造工具调用记录
+        # 构造工具调用记录，使用 XML 风格的标签包裹每一轮对话，便于审查节点解析
         trace_lines = []
         for i, m in enumerate(messages[:-1]):
             if m.type == 'ai':
@@ -477,12 +477,12 @@ class BaseExpertAgent():
                     return {"messages": [error_msg], "remaining_rounds": state['remaining_rounds']-1}
 
     def _router_edge(self, state: AgentState) -> Literal["reject", "retry", "tools_call", "format_output"]:
-        """条件边路由逻辑：判断是否需要调用工具"""
+        """条件边路由逻辑：判断调用什么工具"""
         last_message = state["messages"][-1]
         
         # 如果没有调用任何工具，路由到 retry 节点
         if not last_message.tool_calls:
-            return "retry" 
+            return "retry"
             
         tool_name = last_message.tool_calls[0]["name"]
         

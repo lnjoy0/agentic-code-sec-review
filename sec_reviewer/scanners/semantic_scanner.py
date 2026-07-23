@@ -89,7 +89,7 @@ class LLMSemanticScanner:
             start_line = min(added_lines)
             end_line = max(added_lines)
 
-            # 如果目标区间太大，则执行切分
+            # 如果目标区间太大，则执行切分，防止 LLM 注意力分散以及上下文过长导致报错
             if (end_line - start_line) > massive_hunk_threshold:
                 sub_intervals = await self._split_massive_hunk(file_path, start_line, end_line, context_max_lines)
             else:
@@ -177,7 +177,7 @@ class LLMSemanticScanner:
             except Exception as e:
                 logger.error(f"文件 {file_path} 的代码块分析或 Pydantic 结构校验失败：{e}")
                 logger.exception("error: ")
-                return None, hunk_context, None
+                raise e
             finally:
                 await save_task # 确保报错时也保存请求消息
 
