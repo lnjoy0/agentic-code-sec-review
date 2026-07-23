@@ -5,6 +5,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableSerializable
 import logging
 import asyncio
+import json
+import json_repair
 
 from sec_reviewer.core.config import ScannerConfig, CodeRetrievalConfig
 from sec_reviewer.core.data_models import ScannedIssue, SnippetRegion, LLMScanReport
@@ -157,18 +159,36 @@ class LLMSemanticScanner:
             try:
                 result = await chain.ainvoke(inputs)
 
-                if not result.tool_calls and result.invalid_tool_calls:
-                    logger.error(f"文件 {file_path} 的代码块分析失败，LLM 的工具调用格式错误，请尝试重新运行。其响应内容为：{result}")
-                    raise RuntimeError("LLM 的工具调用格式错误，请尝试重新运行")
-                elif not result.tool_calls:
+                tool_name = None
+                tool_args = None
+
+                if result.tool_calls:
+                    tool_name = result.tool_calls[0]['name']
+                    tool_args = result.tool_calls[0]['args']
+
+                elif result.invalid_tool_calls:
+                    invalid_call = result.invalid_tool_calls[0]
+                    tool_name = invalid_call.get('name', '')
+                    raw_args_str = invalid_call.get('args', '{}')
+                    error_msg = invalid_call.get('error', '')
+                    
+                    logger.warning(f"文件 {file_path} 检测到格式错误的工具调用，正在尝试自动修复... (错误: {error_msg})")
+                    
+                    try:
+                        # 修复损坏的 JSON 字符串
+                        fixed_json_str = json_repair.repair_json(raw_args_str)
+                        tool_args = json.loads(fixed_json_str)
+                        logger.info(f"文件 {file_path} 的工具参数格式修复成功！")
+                    except Exception as repair_err:
+                        logger.error(f"文件 {file_path} 尝试自动修复 JSON 失败: {repair_err}。原始参数: {raw_args_str}")
+                        raise RuntimeError("LLM 的工具调用格式严重损坏且无法自动修复，请尝试重新运行")
+                
+                else:
                     logger.error(f"文件 {file_path} 的代码块分析失败，LLM 的输出未调用任何工具，其响应内容为：{result}")
                     raise RuntimeError("LLM 的输出未调用任何工具")
                 
-                tool_name = result.tool_calls[0]['name']
-                tool_args = result.tool_calls[0]['args']
-
                 if tool_name != "LLMScanReport":
-                    logger.error(f"文件 {file_path} 的代码块分析失败，LLM 的输出未调用 LLMScanReport 工具，其响应内容为：{result}")
+                    logger.error(f"文件 {file_path} 的代码块分析失败，LLM 调用了意外的工具 [{tool_name}]，其响应内容为：{result}")
                     raise RuntimeError("LLM 的输出未调用 LLMScanReport 工具")
                 
                 report = LLMScanReport(**tool_args)
@@ -180,7 +200,7 @@ class LLMSemanticScanner:
                 raise e
             finally:
                 await save_task # 确保报错时也保存请求消息
-
+            
     async def _split_massive_hunk(
         self, 
         file_path: str, 
