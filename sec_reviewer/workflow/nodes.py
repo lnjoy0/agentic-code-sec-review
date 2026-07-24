@@ -2,6 +2,8 @@ import logging
 import asyncio
 import re
 import difflib
+import json_repair
+import json
 from langchain_core.runnables import RunnableConfig
 from langchain_core.prompts import ChatPromptTemplate
 from typing import Dict, Any, List
@@ -189,27 +191,55 @@ async def dynamic_router_node(state: AuditState, config: RunnableConfig):
         results = await asyncio.gather(*coros, return_exceptions=True)
 
         for task, result in zip(soft_route_tasks, results):
-            expert_name = "General_Expert"
+            expert_name = "General_Expert"  # 默认兜底为通用专家
+            
             if isinstance(result, Exception):
                 logger.error(f"  [Soft Route] LLM 路由失败，issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) 被分配给通用专家。错误: {result}")
                 logger.error(task['issue'])
-            else:
+                continue  # 进入下一个任务，此任务使用默认的 General_Expert
+
+            tool_name = None
+            tool_args = None
+
+            if hasattr(result, 'tool_calls') and result.tool_calls:
                 tool_name = result.tool_calls[0]['name']
                 tool_args = result.tool_calls[0]['args']
 
-                if tool_name != "LLMRouteDecision":
-                    logger.error(f"  [Soft Route] LLM 路由失败，issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) 被分配给通用专家。错误: LLM 的输出未调用 LLMRouteDecision 工具，输出内容为 {str(result)}")
-                else:
-                    try:
-                        decision = LLMRouteDecision(**tool_args)
-                        expert_name = decision.expert_name
-                        if expert_name in task["rejected_by"]:
-                            logger.error(f"  [Soft Route] LLM 决策失败，专家 {expert_name} 已在退回记录中，issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) 降级为通用专家。")
-                            expert_name = "General_Expert"
-                        else:
-                            logger.info(f"  [Soft Route] LLM 决策: issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) -> {expert_name} (原因: {decision.reason})\n原始消息: {result}")
-                    except ValidationError as e:
-                        logger.error(f"  [Soft Route] LLM 路由失败，issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) 被分配给通用专家。错误: LLM 的输出的参数未通过 Pydantic 校验，输出内容为 {str(result)}，报错 {e}")
+            # 尝试修复 json 格式
+            elif hasattr(result, 'invalid_tool_calls') and result.invalid_tool_calls:
+                invalid_call = result.invalid_tool_calls[0]
+                tool_name = invalid_call.get('name', 'unknown')
+                raw_args_str = invalid_call.get('args', '{}')
+                
+                logger.warning(f"  [Soft Route] ⚠️ LLM 路由参数 JSON 格式错误，尝试修复，issue[{task['id']}]。原始参数: {raw_args_str}")
+                try:
+                    fixed_json_str = json_repair.repair_json(raw_args_str)
+                    tool_args = json.loads(fixed_json_str)
+                    logger.info(f"  [Soft Route] ✅ json_repair 修复成功: {tool_args}")
+                except Exception as repair_err:
+                    logger.error(f"  [Soft Route] ❌ 修复失败，issue[{task['id']}] 降级为通用专家。报错: {repair_err}")
+            
+            # LLM 输出了纯文本
+            if not tool_name or not tool_args:
+                logger.error(f"  [Soft Route] LLM 路由失败，未找到任何工具调用记录，issue[{task['id']}] 降级为通用专家。输出内容为 {str(result)}")
+                continue # 使用默认的 General_Expert
+
+            # 工具名称和参数校验
+            if tool_name != "LLMRouteDecision":
+                logger.error(f"  [Soft Route] LLM 路由失败，issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) 被分配给通用专家。错误: 未调用 LLMRouteDecision 工具，实际调用了: {tool_name}")
+            else:
+                try:
+                    decision = LLMRouteDecision(**tool_args)
+                    expert_name = decision.expert_name
+                    
+                    if expert_name in task["rejected_by"]:
+                        logger.error(f"  [Soft Route] LLM 决策失败，专家 {expert_name} 已在退回记录中，issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) 降级为通用专家。")
+                        expert_name = "General_Expert"
+                    else:
+                        logger.info(f"  [Soft Route] LLM 决策: issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) -> {expert_name} (原因: {decision.reason})\n原始消息: {result}")
+                        
+                except ValidationError as e:
+                    logger.error(f"  [Soft Route] LLM 路由失败，issue[{task['id']}] ({task['issue'].name or task['issue'].cwe}) 被分配给通用专家。错误: 参数未通过 Pydantic 校验，报错 {e}")
 
             routing_decisions.append(_build_task(expert_name, task["issue"], max_rounds, rejection_history))
 

@@ -156,11 +156,11 @@ class BaseExpertAgent():
 
     async def _tools_call_node(self, state: AgentState, config: RunnableConfig):
         """动作执行节点：执行 LLM 要求的工具，并将结果返回"""
-        tool_calls_message = state["messages"][-1] # 获取 LLM 的 tool_calls 消息
+        tool_calls_message = state["messages"][-1]  # 获取 LLM 的 tool_calls 消息
         remaining_rounds = state.get('remaining_rounds')
         tool_outputs = []
-        new_docs = [] # 用于接收新查询到的文档名称
-        refusal_msg = []
+        new_docs = []  # 用于接收新查询到的文档名称
+        refusal_msg = ""
 
         if remaining_rounds <= -3:
             logger.error(
@@ -173,56 +173,68 @@ class BaseExpertAgent():
             logger.warning(f"[{self.expert_name}]-[issue({state['issue'].id})] 🚫 拦截工具调用：行动轮数已耗尽。")
             refusal_msg = "工具调用失败: 行动轮数已全部用尽，你当前只能调用 ExpertAuditResult 工具"
         
-        if len(tool_calls_message.tool_calls) > 2:
+        # 安全获取正常的和失效的 tool calls
+        valid_calls = getattr(tool_calls_message, "tool_calls", [])
+        invalid_calls = getattr(tool_calls_message, "invalid_tool_calls", [])
+        
+        if len(valid_calls) + len(invalid_calls) > 2:
             refusal_msg = "工具调用失败: 一轮行动最多只能调用两个工具"
 
+        # 为所有（正常+失效）的 tool_call_id 生成 ToolMessage
         if refusal_msg:
-            for tool_call in tool_calls_message.tool_calls:
+            all_calls = valid_calls + invalid_calls
+            for tool_call in all_calls:
                 tool_outputs.append(
                     ToolMessage(
                         content=refusal_msg, 
-                        name=tool_call["name"], 
-                        tool_call_id=tool_call["id"]
+                        name=tool_call.get("name", "unknown_tool"), 
+                        tool_call_id=tool_call.get("id", "")
                     )
                 )
             return {"messages": tool_outputs, "remaining_rounds": remaining_rounds - 1}
 
-        # 修复 LLM 可能输出的 JSON 格式错误
-        if tool_calls_message.invalid_tool_calls:
-            for tool_call in tool_calls_message.invalid_tool_calls:
+        # 建立一个独立的执行列表
+        tools_to_execute = list(valid_calls)
+
+        # 尝试修复 invalid_tool_calls
+        if invalid_calls:
+            for tool_call in invalid_calls:
                 tool_name = tool_call.get("name", '')
                 raw_args_str = tool_call.get("args", '{}')
                 tool_call_id = tool_call.get("id", '')
                 error_msg = tool_call.get("error", '')
 
-            logger.warning(f"[{self.expert_name}]-[issue({state['issue'].id})] ⚠️ LLM 输出的工具调用参数 JSON 格式错误，尝试修复: {error_msg}\n原始参数: {raw_args_str}")
+                logger.warning(f"[{self.expert_name}]-[issue({state['issue'].id})] ⚠️ LLM 输出的工具调用参数 JSON 格式错误，尝试修复: {error_msg}\n原始参数: {raw_args_str}")
 
-            try:
-                fixed_json_str = json_repair.repair_json(raw_args_str)
-                tool_args = json.loads(fixed_json_str)
-                tool_calls_message.tool_calls.append({
-                    "name": tool_name,
-                    "args": tool_args,
-                    "id": tool_call_id
-                })
-                logger.info(f"[{self.expert_name}]-[issue({state['issue'].id})] ✅ 修复后的参数: {tool_args}")
-            except Exception as repair_err:
-                logger.error(f"[{self.expert_name}]-[issue({state['issue'].id})] ❌ 修复失败: {repair_err}\n原始参数: {raw_args_str}")
-                tool_outputs.append(
-                    ToolMessage(
-                        content=f"工具调用失败: LLM 输出的工具调用参数 JSON 格式错误，且修复失败: {repair_err}",
-                        name=tool_name,
-                        tool_call_id=tool_call_id
+                try:
+                    fixed_json_str = json_repair.repair_json(raw_args_str)
+                    tool_args = json.loads(fixed_json_str)
+                    
+                    tools_to_execute.append({
+                        "name": tool_name,
+                        "args": tool_args,
+                        "id": tool_call_id
+                    })
+                    logger.info(f"[{self.expert_name}]-[issue({state['issue'].id})] ✅ 修复成功后的参数: {tool_args}")
+                    
+                except Exception as repair_err:
+                    logger.error(f"[{self.expert_name}]-[issue({state['issue'].id})] ❌ 修复失败: {repair_err}\n原始参数: {raw_args_str}")
+                    # 修复失败，直接生成报错的 ToolMessage 传回给 LLM
+                    tool_outputs.append(
+                        ToolMessage(
+                            content=f"工具调用失败: LLM 输出的工具调用参数 JSON 格式错误，且修复失败: {repair_err}",
+                            name=tool_name,
+                            tool_call_id=tool_call_id
+                        )
                     )
-                )
             
-        # 遍历 LLM 发出的所有工具调用请求
-        for tool_call in tool_calls_message.tool_calls:
+        # 遍历所有需要执行的工具
+        for tool_call in tools_to_execute:
             tool_name = tool_call["name"]
             tool_args = tool_call["args"]
             tool_call_id = tool_call["id"]
-            
-            # 尝试解析参数中的 JSON 字符串
+
+            # 尝试解析参数中的 JSON 字符串            
             for k, v in tool_args.items():
                 if isinstance(v, str):
                     v_stripped = v.strip()
@@ -263,10 +275,10 @@ class BaseExpertAgent():
                 result = f"未找到名为 {tool_name} 的工具"
             
             tool_outputs.append(ToolMessage(
-                                    content=str(result), 
-                                    name=tool_name, 
-                                    tool_call_id=tool_call_id
-                                ))
+                content=str(result), 
+                name=tool_name, 
+                tool_call_id=tool_call_id
+            ))
 
         return {
             "messages": tool_outputs, 
@@ -361,19 +373,42 @@ class BaseExpertAgent():
         finally:
             save_task
 
-        if not hasattr(results, 'tool_calls') or not results.tool_calls:
-            logger.error(f"批判节点审查失败，LLM 未调用任何工具，返回了纯文本: {results}")
+        tool_name = None
+        tool_args = None
+
+        if hasattr(results, 'tool_calls') and results.tool_calls:
+            tool_name = results.tool_calls[0]['name']
+            tool_args = results.tool_calls[0]['args']
+
+        # 尝试修复 json 格式
+        elif hasattr(results, 'invalid_tool_calls') and results.invalid_tool_calls:
+            invalid_call = results.invalid_tool_calls[0]
+            tool_name = invalid_call.get('name', 'unknown')
+            raw_args_str = invalid_call.get('args', '{}')
+            
+            logger.warning(f"[{self.expert_name}] ⚠️ 批判节点发现 JSON 格式错误，尝试 json_repair 修复，原始参数: {raw_args_str}")
+            
+            try:
+                fixed_json_str = json_repair.repair_json(raw_args_str)
+                tool_args = json.loads(fixed_json_str)
+                logger.info(f"[{self.expert_name}] ✅ json_repair 修复成功: {tool_args}")
+            except Exception as repair_err:
+                logger.error(f"批判节点审查失败，JSON 修复失败: {repair_err}，原始字符: {raw_args_str}")
+                await self.save_langgraph_messages(messages, issue.id)
+                return {"audit_results": [state["draft_result"]]}
+                
+        else:
+            logger.error(f"批判节点审查失败，LLM 未调用任何工具，返回了纯文本: {results.content}")
             await self.save_langgraph_messages(messages, issue.id)
             return {"audit_results": [state["draft_result"]]}
 
-        tool_name = results.tool_calls[0]['name']
-        tool_args = results.tool_calls[0]['args']
-
+        # 工具名称校验
         if tool_name != 'CriticDecision':
-            logger.error(f"批判节点审查失败，LLM 的输出未调用 CriticDecision 工具")
+            logger.error(f"批判节点审查失败，LLM 的输出未调用 CriticDecision 工具，而是调用了: {tool_name}")
             await self.save_langgraph_messages(messages, issue.id)
             return {"audit_results": [state["draft_result"]]}
             
+        # Pydantic 校验
         try: 
             critic_dc = CriticDecision(**tool_args)
         except ValidationError as e:
