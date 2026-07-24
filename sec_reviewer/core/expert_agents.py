@@ -3,6 +3,7 @@ import json
 import os
 import asyncio
 import aiofiles
+import json_repair
 from typing import List, Literal
 from langgraph.graph import StateGraph, START, END
 from langchain_openai import ChatOpenAI
@@ -185,6 +186,35 @@ class BaseExpertAgent():
                     )
                 )
             return {"messages": tool_outputs, "remaining_rounds": remaining_rounds - 1}
+
+        # 修复 LLM 可能输出的 JSON 格式错误
+        if tool_calls_message.invalid_tool_calls:
+            for tool_call in tool_calls_message.invalid_tool_calls:
+                tool_name = tool_call.get("name", '')
+                raw_args_str = tool_call.get("args", '{}')
+                tool_call_id = tool_call.get("id", '')
+                error_msg = tool_call.get("error", '')
+
+            logger.warning(f"[{self.expert_name}]-[issue({state['issue'].id})] ⚠️ LLM 输出的工具调用参数 JSON 格式错误，尝试修复: {error_msg}\n原始参数: {raw_args_str}")
+
+            try:
+                fixed_json_str = json_repair.repair_json(raw_args_str)
+                tool_args = json.loads(fixed_json_str)
+                tool_calls_message.tool_calls.append({
+                    "name": tool_name,
+                    "args": tool_args,
+                    "id": tool_call_id
+                })
+                logger.info(f"[{self.expert_name}]-[issue({state['issue'].id})] ✅ 修复后的参数: {tool_args}")
+            except Exception as repair_err:
+                logger.error(f"[{self.expert_name}]-[issue({state['issue'].id})] ❌ 修复失败: {repair_err}\n原始参数: {raw_args_str}")
+                tool_outputs.append(
+                    ToolMessage(
+                        content=f"工具调用失败: LLM 输出的工具调用参数 JSON 格式错误，且修复失败: {repair_err}",
+                        name=tool_name,
+                        tool_call_id=tool_call_id
+                    )
+                )
             
         # 遍历 LLM 发出的所有工具调用请求
         for tool_call in tool_calls_message.tool_calls:
