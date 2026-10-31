@@ -31,7 +31,7 @@ def distribute_issues_edge(state: AuditState):
         
     return sends
 
-def check_rejection_edge(state: AuditState) -> Literal["dynamic_router", "__end__"]:
+def check_rejection_edge(state: AuditState) -> Literal["dynamic_router", "get_comment"]:
     """检查是否存在被退回的漏洞"""
     total_target_issues = state.get("total_target_issues", 0)
     audit_results = state.get("audit_results", [])
